@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <link rel="stylesheet" type="text/css" href="/static/css/dhtmlx.css" />
+        <link rel="stylesheet" type="text/css" href="/static/css/app.css" />
+        <script src="/static/js/dhtmlx.js" type="application/x-javascript"></script>
+        <script>
+            var myLayout, myTree, myGrid, myFolders, myMenu, myToolbar;
+            var gl_view_type = "dlist";
+            var gl_view_bg = "";
+
+            function doOnLoad(){
+                myLayout = new dhtmlXLayoutObject(document.body, "2U");
+                myLayout.cells("a").setWidth(250);
+                myLayout.cells("a").setHeight(250);
+                myLayout.cells("a").setText("Folders");
+                myLayout.cells("b").hideHeader();
+
+                myMenu = myLayout.attachMenu();
+                myMenu.setImagePath("/static/js/dhtmlx/dhtmlxMenu/codebase/imgs/");
+                myMenu.setIconsPath("/static/js/dhtmlx/icons/");
+
+                myToolbar = myLayout.attachToolbar();
+                myToolbar.setIconsPath("/static/icons/");
+
+                myTree = myLayout.cells("a").attachTree(0);
+                myTree.setImagePath("/static/img/");
+                myTree.loadXML("/view/periods_list/");
+
+                myGrid = myLayout.cells("b").attachGrid();
+                myGrid.setImagePath("/static/img/");
+                myGrid.setIconsPath("/static/icons/");
+                myGrid.setHeader("&nbsp;,Name,Size,Type,Modified");
+                myGrid.setColTypes("img,ro,ro,ro");
+                myGrid.setInitWidths("40,250,50,100,*");
+                myGrid.setColAlign("center,left,right,left");
+                myGrid.load("xml/directoryContent.php?dir="+dir);
+                myGrid.attachEvent("onRowDblClicked",function(id){
+                          myTree.selectItem(id,true);
+                      showFileContent(id);
+                })
+                myGrid.init();
+                gl_view_bg = "grid";
+
+            }
+
+            function showDList(dir){
+
+            }
+        </script>
+
+    </head>
+    <body onload="doOnLoad()">
+    </body>
+</html>

@@ -1,0 +1,7 @@
+settings.py
+settings.pyc
+*.pyc
+.idea/
+static/img
+static/icons
+static/fonts

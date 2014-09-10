@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tree id="0">
+    {% for year, periods in periods_dict.items %}
+        <item id="{{ year }}" text="{{ year }}">
+            {% for period in periods %}
+                <item id="{{ period }}" text="Период {{ period }}"></item>
+            {% endfor %}
+        </item>
+    {% endfor %}
+</tree>
