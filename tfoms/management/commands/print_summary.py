@@ -9,7 +9,7 @@ from register_function import (get_patients, get_services,
                                pse_export)
 from medical_service_register.path import REESTR_EXP, BASE_DIR, MONTH_NAME
 from tfoms.management.commands import register_function
-from tfoms.management.commands.utils import excel_writer_1
+from helpers.excel_writer import ExcelWriter
 
 
 ### Печать сокращённого сводного акта для экспертов
@@ -80,8 +80,8 @@ def print_summary(year, period, mo_code, data, handbooks):
         failure_cause_dict[failure_cause_id] += 1
 
     # Печать акта
-    with excel_writer_1.ExcelWriter(ur'%s/__%s' % (target_dir, mo_code),
-                                    template=ur'%s/templates/summary_1.xls' % BASE_DIR) as act_book:
+    with ExcelWriter(ur'%s/__%s' % (target_dir, mo_code),
+                     template=ur'%s/templates/excel_pattern/summary_1.xls' % BASE_DIR) as act_book:
         act_book.set_sheet(0)
         act_book.set_cursor(0, 0)
         act_book.write_cell(get_mo_name(mo_code), 'c', 1)

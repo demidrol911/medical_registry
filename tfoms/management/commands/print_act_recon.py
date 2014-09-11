@@ -6,10 +6,8 @@ from django.core.management.base import BaseCommand
 from django.db.models import Sum
 
 from medical_service_register.path import REESTR_EXP, BASE_DIR, MONTH_NAME
-from tfoms.management.commands.utils import excel_writer_1
-from tfoms.management.commands.utils.excel_style import (VALUE_STYLE,
-                                                         TITLE_STYLE,
-                                                         TOTAL_STYLE)
+from helpers.excel_writer import ExcelWriter
+from helpers.excel_style import (VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE)
 from tfoms.models import ProvidedService, AdministrativeArea
 
 
@@ -39,10 +37,8 @@ class Command(BaseCommand):
         total_sum = {'sum_tariff': 0, 'sum_invoiced': 0, 'sum_accepted': 0}
 
         # Распечатка акта
-        with excel_writer_1.ExcelWriter(u'%s/сверка_%s_%s' % (reestr_path,
-                                                              year,
-                                                              MONTH_NAME[period]),
-                                        template=ur'%s/templates/recon.xls' % BASE_DIR) as act_book:
+        with ExcelWriter(u'%s/сверка_%s_%s' % (reestr_path, year, MONTH_NAME[period]),
+                         template=ur'%s/templates/excel_pattern/recon.xls' % BASE_DIR) as act_book:
             act_book.set_overall_style({'font_size': 11})
             act_book.set_style(VALUE_STYLE)
             current_region = 0
