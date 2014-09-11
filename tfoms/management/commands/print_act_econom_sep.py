@@ -3,12 +3,12 @@ from copy import deepcopy
 
 from django.core.management.base import BaseCommand
 from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR, MONTH_NAME
-from tfoms.management.commands.utils import excel_writer_1
+from helpers.excel_writer import ExcelWriter
 import time
-from utils.correct_1 import date_correct
+from helpers.correct import date_correct
 import register_function
 
-from utils.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
+from helpers.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
 
 
 ### Рвспечатка сводного реестра принятых услуг
@@ -1464,7 +1464,7 @@ class Command(BaseCommand):
         status = int(args[2])
         is_partial_register = args[3] if len(args) == 4 else 0
         printed_act = []
-        template = BASE_DIR + r'\templates\reestr_201408_test.xls'
+        template = BASE_DIR + r'\templates\excel_pattern\reestr_201408_test.xls'
         target_dir = REESTR_DIR if status in (8, 6) else REESTR_EXP
         handbooks = {'failure_causes': register_function.get_failure_causes(),
                      'errors_code': register_function.get_errors(),
@@ -1509,7 +1509,7 @@ class Command(BaseCommand):
             target = target_dir % (year, period) + r'\%s' % handbooks['mo_name'].replace('"', '').replace(' ', '_')
             print u'Печать акта: %s ...' % target
 
-            with excel_writer_1.ExcelWriter(target, template=template) as act_book:
+            with ExcelWriter(target, template=template) as act_book:
                 act_book.set_overall_style({'font_size': 11})
                 print_accepted_service(act_book, year, period, mo, capitation_events,
                                        treatment_events,
@@ -1551,7 +1551,7 @@ class Command(BaseCommand):
                         replace('"', '').replace(' ', '_')
                     print u'Печать акта: %s ...' % target
 
-                    with excel_writer_1.ExcelWriter(target, template=template) as act_book:
+                    with ExcelWriter(target, template=template) as act_book:
                         act_book.set_overall_style({'font_size': 11})
                         print_accepted_service(act_book, year, period, mo,
                                                capitation_events, treatment_events,

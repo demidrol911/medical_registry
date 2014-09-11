@@ -66,9 +66,6 @@ class Command(BaseCommand):
         print u'PA будет проставлено на %d услугах из %d' % (len(service_pa), count_pa)
 
         # Проставляем PA
-        i = ProvidedServiceCoefficient.objects.all().order_by('-id_pk')[0].pk + 1
-        print i
-
         for service in service_pa:
             print service.pk, service.payment_type_id, service.tariff, \
                 service.accepted_payment, service.calculated_payment, \
@@ -79,10 +76,9 @@ class Command(BaseCommand):
             service.provided_tariff = round(0.7*float(service.tariff), 2)
             service.save()
             ProvidedServiceCoefficient.objects.create(
-                id_pk=i, service=service, coefficient_id=6
+                service=service, coefficient_id=6
             )
             Sanction.objects.create(
                 type_id=1, service=service, underpayment=round(0.7*float(service.tariff), 3),
                 error_id=75)
-            i += 1
 

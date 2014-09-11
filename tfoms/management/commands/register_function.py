@@ -20,7 +20,7 @@ from tfoms.models import (MedicalError, ProvidedService, MedicalRegister,
 
 from medical_service_register.path import BASE_DIR, REESTR_PSE
 
-from utils.correct_1 import date_correct
+from helpers.correct import date_correct
 
 
 ### Значение даты следующей за отчётным периодом
@@ -518,7 +518,7 @@ def get_mo_register(year, period, status=None):
 def pse_export(year, period, mo_code, register_status, data, handbooks):
     print u'Выгрузка в PSE файлы...'
     target_dir = REESTR_PSE
-    templates_path = '%s/templates' % BASE_DIR
+    templates_path = '%s/templates/dbf_pattern' % BASE_DIR
     errors_code = handbooks['errors_code']
 
     services = data['invoiced_services']
