@@ -1,7 +1,8 @@
 settings.py
 settings.pyc
 *.pyc
-.idea/
-static/img
-static/icons
-static/fonts
+*.xml
+/static/img/
+/static/fonts/
+/static/icons/
+/.idea/
