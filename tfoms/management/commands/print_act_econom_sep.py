@@ -11,6 +11,9 @@ import register_function
 from helpers.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
 
 
+DEBUG = True
+
+
 ### Рвспечатка сводного реестра принятых услуг
 def print_accepted_service(act_book, year, period, mo,
                            capitation_events, treatment_events,
@@ -173,6 +176,9 @@ def print_accepted_service(act_book, year, period, mo,
             event_data = service['event_id']
             if event_data not in adult_examination_event:
                 adult_examination_event[event_data] = service['subgroup']
+
+    if DEBUG:
+        file_viewed_service = file('log.csv', 'w')
 
     # Рассчёт сводных сумм
     for service in accepted_services:
@@ -370,6 +376,8 @@ def print_accepted_service(act_book, year, period, mo,
                     else:
                         value = value_default[sum_key]
                     sum_division_nogroup[term][section][division][sum_key][age] += value
+                if DEBUG:
+                    file_viewed_service.write(str(service['id'])+'\n')
         # Рассчёт сумм для услуг, имеющих обычные группы
         elif service['group'] and service['group'] not in exception_group \
                 and not term == 'unidentified':
@@ -386,6 +394,8 @@ def print_accepted_service(act_book, year, period, mo,
                 # Рассчёт сумм
                 for sum_key in sum_division_group[term][section]['subgroup'][division]:
                     sum_division_group[term][section]['subgroup'][division][sum_key][age] += value_default[sum_key]
+                if DEBUG:
+                    file_viewed_service.write(str(service['id'])+'\n')
             # Группировка по кодам для всех остальных
             else:
                 division = service['code_id']
@@ -394,12 +404,17 @@ def print_accepted_service(act_book, year, period, mo,
                 # Рассчёт сумм
                 for sum_key in sum_division_group[term][section]['code'][division]:
                     sum_division_group[term][section]['code'][division][sum_key][age] += value_default[sum_key]
+                if DEBUG:
+                    file_viewed_service.write(str(service['id'])+'\n')
 
         if not is_viewed_event:
             viewed_event.append(service['event_id'])
 
         if not is_viewed_patient:
             viewed_patient[term].append(patient)
+
+    if DEBUG:
+        file_viewed_service.close()
 
     # Рассчёт подушевого по поликлинике
     capitation_policlinic = {'male': deepcopy(init_sum), 'female': deepcopy(init_sum)}
@@ -1465,7 +1480,7 @@ class Command(BaseCommand):
         is_partial_register = args[3] if len(args) == 4 else 0
         printed_act = []
         template = BASE_DIR + r'\templates\excel_pattern\reestr_201408_test.xls'
-        target_dir = REESTR_DIR if status in (8, 6) else REESTR_EXP
+        target_dir = REESTR_DIR if status in (10, 6) else REESTR_EXP
         handbooks = {'failure_causes': register_function.get_failure_causes(),
                      'errors_code': register_function.get_errors(),
                      'workers_speciality': register_function.get_medical_worker_speciality(),
@@ -1523,7 +1538,7 @@ class Command(BaseCommand):
                                 sum_capitation_policlinic,
                                 sum_capitation_ambulance, data, handbooks)
                 print_error_fund(act_book, year, period, mo, data, handbooks)
-                if status == 8:
+                if status == 10:
                     register_function.pse_export(year, period, mo, 6, data, handbooks)
                 if status == 3:
                     register_function.change_register_status(year, period, mo, 9)
