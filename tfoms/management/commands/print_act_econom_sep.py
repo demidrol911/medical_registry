@@ -1283,7 +1283,7 @@ def print_order_146(act_book, year, period, mo, capitation_events,
                 sum_service_kind[service_kind][sum_kind[0]]['children']
 
     # Распечатка сумм по видам помощи
-    act_book.set_sheet(3)
+    act_book.set_sheet(4)
     act_book.set_style()
     act_book.set_cursor(2, 0)
     act_book.write_cell(handbooks['mo_name'])
@@ -1293,6 +1293,131 @@ def print_order_146(act_book, year, period, mo, capitation_events,
     for service_kind, row_index in service_kind_keys:
         act_book.set_cursor(row_index, 3)
         print_sum(act_book, '', sum_service_kind[service_kind], sum_kind_keys)
+
+
+def print_error_pk(act_book, year, period, mo, capitation_events, treatment_events, data, handbooks):
+    print u'Распечатка справки по ошибке PK'
+    services_mek = data['discontinued_services']
+    sanctions_mek = data['sanctions']
+    patients = data['patients']
+
+    services_pk = []
+
+    # Поиск услуг снятых по ошибке PK
+    for index, service in enumerate(services_mek):
+        active_error = sanctions_mek[service['id']][0]['error']
+        if active_error == 54:
+            services_pk.append(index)
+
+    service_term_keys = (
+        'hospital',                        # Стационар
+        'day_hospital',                    # Дневной стационар
+        'policlinic',                      # Поликлиника + Диспасеризация + Профосмотры
+        'ambulance',                       # Скорая помощь
+        'stomatology',                     # Стоматология
+        'total'                            # Итоговая сумма
+    )
+
+    sum_error_pk = {term_key: {'count_service': 0, 'sum_sanctions': 0}
+                    for term_key in service_term_keys}
+
+    sum_error_pk['population'] = 0
+    unique_patient = []
+
+    # Рассчёт сумм по ошибкe PK
+    for index in services_pk:
+        service = services_mek[index]
+        is_capitation = service['event_id'] in capitation_events or service['term'] == 4
+        # Словарь, в котором описываются условия разбивки услуг (по стационару, поликлинике и т. д.)
+        # и переопределяются значения рассчёта по умолчанию
+        rules_dict = [
+            # Круглосуточный стационар
+            {'condition': service['term'] == 1,
+             'term': 'hospital',
+             'column_condition': {
+                 'count_service': {'condition': service['group'] == 27, 'value': 0}
+             }},
+
+            # Дневной стационар
+            {'condition': service['term'] == 2,
+            'term': 'day_hospital',
+            'column_condition': {
+                'count_service': {'condition': service['group'] == 27, 'value': 0}
+            }},
+
+            # Поликлиника
+            {'condition': (service['term'] == 3 and not service['group'] == 19)
+                or not service['term'],
+            'term': 'policlinic',
+            'column_condition': {
+                'sum_sanctions': {'condition': is_capitation, 'value': 0}
+            }},
+
+            # Стоматология
+            {'condition': service['term'] == 3 and service['group'] == 19,
+             'term': 'stomatology'},
+
+            # Скорая помощь
+            {'condition': service['term'] == 4,
+             'term': 'ambulance',
+             'column_condition': {
+                 'sum_sanctions': {'condition': is_capitation, 'value': 0}
+             }}
+        ]
+
+        # Значения для рассчёта по умолчанию
+        value_default = {
+            'count_service': 1,
+            'sum_sanctions': service['provided_tariff']
+        }
+
+        if service['patient_id'] not in unique_patient:
+            unique_patient.append(service['patient_id'])
+
+        # Поиск к какому виду помощи относится услуга
+        term = None
+        column_conditions = None
+        for rule in rules_dict:
+            if rule['condition']:
+                term = rule['term']
+                column_conditions = rule['column_condition']
+
+        if term:
+            for column_key in sum_error_pk[term]:
+                if column_key in column_conditions:
+                    column_condition = column_conditions[column_key]
+                    if column_condition['condition']:
+                        value = column_condition['value']
+                    else:
+                        value = value_default[column_key]
+
+                else:
+                    value = value_default[column_key]
+                sum_error_pk[term][column_key] += value
+
+    for term_key in service_term_keys[:-1]:
+        sum_error_pk['total']['count_service'] += sum_error_pk[term_key]['count_service']
+        sum_error_pk['total']['sum_sanctions'] += sum_error_pk[term_key]['sum_sanctions']
+
+    sum_error_pk['population'] = len(unique_patient)
+
+    # Распечатка сумм в акт
+    act_book.set_sheet(3)
+    act_book.set_cursor(2, 0)
+    act_book.set_style()
+    act_book.write_cell(handbooks['mo_name'])
+    act_book.set_cursor(2, 5)
+    act_book.write_cell(u'%s %s года' % (MONTH_NAME[period], year))
+    act_book.set_cursor(3, 0)
+    partial_register = ','.join(handbooks['partial_register'])
+    act_book.write_cell(u'Частичный реестр: %s' % partial_register)
+    act_book.set_style(VALUE_STYLE)
+    act_book.set_cursor(6, 0)
+
+    act_book.write_cell(sum_error_pk['population'], 'c')
+    for term_key in service_term_keys:
+        act_book.write_cell(sum_error_pk[term_key]['count_service'], 'c')
+        act_book.write_cell(sum_error_pk[term_key]['sum_sanctions'], 'c')
 
 
 ### Распечатка ошибок МЭК (в табличной форме)
@@ -1371,7 +1496,7 @@ def print_error_fund(act_book, year, period, mo, data, handbooks):
         division_group[term]['data'][division]['invoiced_payment']['count'] += 1
         division_group[term]['data'][division]['invoiced_payment']['sum'] += service['invoiced_payment']
 
-    act_book.set_sheet(5)
+    act_book.set_sheet(6)
     act_book.set_style({'align': 'center'})
     act_book.set_cursor(3, 0)
     act_book.write_cell(u'в медицинской организации: %s' % register_function.get_mo_name(mo))
@@ -1533,6 +1658,9 @@ class Command(BaseCommand):
                                        data, handbooks)
                 print_errors_page(act_book, year, period, mo, capitation_events,
                                   treatment_events, data, handbooks)
+                print_error_pk(act_book, year, period, mo,
+                               capitation_events, treatment_events,
+                               data, handbooks)
                 print_order_146(act_book, year, period, mo,
                                 capitation_events, treatment_events,
                                 sum_capitation_policlinic,
@@ -1575,6 +1703,9 @@ class Command(BaseCommand):
                         print_errors_page(act_book, year, period, mo,
                                           capitation_events, treatment_events,
                                           data, handbooks)
+                        print_error_pk(act_book, year, period, mo,
+                                       capitation_events, treatment_events,
+                                       data, handbooks)
                         print_order_146(act_book, year, period, mo,
                                         capitation_events, treatment_events,
                                         sum_capitation_policlinic, sum_capitation_ambulance,
