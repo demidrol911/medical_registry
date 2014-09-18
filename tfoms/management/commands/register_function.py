@@ -430,10 +430,10 @@ def calculate_capitation_tariff_1(term, year, period, mo_code):
     if tariff:
         if term == 4:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_ambulance_attachment_count_1(data_attachment)
+                get_attachment_count(data_attachment)
         elif term == 3:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_attachment_count_1(data_attachment)
+                get_attachment_count(data_attachment)
 
         # Численность прикреплённых
         capitation_data['male']['population']['adult'] = population['adults_male_count']
