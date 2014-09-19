@@ -329,80 +329,8 @@ def get_total_sum(year, period, mo):
     return total_sum['tariff']
 
 
-### Расчёт тарифа по подушевому по поликлинике и скорой помощи
-def calculate_capitation_tariff(term, year, period, mo_code):
-    if term == 3:
-        print u'Рассчёт подушевого по поликлиннике...'
-    elif term == 4:
-        print u'Рассчёт подушевого по скорой помощи...'
-    data_attachment = get_date_following_reporting_period(year, period)
-    tariff = TariffCapitation.objects.filter(term=term, organization__code=mo_code,
-                                             start_date__lte=data_attachment)
-
-    value_keys = (
-        'adult',                     # Взрослые
-        'children'                   # Дети
-    )
-    column_keys = (
-        'population',                # Численность прикреплёных пациентов
-        'tariff',                    # Тариф по подушевому
-        'population_tariff',         # Численность * тариф по подушевому
-        'coefficient_value',         # Величина коэффициента ФАП
-        'coefficient',               # Коэффициент ФАП
-        'accepted_payment'           # Численность * тариф + тариф * (1-ФАП)
-    )
-    capitation_data = {column_key: {value_key: 0 for value_key in value_keys}
-                       for column_key in column_keys}
-    if tariff:
-        if term == 4:
-            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_ambulance_attachment_count(data_attachment)
-        elif term == 3:
-            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_attachment_count(data_attachment)
-
-        capitation_data['population']['adult'] = population['adults_count']
-        capitation_data['population']['children'] = population['children_count']
-
-        capitation_data['tariff']['adult'] = tariff.filter(is_children_profile=False).\
-            order_by('-start_date')[0].value\
-            if population['adults_count'] else 0
-        capitation_data['tariff']['children'] = tariff.filter(is_children_profile=True).\
-            order_by('-start_date')[0].value\
-            if population['children_count'] else 0
-
-        capitation_data['population_tariff']['adult'] = \
-            capitation_data['population']['adult'] * capitation_data['tariff']['adult']
-
-        capitation_data['population_tariff']['children'] = \
-            capitation_data['population']['children'] * capitation_data['tariff']['children']
-
-        if term == 3:
-            fap = TariffFap.objects.filter(organization__code=mo_code,
-                                           start_date__lte=data_attachment)
-            if fap:
-                capitation_data['coefficient_value']['adult'] = \
-                    fap.filter(is_children_profile=False).order_by('-start_date')[0].value
-                capitation_data['coefficient_value']['children'] = \
-                    fap.filter(is_children_profile=True).order_by('-start_date')[0].value
-
-                capitation_data['coefficient']['adult'] = \
-                    capitation_data['population_tariff']['adult'] * \
-                    (capitation_data['coefficient_value']['adult']-1)
-                capitation_data['coefficient']['children'] = \
-                    capitation_data['population_tariff']['children'] * \
-                    (capitation_data['coefficient_value']['children']-1)
-
-        capitation_data['accepted_payment']['adult'] = \
-            capitation_data['population_tariff']['adult'] + capitation_data['coefficient']['adult']
-        capitation_data['accepted_payment']['children'] = \
-            capitation_data['population_tariff']['children'] + capitation_data['coefficient']['children']
-
-    return capitation_data
-
-
 ### Расчёт тарифа по подушевому по поликлинике и скорой помощи c сентября 2014
-def calculate_capitation_tariff_1(term, year, period, mo_code):
+def calculate_capitation_tariff(term, year, period, mo_code):
     if term == 3:
         print u'Рассчёт подушевого по поликлиннике...'
     elif term == 4:
@@ -430,7 +358,7 @@ def calculate_capitation_tariff_1(term, year, period, mo_code):
     if tariff:
         if term == 4:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_attachment_count(data_attachment)
+                get_ambulance_attachment_count(data_attachment)
         elif term == 3:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
                 get_attachment_count(data_attachment)
@@ -648,5 +576,3 @@ def change_register_status(year, period, mo_code, register_status):
     for register_file in register_files:
         register_file.status_id = register_status
         register_file.save()
-
-

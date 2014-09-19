@@ -1355,7 +1355,8 @@ def print_error_pk(act_book, year, period, mo, capitation_events, treatment_even
 
             # Стоматология
             {'condition': service['term'] == 3 and service['group'] == 19,
-             'term': 'stomatology'},
+             'term': 'stomatology',
+             'column_condition': {}},
 
             # Скорая помощь
             {'condition': service['term'] == 4,
@@ -1643,8 +1644,8 @@ class Command(BaseCommand):
             print u'Поиск случаев с подушевым...'
             capitation_events = register_function.get_capitation_events(year, period, mo)
 
-            sum_capitation_policlinic = register_function.calculate_capitation_tariff_1(3, year, period, mo)
-            sum_capitation_ambulance = register_function.calculate_capitation_tariff_1(4, year, period, mo)
+            sum_capitation_policlinic = register_function.calculate_capitation_tariff(3, year, period, mo)
+            sum_capitation_ambulance = register_function.calculate_capitation_tariff(4, year, period, mo)
 
             target = target_dir % (year, period) + r'\%s' % handbooks['mo_name'].replace('"', '').replace(' ', '_')
             print u'Печать акта: %s ...' % target
