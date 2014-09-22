@@ -222,11 +222,12 @@ def get_treatment_events(year, period, mo_code):
     return events.values_list('event__pk', flat=True).distinct()
 
 
-### Наименование больницы
-def get_mo_name(mo_code, department_code=None):
+### Информация
+def get_mo_info(mo_code, department_code=None):
     if department_code:
-        return MedicalOrganization.objects.get(code=mo_code, old_code=department_code).name
-    return MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).name
+        mo = MedicalOrganization.objects.get(code=mo_code, old_code=department_code)
+    mo = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
+    return {'name': mo.name, 'is_agma_cathedra': mo.is_agma_cathedra}
 
 
 ### Коды больниц прикреплённых к указанной больнице

@@ -36,6 +36,7 @@ class ExcelWriter(Workbook):
         self.cursor = {'row': 0, 'column': 0}
         self.overall_style = {}
         self.style = {}
+        self.number_precision = 2
         if template:
             template_book = open_workbook(template, formatting_info=True)
             format_info = template_book.xf_list
@@ -93,8 +94,8 @@ class ExcelWriter(Workbook):
     ### Записывает в ячейку укаазанное значение
     def write_cell(self, value, increment=None, size=0):
         if (isinstance(value, Decimal) or isinstance(value, float)) and value != round(value, 0):
-            self.set_style_property('num_format', '0.00')
-            value_cell = round(value, 2)
+            self.set_style_property('num_format', '0.'+'0'*self.number_precision)
+            value_cell = round(value, self.number_precision)
         else:
             self.set_style_property('num_format', '0')
             value_cell = value
@@ -112,6 +113,10 @@ class ExcelWriter(Workbook):
         elif increment == 'rc':
             self.cursor['row'] += 1
             self.cursor['column'] += 1
+
+    ### Устанаавливает количество отображаемых знаков после запятой для чисел
+    def set_number_precision(self, prec):
+        self.number_precision = prec
 
     ### Устанавливает текущий лист
     def set_sheet(self, index):

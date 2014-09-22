@@ -320,7 +320,8 @@ def print_accepted_service(act_book, year, period, mo,
         sum_tariff_coefficient = float(service['tariff'])
         for code in sorted(coef_to_field):
             field = coef_to_field[code]
-            prec = 3 if code == 2 else 2
+            prec = 4 if code == 2 or \
+                (code == 6 and handbooks['mo_info']['is_agma_cathedra'])else 2
             if code in coefficient_service:
                 if code == 6:
                     value = round(float((handbooks['coefficient_type'][code]['value']-1))*sum_tariff_coefficient, prec)
@@ -473,7 +474,7 @@ def print_accepted_service(act_book, year, period, mo,
     # Распечатка сводного акта
     act_book.set_sheet(0)
     act_book.set_cursor(2, 0)
-    act_book.write_cell(mo+' '+handbooks['mo_name'])
+    act_book.write_cell(mo+' '+handbooks['mo_info']['name'])
     act_book.set_cursor(2, 9)
     act_book.write_cell(u'за %s %s г.' % (MONTH_NAME[period], year))
     act_book.set_cursor(3, 0)
@@ -506,7 +507,10 @@ def print_accepted_service(act_book, year, period, mo,
                     total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
                     division_name = division_name_handbook[division]['name'] \
                         if division_name_handbook.get(division, None) else u' '
-                    print_sum(act_book, division_name, sum_value, column_keys)
+                    if term == 'hospital' and handbooks['mo_info']['is_agma_cathedra']:
+                        print_sum(act_book, division_name, sum_value, column_keys, prec=3)
+                    else:
+                        print_sum(act_book, division_name, sum_value, column_keys)
 
                 total_sum_mo = calculate_total_sum_adv(total_sum_mo, total_sum_section, column_keys)
 
@@ -625,7 +629,7 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
                         MONTH_NAME[period])
     act_book.set_cursor(5, 0)
     act_book.write_cell(u'в медицинской организации: %s'
-                        % handbooks['mo_name'])
+                        % handbooks['mo_info']['name'])
     act_book.set_cursor(7, 0)
     for failure_cause_id in failure_causes_group:
 
@@ -788,7 +792,7 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
     act_book.set_sheet(2)
     act_book.set_cursor(2, 0)
     act_book.set_style()
-    act_book.write_cell(handbooks['mo_name'])
+    act_book.write_cell(handbooks['mo_info']['name'])
     act_book.set_cursor(2, 5)
     act_book.write_cell(u'%s %s года' % (MONTH_NAME[period], year))
     act_book.set_cursor(3, 0)
@@ -921,10 +925,11 @@ def print_total_sum_error(act_book, title, total_sum):
 
 
 ### Распечатка суммы (по отделению, причинам отказа, виду помощи и т. д
-def print_sum(act_book, title, total_sum, sum_keys, style=VALUE_STYLE):
+def print_sum(act_book, title, total_sum, sum_keys, prec=2, style=VALUE_STYLE):
     act_book.set_style(style)
     if title:
         act_book.write_cell(title, 'c')
+    act_book.set_number_precision(prec)
     for title_key, column_keys in sum_keys:
         for column_key in column_keys:
             act_book.write_cell(total_sum[title_key][column_key], 'c')
@@ -1286,7 +1291,7 @@ def print_order_146(act_book, year, period, mo, capitation_events,
     act_book.set_sheet(4)
     act_book.set_style()
     act_book.set_cursor(2, 0)
-    act_book.write_cell(handbooks['mo_name'])
+    act_book.write_cell(handbooks['mo_info']['name'])
     act_book.set_cursor(3, 10)
     act_book.write_cell(u'за %s %s г.' % (MONTH_NAME[period], year))
 
@@ -1406,7 +1411,7 @@ def print_error_pk(act_book, year, period, mo, capitation_events, treatment_even
     act_book.set_sheet(3)
     act_book.set_cursor(2, 0)
     act_book.set_style()
-    act_book.write_cell(handbooks['mo_name'])
+    act_book.write_cell(handbooks['mo_info']['name'])
     act_book.set_cursor(2, 5)
     act_book.write_cell(u'%s %s года' % (MONTH_NAME[period], year))
     act_book.set_cursor(3, 0)
@@ -1500,7 +1505,7 @@ def print_error_fund(act_book, year, period, mo, data, handbooks):
     act_book.set_sheet(6)
     act_book.set_style({'align': 'center'})
     act_book.set_cursor(3, 0)
-    act_book.write_cell(u'в медицинской организации: %s' % register_function.get_mo_name(mo))
+    act_book.write_cell(u'в медицинской организации: %s' % handbooks['mo_info']['name'])
     act_book.set_cursor(11, 0)
 
     # Распечатка услуг снятых с оплаты или частично оплаченных
@@ -1624,7 +1629,7 @@ class Command(BaseCommand):
             start = time.clock()
             partial_register = register_function.get_partial_register(year, period, mo)
             handbooks['partial_register'] = partial_register
-            handbooks['mo_name'] = register_function.get_mo_name(mo)
+            handbooks['mo_info'] = register_function.get_mo_info(mo)
             print u'Сборка сводного реестра для', mo
             print u'Загрузка данных...'
             data = {
@@ -1647,7 +1652,8 @@ class Command(BaseCommand):
             sum_capitation_policlinic = register_function.calculate_capitation_tariff(3, year, period, mo)
             sum_capitation_ambulance = register_function.calculate_capitation_tariff(4, year, period, mo)
 
-            target = target_dir % (year, period) + r'\%s' % handbooks['mo_name'].replace('"', '').replace(' ', '_')
+            target = target_dir % (year, period) + r'\%s' % \
+                     handbooks['mo_info']['name'].replace('"', '').replace(' ', '_')
             print u'Печать акта: %s ...' % target
 
             with ExcelWriter(target, template=template) as act_book:
@@ -1678,7 +1684,7 @@ class Command(BaseCommand):
                 print u'Сборка сводного реестра по прикреплённым больницам...'
                 for department in partial_register:
                     print u'Загрузка данных...'
-                    handbooks['mo_name'] = register_function.get_mo_name(mo, department)
+                    handbooks['mo_info'] = register_function.get_mo_info(mo, department)
                     handbooks['partial_register'] = [department, ]
 
                     data['invoiced_services'] = register_function.get_services(year, period, mo,
@@ -1691,7 +1697,7 @@ class Command(BaseCommand):
                                                                                    payment_type=[3, 4],
                                                                                    is_include_operation=True,
                                                                                    department_code=department)
-                    target = target_dir % (year, period) + r'\%s' % handbooks['mo_name'].\
+                    target = target_dir % (year, period) + r'\%s' % handbooks['mo_info']['name'].\
                         replace('"', '').replace(' ', '_')
                     print u'Печать акта: %s ...' % target
 

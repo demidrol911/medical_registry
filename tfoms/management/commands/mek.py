@@ -967,13 +967,13 @@ def sanctions_on_cross_dates_services(register_element):
 
     services1 = ProvidedService.objects.raw(
         query1, dict(year=register_element['year'],
-                    period=register_element['period'],
-                    organization=register_element['organization_code']))
+                     period=register_element['period'],
+                     organization=register_element['organization_code']))
 
     services2 = ProvidedService.objects.raw(
         query2, dict(year=register_element['year'],
-                    period=register_element['period'],
-                    organization=register_element['organization_code']))
+                     period=register_element['period'],
+                     organization=register_element['organization_code']))
 
     return get_sanction_tuple(services1, 73) + get_sanction_tuple(services2, 73)
 
