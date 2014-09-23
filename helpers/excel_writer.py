@@ -13,7 +13,7 @@ class ExcelWriter(Workbook):
     ### Временная директория
     TEMPORARY_DIR = BASE_DIR + r'\tmp'
 
-    def __init__(self, target, template=None):
+    def __init__(self, target, template=None, sheet_names=[]):
         book_name = path.basename(target)
         target_dir = path.dirname(target)
         similar_names = [f_name for f_name in listdir(target_dir)
@@ -43,8 +43,10 @@ class ExcelWriter(Workbook):
             colour_map = template_book.colour_map
             vert_align = {0: 'vleft', 1: 'vcenter', 2: 'vcenter', 4: 'vcenter'}
             hort_align = {0: 'left', 1: 'left', 2: 'center', 3: 'right'}
-            for temp_sheet in template_book.sheets():
-                self.sheet = self.add_worksheet(temp_sheet.name)
+            for idx, temp_sheet in enumerate(template_book.sheets()):
+                self.sheet = self.add_worksheet(sheet_names[idx]
+                                                if len(sheet_names) > idx
+                                                else temp_sheet.name)
                 rowinfo_map = temp_sheet.rowinfo_map
                 colinfo_map = temp_sheet.colinfo_map
                 for cell_range in temp_sheet.merged_cells:
