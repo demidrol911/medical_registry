@@ -1653,7 +1653,7 @@ class Command(BaseCommand):
             sum_capitation_ambulance = register_function.calculate_capitation_tariff(4, year, period, mo)
 
             target = target_dir % (year, period) + r'\%s' % \
-                     handbooks['mo_info']['name'].replace('"', '').replace(' ', '_')
+                     handbooks['mo_info']['name'].replace('"', '').strip()
             print u'Печать акта: %s ...' % target
 
             with ExcelWriter(target, template=template) as act_book:
@@ -1698,7 +1698,7 @@ class Command(BaseCommand):
                                                                                    is_include_operation=True,
                                                                                    department_code=department)
                     target = target_dir % (year, period) + r'\%s' % handbooks['mo_info']['name'].\
-                        replace('"', '').replace(' ', '_')
+                        replace('"', '').strip()
                     print u'Печать акта: %s ...' % target
 
                     with ExcelWriter(target, template=template) as act_book:
