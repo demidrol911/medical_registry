@@ -1,9 +1,10 @@
 #! -*- coding: utf-8 -*-
-from copy import deepcopy
 
+from copy import deepcopy
 from django.core.management.base import BaseCommand
-from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR, MONTH_NAME
+from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
+from helpers.const import MONTH_NAME
 import time
 from helpers.correct import date_correct
 import register_function

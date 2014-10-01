@@ -1,9 +1,11 @@
 #! -*- coding: utf-8 -*-
+
 from django.core.management.base import BaseCommand
 from django.db import connection
-from medical_service_register.path import REESTR_EXP, MONTH_NAME, BASE_DIR
+from medical_service_register.path import REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
 from helpers.excel_style import VALUE_STYLE, PERIOD_VALUE_STYLE
+from helpers.const import MONTH_NAME
 
 ACT_CELL_POSITION = {
     '280003': 20, '280005': 21, '280043': 22, '280013': 23,
