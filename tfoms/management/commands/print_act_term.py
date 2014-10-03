@@ -5,30 +5,13 @@ from django.db import connection
 from medical_service_register.path import REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
 from helpers.excel_style import VALUE_STYLE, PERIOD_VALUE_STYLE
-from helpers.const import MONTH_NAME
-
-ACT_CELL_POSITION = {
-    '280003': 20, '280005': 21, '280043': 22, '280013': 23,
-    '280018': 24, '280054': 25, '280026': 27, '280036': 28,
-    '280085': 29, '280038': 30, '280066': 31, '280064': 32,
-    '280069': 33, '280004': 34, '280082': 35, '280083': 36,
-    '280028': 37, '280086': 38, '280088': 39, '280091': 40,
-    '280093': 41, '280096': 42, '280017': 45, '280065': 46,
-    '280010': 47, '280001': 49, '280052': 50, '280016': 51,
-    '280076': 52, '280075': 54, '280019': 55, '280024': 57,
-    '280068': 59, '280067': 61, '280022': 62, '280084': 64,
-    '280070': 65, '280029': 67, '280037': 68, '280078': 70,
-    '280059': 72, '280074': 73, '280061': 74, '280027': 76,
-    '280041': 77, '280023': 78, '280040': 80, '280025': 82,
-    '280015': 83, '280012': 85, '280009': 86, '280007': 88,
-    '280002': 90, '280039': 92, '280071': 94, '280080': 96,
-    '280053': 98, '280020': 100
-}
+from helpers.const import MONTH_NAME, ACT_CELL_POSITION
+import time
 
 
 ### Структура для актов дневного стационара
 def get_day_hospital_structure():
-    DAY_HOSPITAL_QUERY = """
+    day_hospital_query = """
          SELECT medical_register.organization_code,
          COUNT(DISTINCT (patient.id_pk, medical_division.term_fk,
                medical_service.group_fk, medical_service.tariff_profile_fk)) AS all_population,
@@ -77,10 +60,11 @@ def get_day_hospital_structure():
              AND ({condition})
          GROUP BY medical_register.organization_code
          """
+
     return [{'title': u'Дневной стационар',
              'pattern': 'day_hospital',
              'sum': [
-                 {'query': (DAY_HOSPITAL_QUERY,
+                 {'query': (day_hospital_query,
                             """
                             (provided_event.term_fk=2 and
                              medical_division.term_fk in (10, 11) and
@@ -89,7 +73,7 @@ def get_day_hospital_structure():
                             """),
                   'cell_count': 12,
                   'separator_length': 2},
-                 {'query': (DAY_HOSPITAL_QUERY,
+                 {'query': (day_hospital_query,
                             """
                             provided_event.term_fk=2 and
                             medical_service.group_fk = 28
@@ -100,7 +84,7 @@ def get_day_hospital_structure():
             {'title': u'Дневной стационар на дому',
              'pattern': 'day_hospital_home',
              'sum': [
-                 {'query': (DAY_HOSPITAL_QUERY,
+                 {'query': (day_hospital_query,
                             """
                             provided_event.term_fk=2 and
                             medical_division.term_fk=12 and
@@ -112,7 +96,7 @@ def get_day_hospital_structure():
             {'title': u'Дневной стационар свод',
              'pattern': 'day_hospital_all',
              'sum': [
-                 {'query': (DAY_HOSPITAL_QUERY,
+                 {'query': (day_hospital_query,
                             """
                             (provided_event.term_fk=2 and medical_service.group_fk is null)
                              or medical_service.group_fk in (17, 28)
@@ -124,7 +108,7 @@ def get_day_hospital_structure():
 
 ### Структура актов по стоматологии
 def get_stomatology_structure():
-    STOMATOLOGY_DISEASE_QUERY = """
+    stomatology_disease_query = """
          SELECT medical_register.organization_code,
 
          COUNT(DISTINCT patient.id_pk) AS all_population,
@@ -191,7 +175,7 @@ def get_stomatology_structure():
          GROUP BY medical_register.organization_code
          """
 
-    STOMATOLOGY_PROPH_OR_AMBULANCE_QUERY = """
+    stomatology_proph_or_ambulance_query = """
          SELECT medical_register.organization_code,
 
          COUNT(DISTINCT patient.id_pk) AS all_population,
@@ -253,7 +237,7 @@ def get_stomatology_structure():
          GROUP BY medical_register.organization_code
          """
 
-    STOMATOLOGY_EMERGENCY_QUERY = """
+    stomatology_emergency_query = """
          SELECT medical_register.organization_code,
 
          COUNT(DISTINCT patient.id_pk) AS all_population,
@@ -330,7 +314,7 @@ def get_stomatology_structure():
          GROUP BY medical_register.organization_code
          """
 
-    STOMATOLOGY_TOTAL_QUERY = """
+    stomatology_total_query = """
          SELECT medical_register.organization_code,
 
          COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL
@@ -418,19 +402,19 @@ def get_stomatology_structure():
     return [{'title': u'Стоматология',
              'pattern': 'stomatology',
              'sum': [
-                 {'query': (STOMATOLOGY_DISEASE_QUERY, '12'),
+                 {'query': (stomatology_disease_query, '12'),
                   'cell_count': 15,
                   'separator_length': 0},
-                 {'query': (STOMATOLOGY_PROPH_OR_AMBULANCE_QUERY, '13'),
+                 {'query': (stomatology_proph_or_ambulance_query, '13'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (STOMATOLOGY_PROPH_OR_AMBULANCE_QUERY, '14'),
+                 {'query': (stomatology_proph_or_ambulance_query, '14'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (STOMATOLOGY_EMERGENCY_QUERY, '17'),
+                 {'query': (stomatology_emergency_query, '17'),
                   'cell_count': 18,
                   'separator_length': 0},
-                 {'query': (STOMATOLOGY_TOTAL_QUERY, '12, 13, 14, 17'),
+                 {'query': (stomatology_total_query, '12, 13, 14, 17'),
                   'cell_count': 21,
                   'separator_length': 0}]},
             ]
@@ -438,7 +422,7 @@ def get_stomatology_structure():
 
 ### Структура актов для круглосуточного стационара
 def get_hospital_structure():
-    HOSPITAL_QUERY = """
+    hospital_query = """
          SELECT
          medical_register.organization_code,
          COUNT(DISTINCT (patient.id_pk, medical_service.group_fk,
@@ -492,7 +476,7 @@ def get_hospital_structure():
          GROUP BY medical_register.organization_code
          """
 
-    HOSPITAL_TOTAL_QUERY = """
+    hospital_total_query = """
          SELECT
          medical_register.organization_code,
          SUM(round(provided_service.tariff, 2)) AS all_tariff,
@@ -525,7 +509,7 @@ def get_hospital_structure():
          GROUP BY medical_register.organization_code
          """
 
-    HOSPITAL_HMC_QUERY = """
+    hospital_hmc_query = """
          SELECT
          DISTINCT medical_register.organization_code,
          COUNT(DISTINCT (patient.id_pk, medical_service.tariff_profile_fk)) AS all_population,
@@ -572,7 +556,7 @@ def get_hospital_structure():
          GROUP BY medical_register.organization_code
          """
 
-    HOSPITAL_HMC_TOTAL_QUERY = """
+    hospital_hmc_total_query = """
          SELECT
          medical_register.organization_code, SUM(provided_service.tariff) AS all_tariff
          FROM provided_service
@@ -594,17 +578,18 @@ def get_hospital_structure():
              AND medical_service.tariff_profile_fk in ({condition})
          GROUP BY medical_register.organization_code
          """
+
     return [{'title': u'Круглосуточный стационар',
              'pattern': 'hospital',
              'sum': [
-                 {'query': (HOSPITAL_QUERY,
+                 {'query': (hospital_query,
                             """
                             (provided_event.term_fk = 1 AND medical_service.group_fk IS NULL)
                             OR medical_service.group_fk in (1, 2, 3)
                             """),
                   'cell_count': 12,
                   'separator_length': 2},
-                 {'query': (HOSPITAL_TOTAL_QUERY,
+                 {'query': (hospital_total_query,
                             """
                             (provided_event.term_fk = 1 AND
                             medical_service.group_fk IS NULL)
@@ -615,40 +600,40 @@ def get_hospital_structure():
             {'title': u'Круглосуточный стационар ВМП',
              'pattern': 'hospital_hmc',
              'sum': [
-                 {'query': (HOSPITAL_HMC_QUERY, '56'),
+                 {'query': (hospital_hmc_query, '56'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '57'),
+                 {'query': (hospital_hmc_query, '57'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '58'),
+                 {'query': (hospital_hmc_query, '58'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '59'),
+                 {'query': (hospital_hmc_query, '59'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '60'),
+                 {'query': (hospital_hmc_query, '60'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '63'),
+                 {'query': (hospital_hmc_query, '63'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '61'),
+                 {'query': (hospital_hmc_query, '61'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '62'),
+                 {'query': (hospital_hmc_query, '62'),
                   'cell_count': 12,
                   'separator_length': 0},
-                 {'query': (HOSPITAL_HMC_QUERY, '56, 57, 58, 59, 60, 63, 61, 62'),
+                 {'query': (hospital_hmc_query, '56, 57, 58, 59, 60, 63, 61, 62'),
                   'cell_count': 12,
                   'separator_length': 2},
-                 {'query': (HOSPITAL_HMC_TOTAL_QUERY, '56, 57, 58, 59, 60, 63, 61, 62'),
+                 {'query': (hospital_hmc_total_query, '56, 57, 58, 59, 60, 63, 61, 62'),
                   'cell_count': 1,
                   'separator_length': 0}]},
             {'title': u'Круглосуточный стационар свод',
              'pattern': 'hospital_all',
              'sum': [{
-                 'query': (HOSPITAL_QUERY,
+                 'query': (hospital_query,
                            """
                            (provided_event.term_fk = 1 AND medical_service.group_fk IS NULL)
                            OR medical_service.group_fk in (1, 2, 3, 20)
@@ -660,7 +645,7 @@ def get_hospital_structure():
 
 ### Структура актов по скорой помощи
 def get_acute_care_structure():
-    ACUTE_CARE_QUERY = """
+    acute_care_query = """
          SELECT
          medical_register.organization_code,
          COUNT(DISTINCT (patient.id_pk, medical_service.division_fk)) AS all_population,
@@ -700,24 +685,406 @@ def get_acute_care_structure():
                AND medical_service.division_fk in ({condition})
          GROUP BY medical_register.organization_code
          """
+
     return [{'title': u'СМП финансирование по подушевому нормативу (кол-во, основной тариф)',
              'pattern': 'acute_care',
              'sum': [
-                 {'query': (ACUTE_CARE_QUERY, '456'),
+                 {'query': (acute_care_query, '456'),
                   'cell_count': 9,
                   'separator_length': 0},
-                 {'query': (ACUTE_CARE_QUERY, '455'),
+                 {'query': (acute_care_query, '455'),
                   'cell_count': 9,
                   'separator_length': 0},
-                 {'query': (ACUTE_CARE_QUERY, '457'),
+                 {'query': (acute_care_query, '457'),
                   'cell_count': 9,
                   'separator_length': 0},
-                 {'query': (ACUTE_CARE_QUERY, '458'),
+                 {'query': (acute_care_query, '458'),
                   'cell_count': 9,
                   'separator_length': 0},
-                 {'query': (ACUTE_CARE_QUERY, '456, 455, 457, 458'),
+                 {'query': (acute_care_query, '456, 455, 457, 458'),
                   'cell_count': 9,
                   'separator_length': 0}]}]
+
+
+### Структура актов периодических медосмотров
+def get_periodic_med_exam_structure():
+    periodic_med_exam_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT patient.id_pk) AS all_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+
+         SUM(provided_service.tariff) AS all_tariff,
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END),
+
+         SUM(provided_service.accepted_payment) AS all_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT provided_service_coefficient.id_pk
+                  FROM provided_service_coefficient
+                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND medical_service.group_fk=16 and medical_service.subgroup_fk is NULL
+               {condition}
+         GROUP BY medical_register.organization_code
+         """
+
+    return [{'title': u'Периодический медицинский осмотр несовершеннолетних',
+             'pattern': 'periodic_medical_examination',
+             'sum': [
+                 {'query': (periodic_med_exam_query, ''),
+                  'cell_count': 5,
+                  'separator_length': 0}]}]
+
+
+### Структура актов предварительных медосмотров
+def get_preliminary_med_exam_structure():
+    preliminary_med_exam_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+
+         SUM(provided_service.tariff) AS all_tariff,
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END),
+
+         SUM(provided_service.accepted_payment) AS all_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient
+                 ON provided_service_coefficient.id_pk =
+                 (SELECT provided_service_coefficient.id_pk
+                  FROM provided_service_coefficient
+                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk
+                  LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND {condition}
+         GROUP BY medical_register.organization_code
+         """
+
+    preliminary_med_exam_spec_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT patient.id_pk) AS all_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND {condition}
+         GROUP BY medical_register.organization_code
+         """
+
+    return [{'title': u'Предварительный медицинский осмотр несовершеннолетних',
+             'pattern': 'preliminary_medical_examination',
+             'sum': [
+                 {'query': (preliminary_med_exam_query, "medical_service.code='119101'"),
+                  'cell_count': 5,
+                  'separator_length': 0},
+                 {'query': (preliminary_med_exam_query, "medical_service.code='119119'"),
+                  'cell_count': 5,
+                  'separator_length': 0},
+                 {'query': (preliminary_med_exam_query, "medical_service.code='119120'"),
+                  'cell_count': 5,
+                  'separator_length': 0},
+                 {'query': (preliminary_med_exam_query,
+                            """
+                            medical_service.code in
+                            ('119101', '119119', '119120')
+                            """),
+                  'cell_count': 5,
+                  'separator_length': 1},
+                 {'query': (preliminary_med_exam_spec_query,
+                            """
+                            medical_service.group_fk=15 and
+                            medical_service.subgroup_fk=11
+                            """),
+                  'cell_count': 2,
+                  'separator_length': 2},
+                 {'query': (preliminary_med_exam_query,
+                            """
+                            medical_service.group_fk=15 and
+                            (medical_service.subgroup_fk=11
+                              or medical_service.code in ('119101', '119119', '119120'))
+                            """),
+                  'cell_count': 5,
+                  'separator_length': 0}
+             ]}]
+
+
+### Структура актов профиактических осмотров
+def get_preventive_med_exam_structure():
+    preventive_med_exam_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_male_population,
+
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization,
+
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.tariff ELSE 0 END) AS all_female_tariff,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
+
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 AND patient.gender_fk = 2
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 AND patient.gender_fk = 1
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
+
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_female_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_male_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient
+                 ON provided_service_coefficient.id_pk =
+                 (SELECT provided_service_coefficient.id_pk
+                  FROM provided_service_coefficient
+                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk
+                  LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND ({condition})
+         GROUP BY medical_register.organization_code
+         """
+
+    preventive_med_exam_total_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_male_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization,
+
+         SUM(provided_service.tariff) AS all_tariff,
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.tariff ELSE 0 END) AS all_female_tariff,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 and patient.gender_fk = 2
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 and patient.gender_fk = 1
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
+
+         SUM(provided_service.accepted_payment) AS all_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_female_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_male_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient
+                 ON provided_service_coefficient.id_pk =
+                 (SELECT provided_service_coefficient.id_pk
+                  FROM provided_service_coefficient
+                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk
+                  LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND ({condition})
+         GROUP BY medical_register.organization_code
+         """
+
+    preventive_med_exam_spec_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT patient.id_pk) AS all_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN patient.id_pk END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN patient.id_pk END) AS all_male_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND (medical_service.group_fk=11 AND medical_service.subgroup_fk=8)
+               {condition}
+         GROUP BY medical_register.organization_code
+         """
+
+    return [{'title': u'Профилактический медицинский осмотр несовершеннолетних',
+             'pattern': 'preventive_medical_examination',
+             'sum': [
+                 {'query': (preventive_med_exam_query,
+                            """
+                            medical_service.code in ('119051', '119080', '119081')
+                            """),
+                  'cell_count': 10,
+                  'separator_length': 0},
+                 {'query': (preventive_med_exam_query,
+                            """
+                            medical_service.code in ('119052', '119082', '119083')
+                            """),
+                  'cell_count': 10,
+                  'separator_length': 0},
+                 {'query': (preventive_med_exam_query,
+                            """
+                            medical_service.code in ('119053', '119084', '119085')
+                            """),
+                  'cell_count': 10,
+                  'separator_length': 0},
+                 {'query': (preventive_med_exam_query,
+                            """
+                            medical_service.code in ('119054', '119086', '119087')
+                            """),
+                  'cell_count': 10,
+                  'separator_length': 0},
+                 {'query': (preventive_med_exam_query,
+                            """
+                            medical_service.code in ('119055', '119088', '119089')
+                            """),
+                  'cell_count': 10,
+                  'separator_length': 0},
+                 {'query': (preventive_med_exam_query,
+                            """
+                            medical_service.code in ('119056', '119090', '119091')
+                            """),
+                  'cell_count': 10,
+                  'separator_length': 0},
+                 {'query': (preventive_med_exam_total_query,
+                            """
+                            medical_service.code in ('119051', '119052', '119053',
+                                                     '119054', '119055', '119056',
+                                                     '119080', '119081', '119082',
+                                                     '119083', '119084', '119085',
+                                                     '119086', '119087', '119088',
+                                                     '119089', '119090', '119091')
+                            """),
+                  'cell_count': 15,
+                  'separator_length': 2},
+                 {'query': (preventive_med_exam_spec_query, ''),
+                  'cell_count': 6,
+                  'separator_length': 2},
+                 {'query': (preventive_med_exam_total_query,
+                            """
+                            medical_service.group_fk=11 AND
+                            (medical_service.subgroup_fk=8
+                            OR medical_service.code in ('119051', '119052', '119053',
+                                                        '119054', '119055', '119056',
+                                                        '119080', '119081', '119082',
+                                                        '119083', '119084', '119085',
+                                                        '119086', '119087', '119088',
+                                                        '119089', '119090', '119091')
+                            )
+                            """),
+                  'cell_count': 15,
+                  'separator_length': 0},
+
+             ]}]
 
 
 class Command(BaseCommand):
@@ -728,13 +1095,17 @@ class Command(BaseCommand):
         target_dir = REESTR_EXP % (year, period)
         act_path_t = ur'{dir}\{title}_{month}_{year}'
         temp_path_t = ur'{base}\templates\excel_pattern\end_of_month\{template}.xls'
+        start = time.clock()
         query_cursor = connection.cursor()
 
         acts_structure = [
             get_day_hospital_structure(),
             get_stomatology_structure(),
             get_hospital_structure(),
-            get_acute_care_structure()
+            get_acute_care_structure(),
+            get_periodic_med_exam_structure(),
+            get_preliminary_med_exam_structure(),
+            get_preventive_med_exam_structure()
         ]
 
         for structure in acts_structure:
@@ -781,3 +1152,5 @@ class Command(BaseCommand):
                         block_index += condition['cell_count'] + \
                             condition['separator_length']
         query_cursor.close()
+        elapsed = time.clock() - start
+        print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
