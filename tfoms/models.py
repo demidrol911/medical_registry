@@ -360,13 +360,21 @@ class MedicalOrganization(models.Model):
                  period=period))]
 
     def get_attachment_count(self, date):
-        population = AttachmentStatistics.objects.get(organization=self.code, at=date)
-        return {
-            'adults_male_count': population.adult_male,
-            'children_male_count': population.children_male,
-            'adults_female_count': population.adult_female,
-            'children_female_count': population.children_female
-        }
+        population = AttachmentStatistics.objects.filter(organization=self.code, at=date)
+        if population:
+            return {
+                'adults_male_count': population[0].adult_male,
+                'children_male_count': population[0].children_male,
+                'adults_female_count': population[0].adult_female,
+                'children_female_count': population[0].children_female
+            }
+        else:
+            return {
+                'adults_male_count': 0,
+                'children_male_count': 0,
+                'adults_female_count': 0,
+                'children_female_count': 0
+            }
 
     def get_ambulance_attachment_count(self, date):
         # Из-за того, что больница 280065 не принадлежит територриально 280017

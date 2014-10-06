@@ -6,11 +6,16 @@ from medical_service_register.path import REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
 from helpers.excel_style import VALUE_STYLE, PERIOD_VALUE_STYLE
 from helpers.const import MONTH_NAME, ACT_CELL_POSITION
+from tfoms.management.commands.register_function import (calculate_capitation_tariff,
+                                                         get_mo_register)
 import time
+
+ACT_PATH = ur'{dir}\{title}_{month}_{year}'
+TEMP_PATH = ur'{base}\templates\excel_pattern\end_of_month\{template}.xls'
 
 
 ### Структура для актов дневного стационара
-def get_day_hospital_structure():
+def get_day_hospital_structure(calc):
     day_hospital_query = """
          SELECT medical_register.organization_code,
          COUNT(DISTINCT (patient.id_pk, medical_division.term_fk,
@@ -64,50 +69,46 @@ def get_day_hospital_structure():
     return [{'title': u'Дневной стационар',
              'pattern': 'day_hospital',
              'sum': [
-                 {'query': (day_hospital_query,
-                            """
-                            (provided_event.term_fk=2 and
-                             medical_division.term_fk in (10, 11) and
-                             medical_service.group_fk is null)
-                             or medical_service.group_fk in (17, 28)
-                            """),
-                  'cell_count': 12,
+                 {'query': calc((day_hospital_query,
+                                """
+                                (provided_event.term_fk=2 and
+                                 medical_division.term_fk in (10, 11) and
+                                 medical_service.group_fk is null)
+                                 or medical_service.group_fk in (17, 28)
+                                 """)),
                   'separator_length': 2},
-                 {'query': (day_hospital_query,
-                            """
-                            provided_event.term_fk=2 and
-                            medical_service.group_fk = 28
-                            """),
-                  'cell_count': 12,
+                 {'query': calc((day_hospital_query,
+                                 """
+                                 provided_event.term_fk=2 and
+                                 medical_service.group_fk = 28
+                                 """)),
                   'separator_length': 2}
              ]},
             {'title': u'Дневной стационар на дому',
              'pattern': 'day_hospital_home',
              'sum': [
-                 {'query': (day_hospital_query,
-                            """
-                            provided_event.term_fk=2 and
-                            medical_division.term_fk=12 and
-                            medical_service.group_fk is null
-                            """),
-                  'cell_count': 12,
+                 {'query': calc((day_hospital_query,
+                                 """
+                                 provided_event.term_fk=2 and
+                                 medical_division.term_fk=12 and
+                                 medical_service.group_fk is null
+                                 """)),
                   'separator_length': 2}
              ]},
             {'title': u'Дневной стационар свод',
              'pattern': 'day_hospital_all',
              'sum': [
-                 {'query': (day_hospital_query,
-                            """
-                            (provided_event.term_fk=2 and medical_service.group_fk is null)
-                             or medical_service.group_fk in (17, 28)
-                            """),
-                  'cell_count': 12,
+                 {'query': calc((day_hospital_query,
+                                 """
+                                 (provided_event.term_fk=2 and medical_service.group_fk is null)
+                                 or medical_service.group_fk in (17, 28)
+                                 """)),
                   'separator_length': 2}
              ]}]
 
 
 ### Структура актов по стоматологии
-def get_stomatology_structure():
+def get_stomatology_structure(calc):
     stomatology_disease_query = """
          SELECT medical_register.organization_code,
 
@@ -402,26 +403,21 @@ def get_stomatology_structure():
     return [{'title': u'Стоматология',
              'pattern': 'stomatology',
              'sum': [
-                 {'query': (stomatology_disease_query, '12'),
-                  'cell_count': 15,
+                 {'query': calc((stomatology_disease_query, '12')),
                   'separator_length': 0},
-                 {'query': (stomatology_proph_or_ambulance_query, '13'),
-                  'cell_count': 12,
+                 {'query': calc((stomatology_proph_or_ambulance_query, '13')),
                   'separator_length': 0},
-                 {'query': (stomatology_proph_or_ambulance_query, '14'),
-                  'cell_count': 12,
+                 {'query': calc((stomatology_proph_or_ambulance_query, '14')),
                   'separator_length': 0},
-                 {'query': (stomatology_emergency_query, '17'),
-                  'cell_count': 18,
+                 {'query': calc((stomatology_emergency_query, '17')),
                   'separator_length': 0},
-                 {'query': (stomatology_total_query, '12, 13, 14, 17'),
-                  'cell_count': 21,
+                 {'query': calc((stomatology_total_query, '12, 13, 14, 17')),
                   'separator_length': 0}]},
             ]
 
 
 ### Структура актов для круглосуточного стационара
-def get_hospital_structure():
+def get_hospital_structure(calc):
     hospital_query = """
          SELECT
          medical_register.organization_code,
@@ -582,69 +578,56 @@ def get_hospital_structure():
     return [{'title': u'Круглосуточный стационар',
              'pattern': 'hospital',
              'sum': [
-                 {'query': (hospital_query,
-                            """
-                            (provided_event.term_fk = 1 AND medical_service.group_fk IS NULL)
-                            OR medical_service.group_fk in (1, 2, 3)
-                            """),
-                  'cell_count': 12,
+                 {'query': calc((hospital_query,
+                                 """
+                                 (provided_event.term_fk = 1 AND medical_service.group_fk IS NULL)
+                                  OR medical_service.group_fk in (1, 2, 3)
+                                  """)),
                   'separator_length': 2},
-                 {'query': (hospital_total_query,
-                            """
-                            (provided_event.term_fk = 1 AND
-                            medical_service.group_fk IS NULL)
-                            OR medical_service.group_fk in (1, 2, 3)
-                            """),
-                  'cell_count': 4,
+                 {'query': calc((hospital_total_query,
+                                 """
+                                 (provided_event.term_fk = 1 AND
+                                  medical_service.group_fk IS NULL)
+                                  OR medical_service.group_fk in (1, 2, 3)
+                                  """)),
                   'separator_length': 2}]},
             {'title': u'Круглосуточный стационар ВМП',
              'pattern': 'hospital_hmc',
              'sum': [
-                 {'query': (hospital_hmc_query, '56'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '56')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '57'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '57')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '58'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '58')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '59'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '59')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '60'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '60')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '63'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '63')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '61'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '61')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '62'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '62')),
                   'separator_length': 0},
-                 {'query': (hospital_hmc_query, '56, 57, 58, 59, 60, 63, 61, 62'),
-                  'cell_count': 12,
+                 {'query': calc((hospital_hmc_query, '56, 57, 58, 59, 60, 63, 61, 62')),
                   'separator_length': 2},
-                 {'query': (hospital_hmc_total_query, '56, 57, 58, 59, 60, 63, 61, 62'),
-                  'cell_count': 1,
+                 {'query': calc((hospital_hmc_total_query, '56, 57, 58, 59, 60, 63, 61, 62')),
                   'separator_length': 0}]},
             {'title': u'Круглосуточный стационар свод',
              'pattern': 'hospital_all',
              'sum': [{
-                 'query': (hospital_query,
-                           """
-                           (provided_event.term_fk = 1 AND medical_service.group_fk IS NULL)
-                           OR medical_service.group_fk in (1, 2, 3, 20)
-                           """),
-                 'cell_count': 12,
+                 'query': calc((hospital_query,
+                                """
+                                (provided_event.term_fk = 1 AND medical_service.group_fk IS NULL)
+                                OR medical_service.group_fk in (1, 2, 3, 20)
+                                """)),
                  'separator_length': 0
              }]}]
 
 
 ### Структура актов по скорой помощи
-def get_acute_care_structure():
+def get_acute_care_structure(calc):
     acute_care_query = """
          SELECT
          medical_register.organization_code,
@@ -689,25 +672,20 @@ def get_acute_care_structure():
     return [{'title': u'СМП финансирование по подушевому нормативу (кол-во, основной тариф)',
              'pattern': 'acute_care',
              'sum': [
-                 {'query': (acute_care_query, '456'),
-                  'cell_count': 9,
+                 {'query': calc((acute_care_query, '456')),
                   'separator_length': 0},
-                 {'query': (acute_care_query, '455'),
-                  'cell_count': 9,
+                 {'query': calc((acute_care_query, '455')),
                   'separator_length': 0},
-                 {'query': (acute_care_query, '457'),
-                  'cell_count': 9,
+                 {'query': calc((acute_care_query, '457')),
                   'separator_length': 0},
-                 {'query': (acute_care_query, '458'),
-                  'cell_count': 9,
+                 {'query': calc((acute_care_query, '458')),
                   'separator_length': 0},
-                 {'query': (acute_care_query, '456, 455, 457, 458'),
-                  'cell_count': 9,
+                 {'query': calc((acute_care_query, '456, 455, 457, 458')),
                   'separator_length': 0}]}]
 
 
 ### Структура актов периодических медосмотров
-def get_periodic_med_exam_structure():
+def get_periodic_med_exam_structure(calc):
     periodic_med_exam_query = """
          SELECT
          medical_register.organization_code,
@@ -750,13 +728,12 @@ def get_periodic_med_exam_structure():
     return [{'title': u'Периодический медицинский осмотр несовершеннолетних',
              'pattern': 'periodic_medical_examination',
              'sum': [
-                 {'query': (periodic_med_exam_query, ''),
-                  'cell_count': 5,
+                 {'query': calc((periodic_med_exam_query, '')),
                   'separator_length': 0}]}]
 
 
 ### Структура актов предварительных медосмотров
-def get_preliminary_med_exam_structure():
+def get_preliminary_med_exam_structure(calc):
     preliminary_med_exam_query = """
          SELECT
          medical_register.organization_code,
@@ -828,42 +805,39 @@ def get_preliminary_med_exam_structure():
     return [{'title': u'Предварительный медицинский осмотр несовершеннолетних',
              'pattern': 'preliminary_medical_examination',
              'sum': [
-                 {'query': (preliminary_med_exam_query, "medical_service.code='119101'"),
-                  'cell_count': 5,
+                 {'query': calc((preliminary_med_exam_query,
+                                 "medical_service.code='119101'")),
                   'separator_length': 0},
-                 {'query': (preliminary_med_exam_query, "medical_service.code='119119'"),
-                  'cell_count': 5,
+                 {'query': calc((preliminary_med_exam_query,
+                                 "medical_service.code='119119'")),
                   'separator_length': 0},
-                 {'query': (preliminary_med_exam_query, "medical_service.code='119120'"),
-                  'cell_count': 5,
+                 {'query': calc((preliminary_med_exam_query,
+                                 "medical_service.code='119120'")),
                   'separator_length': 0},
-                 {'query': (preliminary_med_exam_query,
-                            """
-                            medical_service.code in
-                            ('119101', '119119', '119120')
-                            """),
-                  'cell_count': 5,
+                 {'query': calc((preliminary_med_exam_query,
+                                 """
+                                  medical_service.code in
+                                  ('119101', '119119', '119120')
+                                  """)),
                   'separator_length': 1},
-                 {'query': (preliminary_med_exam_spec_query,
-                            """
-                            medical_service.group_fk=15 and
-                            medical_service.subgroup_fk=11
-                            """),
-                  'cell_count': 2,
+                 {'query': calc((preliminary_med_exam_spec_query,
+                                 """
+                                 medical_service.group_fk=15 and
+                                 medical_service.subgroup_fk=11
+                                 """)),
                   'separator_length': 2},
-                 {'query': (preliminary_med_exam_query,
-                            """
-                            medical_service.group_fk=15 and
-                            (medical_service.subgroup_fk=11
-                              or medical_service.code in ('119101', '119119', '119120'))
-                            """),
-                  'cell_count': 5,
+                 {'query': calc((preliminary_med_exam_query,
+                                 """
+                                 medical_service.group_fk=15 and
+                                 (medical_service.subgroup_fk=11
+                                 or medical_service.code in ('119101', '119119', '119120'))
+                                 """)),
                   'separator_length': 0}
              ]}]
 
 
 ### Структура актов профиактических осмотров
-def get_preventive_med_exam_structure():
+def get_preventive_med_exam_structure(calc):
     preventive_med_exam_query = """
          SELECT
          medical_register.organization_code,
@@ -1019,72 +993,188 @@ def get_preventive_med_exam_structure():
     return [{'title': u'Профилактический медицинский осмотр несовершеннолетних',
              'pattern': 'preventive_medical_examination',
              'sum': [
-                 {'query': (preventive_med_exam_query,
-                            """
-                            medical_service.code in ('119051', '119080', '119081')
-                            """),
-                  'cell_count': 10,
+                 {'query': calc((preventive_med_exam_query,
+                                 """
+                                  medical_service.code in ('119051', '119080', '119081')
+                                  """)),
                   'separator_length': 0},
-                 {'query': (preventive_med_exam_query,
-                            """
-                            medical_service.code in ('119052', '119082', '119083')
-                            """),
-                  'cell_count': 10,
+                 {'query': calc((preventive_med_exam_query,
+                                 """
+                                 medical_service.code in ('119052', '119082', '119083')
+                                 """)),
                   'separator_length': 0},
-                 {'query': (preventive_med_exam_query,
-                            """
-                            medical_service.code in ('119053', '119084', '119085')
-                            """),
-                  'cell_count': 10,
+                 {'query': calc((preventive_med_exam_query,
+                                 """
+                                 medical_service.code in ('119053', '119084', '119085')
+                                 """)),
                   'separator_length': 0},
-                 {'query': (preventive_med_exam_query,
-                            """
-                            medical_service.code in ('119054', '119086', '119087')
-                            """),
-                  'cell_count': 10,
+                 {'query': calc((preventive_med_exam_query,
+                                 """
+                                 medical_service.code in ('119054', '119086', '119087')
+                                 """)),
                   'separator_length': 0},
-                 {'query': (preventive_med_exam_query,
-                            """
-                            medical_service.code in ('119055', '119088', '119089')
-                            """),
-                  'cell_count': 10,
+                 {'query': calc((preventive_med_exam_query,
+                                """
+                                medical_service.code in ('119055', '119088', '119089')
+                                """)),
                   'separator_length': 0},
-                 {'query': (preventive_med_exam_query,
-                            """
-                            medical_service.code in ('119056', '119090', '119091')
-                            """),
-                  'cell_count': 10,
+                 {'query': calc((preventive_med_exam_query,
+                                 """
+                                 medical_service.code in ('119056', '119090', '119091')
+                                 """)),
                   'separator_length': 0},
-                 {'query': (preventive_med_exam_total_query,
-                            """
-                            medical_service.code in ('119051', '119052', '119053',
-                                                     '119054', '119055', '119056',
-                                                     '119080', '119081', '119082',
-                                                     '119083', '119084', '119085',
-                                                     '119086', '119087', '119088',
-                                                     '119089', '119090', '119091')
-                            """),
-                  'cell_count': 15,
+                 {'query': calc((preventive_med_exam_total_query,
+                                 """
+                                 medical_service.code in (
+                                     '119051', '119052', '119053',
+                                     '119054', '119055', '119056',
+                                     '119080', '119081', '119082',
+                                     '119083', '119084', '119085',
+                                     '119086', '119087', '119088',
+                                     '119089', '119090', '119091')
+                                 """)),
                   'separator_length': 2},
-                 {'query': (preventive_med_exam_spec_query, ''),
-                  'cell_count': 6,
+                 {'query': calc((preventive_med_exam_spec_query, '')),
                   'separator_length': 2},
-                 {'query': (preventive_med_exam_total_query,
-                            """
-                            medical_service.group_fk=11 AND
-                            (medical_service.subgroup_fk=8
-                            OR medical_service.code in ('119051', '119052', '119053',
-                                                        '119054', '119055', '119056',
-                                                        '119080', '119081', '119082',
-                                                        '119083', '119084', '119085',
-                                                        '119086', '119087', '119088',
-                                                        '119089', '119090', '119091')
-                            )
-                            """),
-                  'cell_count': 15,
+                 {'query': calc((preventive_med_exam_total_query,
+                                 """
+                                 medical_service.group_fk=11 AND
+                                 (medical_service.subgroup_fk=8
+                                  OR medical_service.code in (
+                                      '119051', '119052', '119053',
+                                      '119054', '119055', '119056',
+                                      '119080', '119081', '119082',
+                                      '119083', '119084', '119085',
+                                      '119086', '119087', '119088',
+                                      '119089', '119090', '119091'))
+                                """)),
                   'separator_length': 0},
 
              ]}]
+
+
+### Структура акта по подушевому для поликлинники
+def get_capitation_amb_care_structure(year, period):
+    result_data = {}
+    for mo_code in get_mo_register(year, period):
+        capitation_tariff = calculate_capitation_tariff(3, year, period, mo_code)
+        result_data[mo_code] = [0, ]*24
+        result_data[mo_code][1] = capitation_tariff['male']['population']['adult']
+        result_data[mo_code][2] = capitation_tariff['female']['population']['adult']
+        result_data[mo_code][3] = capitation_tariff['male']['population']['children']
+        result_data[mo_code][4] = capitation_tariff['female']['population']['children']
+        result_data[mo_code][0] = result_data[mo_code][1]+result_data[mo_code][2] + \
+            result_data[mo_code][3]+result_data[mo_code][4]
+
+        result_data[mo_code][5] = capitation_tariff['male']['tariff']['adult']
+        result_data[mo_code][6] = capitation_tariff['male']['tariff']['children']
+
+        result_data[mo_code][8] = capitation_tariff['male']['population_tariff']['adult']
+        result_data[mo_code][9] = capitation_tariff['female']['population_tariff']['adult']
+        result_data[mo_code][10] = capitation_tariff['male']['population_tariff']['children']
+        result_data[mo_code][11] = capitation_tariff['female']['population_tariff']['children']
+        result_data[mo_code][7] = result_data[mo_code][8]+result_data[mo_code][9] + \
+            result_data[mo_code][10]+result_data[mo_code][11]
+
+        result_data[mo_code][12] = capitation_tariff['male']['coefficient_value']['adult']-1 \
+            if capitation_tariff['male']['coefficient_value']['adult'] else 0
+        result_data[mo_code][13] = capitation_tariff['male']['coefficient_value']['children']-1 \
+            if capitation_tariff['male']['coefficient_value']['children'] else 0
+
+        result_data[mo_code][15] = capitation_tariff['male']['coefficient']['adult']
+        result_data[mo_code][16] = capitation_tariff['female']['coefficient']['adult']
+        result_data[mo_code][17] = capitation_tariff['male']['coefficient']['children']
+        result_data[mo_code][18] = capitation_tariff['female']['coefficient']['children']
+        result_data[mo_code][14] = result_data[mo_code][15]+result_data[mo_code][16] + \
+            result_data[mo_code][17]+result_data[mo_code][18]
+
+        result_data[mo_code][20] = capitation_tariff['male']['accepted_payment']['adult']
+        result_data[mo_code][21] = capitation_tariff['female']['accepted_payment']['adult']
+        result_data[mo_code][22] = capitation_tariff['male']['accepted_payment']['children']
+        result_data[mo_code][23] = capitation_tariff['female']['accepted_payment']['children']
+        result_data[mo_code][19] = result_data[mo_code][20]+result_data[mo_code][21] + \
+            result_data[mo_code][22]+result_data[mo_code][23]
+
+    return [{'title': u'Подушевой норматив (амбулаторная помощь)',
+             'pattern': 'capitation_ambulatory_care',
+             'sum': [{'query': result_data, 'separator_length': 0}]}]
+
+
+### Структура акта для подушевого по скорой помощи
+def get_capitation_acute_care_structure(year, period):
+    result_data = {}
+    for mo_code in get_mo_register(year, period):
+        capitation_tariff = calculate_capitation_tariff(4, year, period, mo_code)
+        result_data[mo_code] = [0, ]*11
+        result_data[mo_code][1] = capitation_tariff['male']['population']['adult']
+        result_data[mo_code][2] = capitation_tariff['female']['population']['adult']
+        result_data[mo_code][3] = capitation_tariff['male']['population']['children']
+        result_data[mo_code][4] = capitation_tariff['female']['population']['children']
+        result_data[mo_code][0] = result_data[mo_code][1]+result_data[mo_code][2] + \
+            result_data[mo_code][3]+result_data[mo_code][4]
+
+        result_data[mo_code][5] = capitation_tariff['male']['tariff']['adult']
+
+        result_data[mo_code][7] = capitation_tariff['male']['accepted_payment']['adult']
+        result_data[mo_code][8] = capitation_tariff['female']['accepted_payment']['adult']
+        result_data[mo_code][9] = capitation_tariff['male']['accepted_payment']['children']
+        result_data[mo_code][10] = capitation_tariff['female']['accepted_payment']['children']
+        result_data[mo_code][6] = result_data[mo_code][7]+result_data[mo_code][8] + \
+            result_data[mo_code][9]+result_data[mo_code][10]
+
+    return [{'title': u'Подушевой норматив (СМП)',
+             'pattern': 'capitation_acute_care',
+             'sum': [{'query': result_data, 'separator_length': 0}]}]
+
+
+def run_sql(year, period):
+    def run(query):
+        pattern_query, condition = query
+        text_query = pattern_query.format(year=year, period=period,
+                                          condition=condition)
+        cursor = connection.cursor()
+        cursor.execute(text_query)
+        result_sum = {mo_data[0]: [value for value in mo_data[1:]]
+                      for mo_data in cursor.fetchall()}
+        cursor.close()
+        return result_sum
+    return lambda query: run(query)
+
+
+def print_act(year, period, rule):
+    target_dir = REESTR_EXP % (year, period)
+    act_path = ACT_PATH.format(
+        dir=target_dir,
+        title=rule['title'],
+        month=MONTH_NAME[period],
+        year=year)
+    temp_path = TEMP_PATH.format(
+        base=BASE_DIR,
+        template=rule['pattern'])
+    with ExcelWriter(act_path,
+                     template=temp_path,
+                     sheet_names=[MONTH_NAME[period], ]) as act_book:
+        act_book.set_overall_style({'font_size': 11, 'border': 1})
+        act_book.set_cursor(4, 2)
+        act_book.set_style(PERIOD_VALUE_STYLE)
+        act_book.write_cell(u'за %s %s года' % (MONTH_NAME[period], year))
+        act_book.set_style(VALUE_STYLE)
+        block_index = 2
+        for condition in rule['sum']:
+            result_data = condition['query']
+            if result_data:
+                total_sum = [0, ]*len(result_data.values()[0])
+                for mo_code, value in result_data.iteritems():
+                    act_book.set_cursor(ACT_CELL_POSITION[mo_code], block_index)
+                    for index, cell_value in enumerate(value):
+                        total_sum[index] += cell_value
+                        act_book.write_cell(cell_value, 'c')
+                act_book.set_cursor(101, block_index)
+                for cell_value in total_sum:
+                    act_book.write_cell(cell_value, 'c')
+
+                block_index += len(total_sum) + \
+                    condition['separator_length']
 
 
 class Command(BaseCommand):
@@ -1092,65 +1182,25 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         year = args[0]
         period = args[1]
-        target_dir = REESTR_EXP % (year, period)
-        act_path_t = ur'{dir}\{title}_{month}_{year}'
-        temp_path_t = ur'{base}\templates\excel_pattern\end_of_month\{template}.xls'
         start = time.clock()
-        query_cursor = connection.cursor()
+
+        calc = run_sql(year, period)
 
         acts_structure = [
-            get_day_hospital_structure(),
-            get_stomatology_structure(),
-            get_hospital_structure(),
-            get_acute_care_structure(),
-            get_periodic_med_exam_structure(),
-            get_preliminary_med_exam_structure(),
-            get_preventive_med_exam_structure()
+            get_day_hospital_structure(calc),
+            get_stomatology_structure(calc),
+            get_hospital_structure(calc),
+            get_acute_care_structure(calc),
+            get_periodic_med_exam_structure(calc),
+            get_preliminary_med_exam_structure(calc),
+            get_preventive_med_exam_structure(calc),
+            get_capitation_amb_care_structure(year, period),
+            get_capitation_acute_care_structure(year, period)
         ]
 
         for structure in acts_structure:
-
             for rule in structure:
                 print rule['title']
-                act_path = act_path_t.format(dir=target_dir,
-                                             title=rule['title'],
-                                             month=MONTH_NAME[period],
-                                             year=year)
-                temp_path = temp_path_t.format(base=BASE_DIR,
-                                               template=rule['pattern'])
-                print temp_path
-
-                with ExcelWriter(act_path, template=temp_path,
-                                 sheet_names=[MONTH_NAME[period], ]) \
-                        as act_book:
-                    act_book.set_overall_style({'font_size': 11, 'border': 1})
-                    act_book.set_cursor(4, 2)
-                    act_book.set_style(PERIOD_VALUE_STYLE)
-                    act_book.write_cell(u'за %s %s года' % (MONTH_NAME[period], year))
-                    act_book.set_style(VALUE_STYLE)
-                    block_index = 2
-                    for condition in rule['sum']:
-                        total_sum = []
-                        query_cursor.execute(
-                            condition['query'][0].format(
-                                year=year, period=period,
-                                condition=condition['query'][1]))
-
-                        for mo_data in query_cursor.fetchall():
-                            if not total_sum:
-                                total_sum = [0, ]*condition['cell_count']
-                            act_book.set_cursor(ACT_CELL_POSITION[mo_data[0]], block_index)
-
-                            for index, cell_value in enumerate(mo_data[1:]):
-                                total_sum[index] += cell_value
-                                act_book.write_cell(cell_value, 'c')
-
-                        act_book.set_cursor(101, block_index)
-                        for cell_value in total_sum:
-                            act_book.write_cell(cell_value, 'c')
-
-                        block_index += condition['cell_count'] + \
-                            condition['separator_length']
-        query_cursor.close()
+                print_act(year, period, rule)
         elapsed = time.clock() - start
         print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
