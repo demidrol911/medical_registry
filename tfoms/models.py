@@ -1154,7 +1154,7 @@ class InpatientDivision(models.Model):
 
 class ProvidedService(models.Model):
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')
-    id = models.CharField(max_length=80, null=True)
+    id = models.CharField(max_length=36, null=True)
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='organization_fk', null=True)
     department = models.ForeignKey(MedicalOrganization,

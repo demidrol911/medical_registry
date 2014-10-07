@@ -1612,7 +1612,7 @@ class Command(BaseCommand):
         is_partial_register = args[3] if len(args) == 4 else 0
         printed_act = []
         template = BASE_DIR + r'\templates\excel_pattern\reestr_201408_test.xls'
-        target_dir = REESTR_DIR if status in (10, 6) else REESTR_EXP
+        target_dir = REESTR_DIR if status in (8, 6) else REESTR_EXP
         handbooks = {'failure_causes': register_function.get_failure_causes(),
                      'errors_code': register_function.get_errors(),
                      'workers_speciality': register_function.get_medical_worker_speciality(),
@@ -1654,7 +1654,7 @@ class Command(BaseCommand):
             sum_capitation_ambulance = register_function.calculate_capitation_tariff(4, year, period, mo)
 
             target = target_dir % (year, period) + r'\%s' % \
-                     handbooks['mo_info']['name'].replace('"', '').strip()
+                handbooks['mo_info']['name'].replace('"', '').strip()
             print u'Печать акта: %s ...' % target
 
             with ExcelWriter(target, template=template) as act_book:
@@ -1674,7 +1674,7 @@ class Command(BaseCommand):
                                 sum_capitation_policlinic,
                                 sum_capitation_ambulance, data, handbooks)
                 print_error_fund(act_book, year, period, mo, data, handbooks)
-                if status == 10:
+                if status == 8:
                     register_function.pse_export(year, period, mo, 6, data, handbooks)
                 if status == 3:
                     register_function.change_register_status(year, period, mo, 9)
