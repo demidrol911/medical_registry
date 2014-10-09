@@ -24,6 +24,3 @@ class Command(BaseCommand):
                     type_id=1, service=service, underpayment=service.invoiced_payment,
                     error_id=failure_cause)
         file_service.close()
-
-
-

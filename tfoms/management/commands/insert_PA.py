@@ -3,6 +3,7 @@
 from datetime import datetime
 from django.core.management.base import BaseCommand
 from tfoms.models import ProvidedService, ProvidedServiceCoefficient, Sanction
+from register_function import change_register_status
 
 
 ### Проставляет ошибки PA (частичная оплата)
@@ -81,4 +82,6 @@ class Command(BaseCommand):
             Sanction.objects.create(
                 type_id=1, service=service, underpayment=round(0.7*float(service.tariff), 3),
                 error_id=75)
+
+        change_register_status(year, period, mo_code, 8)
 

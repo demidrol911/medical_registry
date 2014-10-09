@@ -342,7 +342,7 @@ class MedicalOrganization(models.Model):
                           SELECT MAX(id_pk)
                           FROM attachment
                           WHERE person_fk = person.version_id_pk AND status_fk = 1
-                             AND confirmation_date <= %(date)s AND attachment.is_active)
+                             AND attachment.date <= %(date)s AND attachment.is_active)
                  JOIN medical_organization med_org
                       ON (med_org.id_pk = attachment.medical_organization_fk
                           AND med_org.parent_fk IS NULL)
@@ -408,9 +408,9 @@ class MedicalOrganization(models.Model):
 
             where
             ambulanceMO.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.confirmation_date <= %(date)s and attachment.is_active = true and
+            and attachment.date <= %(date)s and attachment.is_active = true and
             attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.confirmation_date <= %(date)s group by person_fk)
+            where is_active = true and attachment.date <= %(date)s group by person_fk)
             group by medical_organization.id_pk
             """
 
@@ -767,8 +767,9 @@ class Attachment(models.Model):
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='medical_organization_fk')
     status = models.IntegerField(db_column='status_fk')
-    confirmation_date = models.DateField()
+    #confirmation_date = models.DateField()
     is_active = models.BooleanField()
+    date = models.DateField(db_column='date')
 
     class Meta:
         db_table = "attachment"
@@ -828,7 +829,7 @@ class Patient(models.Model):
         version_id_pk = insurance_policy.person_fk) and is_active)
         join attachment on attachment.id_pk = (select max(id_pk)
         from attachment where person_fk = person.version_id_pk and status_fk = 1
-        and confirmation_date <= %s and attachment.is_active)
+        and attachment.date <= %s and attachment.is_active)
         join medical_organization medOrg on (
         medOrg.id_pk = attachment.medical_organization_fk and
         medOrg.parent_fk is null) or medOrg.id_pk =
