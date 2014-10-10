@@ -86,7 +86,10 @@ class ExcelWriter(Workbook):
                             self.style['fg_color'] = colour_code
                         self.set_cursor(row_index, column_index)
                         self.style_obj = self.add_format(self.style)
-                        self.write_cell(cell.value)
+                        value = int(cell.value) \
+                            if unicode(cell.value).replace('.', '').isdigit() \
+                            else cell.value
+                        self.write_cell(value)
         else:
             self.sheet = self.add_worksheet()
         self.set_sheet(0)
@@ -95,7 +98,8 @@ class ExcelWriter(Workbook):
 
     ### Записывает в ячейку укаазанное значение
     def write_cell(self, value, increment=None, size=0):
-        if (isinstance(value, Decimal) or isinstance(value, float)) and value != round(value, 0):
+        if isinstance(value, Decimal) or isinstance(value, float):
+                #and value != round(value, 0):
             self.set_style_property('num_format', '0.'+'0'*self.number_precision)
             value_cell = round(value, self.number_precision)
         else:
