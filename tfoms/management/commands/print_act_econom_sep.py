@@ -321,7 +321,7 @@ def print_accepted_service(act_book, year, period, mo,
         sum_tariff_coefficient = float(service['tariff'])
         for code in sorted(coef_to_field):
             field = coef_to_field[code]
-            prec = 4 if code == 2 or \
+            prec = 3 if code == 2 or \
                 (code == 6 and handbooks['mo_info']['is_agma_cathedra'])else 2
             if code in coefficient_service:
                 if code == 6:
@@ -1686,6 +1686,7 @@ class Command(BaseCommand):
                 for department in partial_register:
                     print u'Загрузка данных...'
                     handbooks['mo_info'] = register_function.get_mo_info(mo, department)
+                    print handbooks['mo_info'], department
                     handbooks['partial_register'] = [department, ]
 
                     data['invoiced_services'] = register_function.get_services(year, period, mo,

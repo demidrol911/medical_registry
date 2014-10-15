@@ -226,7 +226,8 @@ def get_treatment_events(year, period, mo_code):
 def get_mo_info(mo_code, department_code=None):
     if department_code:
         mo = MedicalOrganization.objects.get(code=mo_code, old_code=department_code)
-    mo = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
+    else:
+        mo = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
     return {'name': mo.name, 'is_agma_cathedra': mo.is_agma_cathedra}
 
 
