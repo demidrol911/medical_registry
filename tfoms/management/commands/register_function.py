@@ -48,7 +48,6 @@ def get_patients(year, period, mo_code):
         'patient__gender__code').distinct()
 
     patients_dict = {patient['patient__pk']
-
                      : {'policy_series': patient['patient__insurance_policy_series'],
                         'policy_number': patient['patient__insurance_policy_number'],
                         'last_name': patient['patient__last_name'],
@@ -217,8 +216,11 @@ def get_treatment_events(year, period, mo_code):
         event__record__register__period=period,
         event__record__register__is_active=True,
         event__record__register__organization_code=mo_code).\
-        filter(Q(code__subgroup__pk=12, code__group__pk=19) |
-               Q(code__reason__pk=1, event__term__pk=3))
+        filter(
+            Q(code__subgroup__pk=12, code__group__pk=19) |
+            (Q(code__reason__pk=1, event__term__pk=3) &
+             (Q(code__group__isnull=True) | ~Q(code__group__pk=19)))
+        )
     return events.values_list('event__pk', flat=True).distinct()
 
 

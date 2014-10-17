@@ -440,6 +440,55 @@ class MedicalOrganization(models.Model):
 
         return result
 
+    ### Расчёт количества обращений (в разрезе взрослые, дети) для указаной причины отказа
+    def get_policlinic_treatment_error(self, year, period, failure_cause):
+        query = """
+        SELECT
+        medical_organization.id_pk,
+        COUNT(DISTINCT provided_event.id_pk) AS all,
+        COUNT(DISTINCT CASE WHEN medical_service.code like %(adult)s
+              THEN provided_event.id_pk END) AS adult,
+        COUNT(DISTINCT CASE WHEN medical_service.code like %(children)s
+              THEN provided_event.id_pk END) AS children
+        FROM provided_service
+        JOIN provided_event
+             ON provided_event.id_pk = provided_service.event_fk
+        JOIN medical_register_record
+             ON medical_register_record.id_pk = provided_event.record_fk
+        JOIN medical_register
+             ON medical_register.id_pk = medical_register_record.register_fk
+        JOIN medical_service
+             ON medical_service.id_pk = provided_service.code_fk
+        JOIN provided_service_sanction
+             ON provided_service_sanction.service_fk = provided_service.id_pk
+        JOIN medical_error
+             ON medical_error.id_pk = provided_service_sanction.error_fk
+        JOIN medical_organization
+             ON medical_organization.id_pk = provided_service.organization_fk
+        WHERE medical_register.period=%(period)s
+              AND medical_register.year=%(year)s
+              AND medical_register.is_active
+              AND medical_organization.code = %(organization)s
+              AND provided_service.payment_type_fk = 3
+              AND (provided_event.term_fk = 3
+                   AND medical_service.reason_fk = 1
+                   AND (medical_service.group_fk IS NULL
+                        OR medical_service.group_fk != 19)
+                  )
+              AND medical_error.failure_cause_fk = %(failure_cause)s
+              AND medical_error.weight = (
+                   SELECT MAX(medical_error1.weight)
+                   FROM provided_service_sanction provided_service_sanction1
+                   JOIN medical_error medical_error1 ON provided_service_sanction1.error_fk = medical_error1.id_pk
+                   WHERE provided_service_sanction1.service_fk = provided_service.id_pk
+              )
+        GROUP BY medical_organization.id_pk
+        """
+        return MedicalOrganization.objects.raw(query, dict(adult='0%', children='1%',
+                                                           year=year, period=period,
+                                                           organization=self.code,
+                                                           failure_cause=int(failure_cause)))[0]
+
 
 class MedicalRegisterStatus(models.Model):
     id_pk = models.IntegerField(primary_key=True, db_column='id_pk')
