@@ -489,6 +489,13 @@ class MedicalOrganization(models.Model):
                                                            organization=self.code,
                                                            failure_cause=int(failure_cause)))[0]
 
+    def get_hospital_division_accepted(self, year, period, failure_cause):
+
+        return MedicalOrganization.objects.raw(query, dict(adult='0%', children='1%',
+                                                           year=year, period=period,
+                                                           organization=self.code,
+                                                           failure_cause=int(failure_cause)))[0]
+
 
 class MedicalRegisterStatus(models.Model):
     id_pk = models.IntegerField(primary_key=True, db_column='id_pk')
