@@ -28,12 +28,15 @@ class Command(BaseCommand):
              ON medical_register_record.id_pk = provided_event.record_fk
         JOIN medical_register
              ON medical_register.id_pk = medical_register_record.register_fk
+        JOIN medical_service
+             ON medical_service.id_pk = provided_service.code_fk
         JOIN medical_division
              ON medical_division.id_pk = provided_event.division_fk
         WHERE medical_register.year='{year}'
               AND medical_register.is_active
               AND provided_service.payment_type_fk in (2, 4)
               AND provided_event.term_fk = 1
+              AND (medical_service.group_fk IS NULL or medical_service.group_fk in (1, 2, 20))
         GROUP BY medical_division.id_pk, medical_division.code, medical_division.name
         ORDER BY medical_division.code
         """
