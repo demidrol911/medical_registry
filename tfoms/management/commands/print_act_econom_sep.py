@@ -154,6 +154,7 @@ def print_accepted_service(act_book, year, period, mo,
 
     accepted_services = data['accepted_services']                      # Принятые услуги
     coefficients = data['coefficients']                                # Тарифные коэффициенты
+    patients = data['patients']
 
     total_sum_mo = deepcopy(init_sum)                                  # Итоговая сумма по МО
 
@@ -183,6 +184,7 @@ def print_accepted_service(act_book, year, period, mo,
 
     # Рассчёт сводных сумм
     for service in accepted_services:
+        gender = 'male' if patients[service['patient_id']]['gender_code'] == 1 else 'female'
         # Список коэффициентов для текущей услуги
         coefficient_service = coefficients.get(service['id'], [])
 
@@ -392,10 +394,17 @@ def print_accepted_service(act_book, year, period, mo,
             if service['subgroup']:
                 division = service['subgroup']
                 if division not in sum_division_group[term][section]['subgroup']:
-                    sum_division_group[term][section]['subgroup'][division] = deepcopy(init_sum)
+                    sum_division_group[term][section]['subgroup'][division] = {'male': deepcopy(init_sum),
+                                                                               'female':  deepcopy(init_sum)}
+
                 # Рассчёт сумм
-                for sum_key in sum_division_group[term][section]['subgroup'][division]:
-                    sum_division_group[term][section]['subgroup'][division][sum_key][age] += value_default[sum_key]
+                if service['group'] in [11, 12, 13]:
+                    for sum_key in sum_division_group[term][section]['subgroup'][division][gender]:
+                        sum_division_group[term][section]['subgroup'][division][gender][sum_key][age] += \
+                            value_default[sum_key]
+                else:
+                    for sum_key in sum_division_group[term][section]['subgroup'][division]['male']:
+                        sum_division_group[term][section]['subgroup'][division]['male'][sum_key][age] += value_default[sum_key]
                 if DEBUG:
                     file_viewed_service.write(str(service['id'])+'\n')
             # Группировка по кодам для всех остальных
@@ -540,10 +549,20 @@ def print_accepted_service(act_book, year, period, mo,
                     print_sum(act_book, handbooks['medical_code'][division]['name'], sum_value, column_keys)
 
                 # Распечатка услуг, разделённых по подгруппам
-                for division in sorted(sum_division_group[term][section]['subgroup']):
-                    sum_value = sum_division_group[term][section]['subgroup'][division]
-                    total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
-                    print_sum(act_book, handbooks['medical_subgroups'][division]['name'], sum_value, column_keys)
+                if term == 'examination' and section in [11, 12, 13]:
+                    for division in sorted(sum_division_group[term][section]['subgroup']):
+                        sum_value = sum_division_group[term][section]['subgroup'][division]['female']
+                        total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
+                        print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', девочки', sum_value, column_keys)
+                        sum_value = sum_division_group[term][section]['subgroup'][division]['male']
+                        total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
+                        print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', мальчики', sum_value, column_keys)
+
+                else:
+                    for division in sorted(sum_division_group[term][section]['subgroup']):
+                        sum_value = sum_division_group[term][section]['subgroup'][division]['male']
+                        total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
+                        print_sum(act_book, handbooks['medical_subgroups'][division]['name'], sum_value, column_keys)
 
                 total_sum_mo = calculate_total_sum_adv(total_sum_mo, total_sum_section, column_keys)
 
