@@ -22,6 +22,8 @@ from medical_service_register.path import BASE_DIR, REESTR_PSE
 
 from helpers.correct import date_correct
 
+from pandas import DataFrame
+
 
 ### Значение даты следующей за отчётным периодом
 def get_date_following_reporting_period(year, period):
@@ -153,6 +155,66 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
         for service in services_values]
 
     return services_list
+
+
+def get_service_df(year, period, mo_code):
+    services = ProvidedService.objects.filter(
+        event__record__register__year=year,
+        event__record__register__period=period,
+        event__record__register__is_active=True,
+        event__record__register__organization_code=mo_code
+    )
+    services_values = services.values_list(
+        'id_pk',                                            # Ид услуги
+        'id',                                               # Ид из xml
+        'event__anamnesis_number',                          # Амбулаторная карта
+        'event__term__pk',                                  # Условие оказания МП
+        'worker_code',                                      # Код мед. работника
+        'quantity',                                         # Количество дней (услуг)
+        'comment',                                          # Комментарий
+        'code__pk',                                         # Ид кода услуги
+        'code__code',                                       # Код услуги
+        'code__name',                                       # Название услуги
+        'start_date',                                       # Дата начала услуги
+        'end_date',                                         # Дата конца услуги
+        'basic_disease__idc_code',                          # Основной диагноз
+        'event__concomitant_disease__idc_code',             # Сопутствующий диагноз
+        'code__group__id_pk',                               # Группа
+        'code__subgroup__id_pk',                            # Подгруппа услуги
+        'code__reason__ID',                                 # Причина
+        'division__code',                                   # Код отделения
+        'division__term__pk',                               # Вид отделения
+        'code__division__pk',                               # Ид отделения (для поликлиники)
+        'code__tariff_profile__pk',                         # Тарифный профиль (для стационара и дн. стационара)
+        'profile__pk',                                      # Профиль услуги
+        'worker_speciality__pk',                            # Специалист
+        'payment_type__pk',                                 # Тип оплаты
+        'tariff',                                           # Основной тариф
+        'invoiced_payment',                                 # Поданная сумма
+        'accepted_payment',                                 # Принятая сумма
+        'calculated_payment',                               # Рассчётная сумма
+        'provided_tariff',                                  # Снятая сумма
+        'code__uet',                                        # УЕТ
+        'event__pk',                                        # Ид случая
+        'department__old_code',                             # Код филиала
+        'event__record__patient__pk'                        # Ид патиента
+    ).order_by('event__record__patient__last_name',
+               'event__record__patient__first')
+
+    fields = ['id', 'xml_id', 'anamnesis_number', 'term',
+              'worker_code', 'quantity', 'comment',
+              'code_id', 'code', 'name', 'start_date',
+              'end_date', 'basic_disease',
+              'concomitant_disease', 'group',
+              'subgroup', 'reason', 'division_code',
+              'division_term', 'division_id',
+              'tariff_profile_id', 'profile',
+              'worker_speciality', 'payment_type',
+              'tariff', 'invoiced_payment', 'accepted_payment',
+              'calculated_payment', 'provided_tariff',
+              'uet', 'event_id', 'department', 'patient_id']
+    services_df = DataFrame(services_values, index=fields)
+    return services_df
 
 
 ### Информация об ошибках в указанной больнице
