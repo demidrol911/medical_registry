@@ -71,16 +71,17 @@ class Command(BaseCommand):
             print service.pk, service.payment_type_id, service.tariff, \
                 service.accepted_payment, service.calculated_payment, \
                 service.provided_tariff, service.start_date
+            accepted_payment = service.accepted_payment
             service.payment_type_id = 4
-            service.accepted_payment = float(service.tariff) - round(0.7*float(service.tariff), 2)
-            service.calculated_payment = round(0.3*float(service.tariff), 2)
-            service.provided_tariff = round(0.7*float(service.tariff), 2)
+            service.accepted_payment = float(accepted_payment) - round(0.7*float(accepted_payment), 2)
+            service.calculated_payment = round(0.3*float(accepted_payment), 2)
+            service.provided_tariff = round(0.7*float(accepted_payment), 2)
             service.save()
             ProvidedServiceCoefficient.objects.create(
                 service=service, coefficient_id=6
             )
             Sanction.objects.create(
-                type_id=1, service=service, underpayment=round(0.7*float(service.tariff), 3),
+                type_id=1, service=service, underpayment=round(0.7*float(accepted_payment), 3),
                 error_id=75)
 
         change_register_status(year, period, mo_code, 8)

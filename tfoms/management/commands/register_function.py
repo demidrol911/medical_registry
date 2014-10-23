@@ -571,7 +571,7 @@ def pse_export(year, period, mo_code, register_status, data, handbooks):
         p_file.close()
         s_file.close()
         e_file.close()
-        change_register_status(year, period, mo_code, register_status)
+    change_register_status(year, period, mo_code, register_status)
 
 
 ### Устанавливает статус реестру
