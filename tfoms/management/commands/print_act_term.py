@@ -266,11 +266,11 @@ def get_stomatology_structure(calc):
          SUM(CASE WHEN medical_service.code like '1%'
              THEN provided_service.tariff ELSE 0 END) AS children_tariff,
 
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=4
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL
              THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS all_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=4 AND medical_service.code like '0%'
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '0%'
              THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS adult_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=4 AND medical_service.code like '1%'
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '1%'
              THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS children_emergency,
 
          SUM(provided_service.accepted_payment) AS all_payment,
@@ -290,7 +290,7 @@ def get_stomatology_structure(calc):
              ON patient.id_pk = medical_register_record.patient_fk
          JOIN medical_register
              ON medical_register_record.register_fk = medical_register.id_pk
-         LEFT JOIN provided_service_coefficient
+        LEFT JOIN provided_service_coefficient
              ON provided_service_coefficient.service_fk=provided_service.id_pk
          WHERE medical_register.is_active
              AND medical_register.year = '{year}'
@@ -351,11 +351,11 @@ def get_stomatology_structure(calc):
          SUM(CASE WHEN medical_service.code like '1%'
              THEN provided_service.tariff ELSE 0 END) AS children_tariff,
 
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=4
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL
              THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS all_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=4 AND medical_service.code like '0%'
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '0%'
              THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS adult_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=4 AND medical_service.code like '1%'
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '1%'
              THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS children_emergency,
 
          SUM(provided_service.accepted_payment) AS all_payment,
@@ -404,15 +404,15 @@ def get_stomatology_structure(calc):
              'pattern': 'stomatology',
              'sum': [
                  {'query': calc((stomatology_disease_query, '12')),
-                  'separator_length': 0},
+                  'separator_length': 15},
                  {'query': calc((stomatology_proph_or_ambulance_query, '13')),
-                  'separator_length': 0},
+                  'separator_length': 12},
                  {'query': calc((stomatology_proph_or_ambulance_query, '14')),
-                  'separator_length': 0},
+                  'separator_length': 12},
                  {'query': calc((stomatology_emergency_query, '17')),
-                  'separator_length': 0},
+                  'separator_length': 18},
                  {'query': calc((stomatology_total_query, '12, 13, 14, 17')),
-                  'separator_length': 0}]},
+                  'separator_length': 21}]},
             ]
 
 
@@ -673,15 +673,15 @@ def get_acute_care_structure(calc):
              'pattern': 'acute_care',
              'sum': [
                  {'query': calc((acute_care_query, '456')),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 9},
                  {'query': calc((acute_care_query, '455')),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 9},
                  {'query': calc((acute_care_query, '457')),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 9},
                  {'query': calc((acute_care_query, '458')),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 9},
                  {'query': calc((acute_care_query, '456, 455, 457, 458')),
-                  'separator_length': 0}]}]
+                  'separator_length': 0, 'len': 9}]}]
 
 
 ### Структура актов периодических медосмотров
@@ -695,8 +695,8 @@ def get_periodic_med_exam_structure(calc):
 
          SUM(provided_service.tariff) AS all_tariff,
 
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5
-             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END),
+         SUM(CASE WHEN provided_service_coefficient IS NULL
+             THEN 0 ELSE round(provided_service.tariff*1.07, 2) END),
 
          SUM(provided_service.accepted_payment) AS all_accepted_payment
 
@@ -712,9 +712,9 @@ def get_periodic_med_exam_structure(calc):
              JOIN patient
                  ON medical_register_record.patient_fk = patient.id_pk
              LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
-                 (SELECT provided_service_coefficient.id_pk
-                  FROM provided_service_coefficient
-                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk LIMIT 1)
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
 
          WHERE medical_register.is_active
                AND medical_register.year = '{year}'
@@ -729,7 +729,7 @@ def get_periodic_med_exam_structure(calc):
              'pattern': 'periodic_medical_examination',
              'sum': [
                  {'query': calc((periodic_med_exam_query, '')),
-                  'separator_length': 0}]}]
+                  'separator_length': 0, 'len': 5}]}]
 
 
 ### Структура актов предварительных медосмотров
@@ -744,8 +744,8 @@ def get_preliminary_med_exam_structure(calc):
 
          SUM(provided_service.tariff) AS all_tariff,
 
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5
-             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END),
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NULL
+             THEN 0 ELSE round(provided_service.tariff*1.07, 2) END),
 
          SUM(provided_service.accepted_payment) AS all_accepted_payment
 
@@ -760,12 +760,10 @@ def get_preliminary_med_exam_structure(calc):
                  ON medical_register_record.register_fk = medical_register.id_pk
              JOIN patient
                  ON medical_register_record.patient_fk = patient.id_pk
-             LEFT JOIN provided_service_coefficient
-                 ON provided_service_coefficient.id_pk =
-                 (SELECT provided_service_coefficient.id_pk
-                  FROM provided_service_coefficient
-                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk
-                  LIMIT 1)
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
 
          WHERE medical_register.is_active
                AND medical_register.year = '{year}'
@@ -807,32 +805,32 @@ def get_preliminary_med_exam_structure(calc):
              'sum': [
                  {'query': calc((preliminary_med_exam_query,
                                  "medical_service.code='119101'")),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 5},
                  {'query': calc((preliminary_med_exam_query,
                                  "medical_service.code='119119'")),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 5},
                  {'query': calc((preliminary_med_exam_query,
                                  "medical_service.code='119120'")),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 5},
                  {'query': calc((preliminary_med_exam_query,
                                  """
                                   medical_service.code in
                                   ('119101', '119119', '119120')
                                   """)),
-                  'separator_length': 1},
+                  'separator_length': 1, 'len': 5},
                  {'query': calc((preliminary_med_exam_spec_query,
                                  """
                                  medical_service.group_fk=15 and
                                  medical_service.subgroup_fk=11
                                  """)),
-                  'separator_length': 2},
+                  'separator_length': 2, 'len': 2},
                  {'query': calc((preliminary_med_exam_query,
                                  """
                                  medical_service.group_fk=15 and
                                  (medical_service.subgroup_fk=11
                                  or medical_service.code in ('119101', '119119', '119120'))
                                  """)),
-                  'separator_length': 0}
+                  'separator_length': 0, 'len': 5}
              ]}]
 
 
@@ -857,9 +855,9 @@ def get_preventive_med_exam_structure(calc):
              THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
 
 
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 AND patient.gender_fk = 2
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND patient.gender_fk = 2
              THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 AND patient.gender_fk = 1
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND patient.gender_fk = 1
              THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
 
          SUM(CASE WHEN patient.gender_fk = 2
@@ -878,12 +876,10 @@ def get_preventive_med_exam_structure(calc):
                  ON medical_register_record.register_fk = medical_register.id_pk
              JOIN patient
                  ON medical_register_record.patient_fk = patient.id_pk
-             LEFT JOIN provided_service_coefficient
-                 ON provided_service_coefficient.id_pk =
-                 (SELECT provided_service_coefficient.id_pk
-                  FROM provided_service_coefficient
-                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk
-                  LIMIT 1)
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
 
          WHERE medical_register.is_active
                AND medical_register.year = '{year}'
@@ -915,11 +911,11 @@ def get_preventive_med_exam_structure(calc):
          SUM(CASE WHEN patient.gender_fk = 1
              THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
 
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL
              THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_coeff,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 and patient.gender_fk = 2
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL and patient.gender_fk = 2
              THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk=5 and patient.gender_fk = 1
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL and patient.gender_fk = 1
              THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
 
          SUM(provided_service.accepted_payment) AS all_accepted_payment,
@@ -939,12 +935,10 @@ def get_preventive_med_exam_structure(calc):
                  ON medical_register_record.register_fk = medical_register.id_pk
              JOIN patient
                  ON medical_register_record.patient_fk = patient.id_pk
-             LEFT JOIN provided_service_coefficient
-                 ON provided_service_coefficient.id_pk =
-                 (SELECT provided_service_coefficient.id_pk
-                  FROM provided_service_coefficient
-                  WHERE provided_service.id_pk = provided_service_coefficient.service_fk
-                  LIMIT 1)
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
 
          WHERE medical_register.is_active
                AND medical_register.year = '{year}'
@@ -997,32 +991,32 @@ def get_preventive_med_exam_structure(calc):
                                  """
                                   medical_service.code in ('119051', '119080', '119081')
                                   """)),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 10},
                  {'query': calc((preventive_med_exam_query,
                                  """
                                  medical_service.code in ('119052', '119082', '119083')
                                  """)),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 10},
                  {'query': calc((preventive_med_exam_query,
                                  """
                                  medical_service.code in ('119053', '119084', '119085')
                                  """)),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 10},
                  {'query': calc((preventive_med_exam_query,
                                  """
                                  medical_service.code in ('119054', '119086', '119087')
                                  """)),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 10},
                  {'query': calc((preventive_med_exam_query,
                                 """
                                 medical_service.code in ('119055', '119088', '119089')
                                 """)),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 10},
                  {'query': calc((preventive_med_exam_query,
                                  """
                                  medical_service.code in ('119056', '119090', '119091')
                                  """)),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 10},
                  {'query': calc((preventive_med_exam_total_query,
                                  """
                                  medical_service.code in (
@@ -1033,9 +1027,9 @@ def get_preventive_med_exam_structure(calc):
                                      '119086', '119087', '119088',
                                      '119089', '119090', '119091')
                                  """)),
-                  'separator_length': 2},
+                  'separator_length': 2, 'len': 15},
                  {'query': calc((preventive_med_exam_spec_query, '')),
-                  'separator_length': 2},
+                  'separator_length': 2,  'len': 6},
                  {'query': calc((preventive_med_exam_total_query,
                                  """
                                  medical_service.group_fk=11 AND
@@ -1048,9 +1042,431 @@ def get_preventive_med_exam_structure(calc):
                                       '119086', '119087', '119088',
                                       '119089', '119090', '119091'))
                                 """)),
-                  'separator_length': 0},
+                  'separator_length': 0, 'len': 15},
 
              ]}]
+
+
+### Структура актов для диспансеризации детей сирот (без попечения родителей)
+def get_examination_children_without(calc):
+    exam_children_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_male_population,
+
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization,
+
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.tariff ELSE 0 END) AS all_female_tariff,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
+
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND patient.gender_fk = 2
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND patient.gender_fk = 1
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
+
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_female_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_male_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND ({condition})
+         GROUP BY medical_register.organization_code
+         """
+
+    exam_children_total_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_male_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization,
+
+         SUM(provided_service.tariff) AS all_tariff,
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.tariff ELSE 0 END) AS all_female_tariff,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL and patient.gender_fk = 2
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL and patient.gender_fk = 1
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
+
+         SUM(provided_service.accepted_payment) AS all_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_female_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_male_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND ({condition})
+         GROUP BY medical_register.organization_code
+         """
+
+    exam_children_spec_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT patient.id_pk) AS all_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN patient.id_pk END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN patient.id_pk END) AS all_male_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND (medical_service.group_fk=13 AND medical_service.subgroup_fk=10)
+               {condition}
+         GROUP BY medical_register.organization_code
+         """
+
+    return [{'title': u'Диспансеризация несовершеннолетних (без попечения родителей)',
+             'pattern': 'examination_children_without_care',
+             'sum': [
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119220', '119221')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119222', '119223')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119224', '119225')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119226', '119227')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119228', '119229')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119230', '119231')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_total_query,
+                                 """
+                                 medical_service.code in (
+                                     '119220', '119221',
+                                     '119222', '119223',
+                                     '119224', '119225',
+                                     '119226', '119227',
+                                     '119228', '119229',
+                                     '119230', '119231')
+                                  """)),
+                  'separator_length': 1, 'len': 15},
+                 {'query': calc((exam_children_spec_query, '')),
+                  'separator_length': 2, 'len': 6},
+                 {'query': calc((exam_children_total_query,
+                                 """
+                                 medical_service.group_fk=13 AND
+                                 (medical_service.subgroup_fk=10
+                                  OR medical_service.code in (
+                                     '119220', '119221',
+                                     '119222', '119223',
+                                     '119224', '119225',
+                                     '119226', '119227',
+                                     '119228', '119229',
+                                     '119230', '119231'))
+                                """)),
+                  'separator_length': 0, 'len': 15}]}]
+
+
+### Структура актов для диспансеризации детей сирот (в трудной ситуации)
+def get_examination_children_difficult_situation(calc):
+    exam_children_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_male_population,
+
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization,
+
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.tariff ELSE 0 END) AS all_female_tariff,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
+
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND patient.gender_fk = 2
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND patient.gender_fk = 1
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
+
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_female_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_male_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND ({condition})
+         GROUP BY medical_register.organization_code
+         """
+
+    exam_children_total_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1 AND medical_service.subgroup_fk IS NULL
+               THEN (patient.id_pk, medical_service.id_pk) END) AS all_male_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization,
+
+         SUM(provided_service.tariff) AS all_tariff,
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.tariff ELSE 0 END) AS all_female_tariff,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.tariff ELSE 0 END) AS all_male_tariff,
+
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL and patient.gender_fk = 2
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_female_coeff,
+         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL and patient.gender_fk = 1
+             THEN round(provided_service.tariff*1.07, 2) ELSE 0 END) AS all_male_coeff,
+
+         SUM(provided_service.accepted_payment) AS all_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 2
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_female_accepted_payment,
+         SUM(CASE WHEN patient.gender_fk = 1
+             THEN provided_service.accepted_payment ELSE 0 END) AS all_male_accepted_payment
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+             LEFT JOIN provided_service_coefficient ON provided_service_coefficient.id_pk =
+                 (SELECT psc1.id_pk
+                  FROM provided_service_coefficient psc1
+                  WHERE provided_service.id_pk = psc1.service_fk and psc1.coefficient_fk=5 LIMIT 1)
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND ({condition})
+         GROUP BY medical_register.organization_code
+         """
+
+    exam_children_spec_query = """
+         SELECT
+         medical_register.organization_code,
+         COUNT(DISTINCT patient.id_pk) AS all_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN patient.id_pk END) AS all_female_population,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN patient.id_pk END) AS all_male_population,
+
+         COUNT(DISTINCT provided_service.id_pk) AS all_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 2
+               THEN provided_service.id_pk END) AS all_female_hospitalization,
+         COUNT(DISTINCT CASE WHEN patient.gender_fk = 1
+               THEN provided_service.id_pk END) AS all_male_hospitalization
+
+         FROM provided_service
+             JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             JOIN patient
+                 ON medical_register_record.patient_fk = patient.id_pk
+
+         WHERE medical_register.is_active
+               AND medical_register.year = '{year}'
+               AND medical_register.period = '{period}'
+               AND provided_service.payment_type_fk in (2, 4)
+               AND (medical_service.group_fk=12 AND medical_service.subgroup_fk=9)
+               {condition}
+         GROUP BY medical_register.organization_code
+         """
+
+    return [{'title': u'Диспансеризация несовершеннолетних (в трудной жизненной ситуации)',
+             'pattern': 'examination_children_difficult_situation',
+             'sum': [
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119020', '119021')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119022', '119023')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119024', '119025')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119026', '119027')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119028', '119029')
+                                  """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_query,
+                                 """
+                                 medical_service.code in ('119030', '119031')
+                                 """)),
+                  'separator_length': 0, 'len': 10},
+                 {'query': calc((exam_children_total_query,
+                                 """
+                                 medical_service.code in (
+                                     '119020', '119021',
+                                     '119022', '119023',
+                                     '119024', '119025',
+                                     '119026', '119027',
+                                     '119028', '119029',
+                                     '119030', '119031')
+                                  """)),
+                  'separator_length': 1, 'len': 15},
+                 {'query': calc((exam_children_spec_query, '')),
+                  'separator_length': 2, 'len': 6},
+                 {'query': calc((exam_children_total_query,
+                                 """
+                                 medical_service.group_fk=12 AND
+                                 (medical_service.subgroup_fk=9
+                                  OR medical_service.code in (
+                                     '119020', '119021',
+                                     '119022', '119023',
+                                     '119024', '119025',
+                                     '119026', '119027',
+                                     '119028', '119029',
+                                     '119030', '119031'))
+                                """)),
+                  'separator_length': 0, 'len': 15}]}]
 
 
 ### Структура акта по подушевому для поликлинники
@@ -1097,7 +1513,7 @@ def get_capitation_amb_care_structure(year, period):
 
     return [{'title': u'Подушевой норматив (амбулаторная помощь)',
              'pattern': 'capitation_ambulatory_care',
-             'sum': [{'query': result_data, 'separator_length': 0}]}]
+             'sum': [{'query': result_data, 'separator_length': 0, 'len': 24}]}]
 
 
 ### Структура акта для подушевого по скорой помощи
@@ -1124,7 +1540,7 @@ def get_capitation_acute_care_structure(year, period):
 
     return [{'title': u'Подушевой норматив (СМП)',
              'pattern': 'capitation_acute_care',
-             'sum': [{'query': result_data, 'separator_length': 0}]}]
+             'sum': [{'query': result_data, 'separator_length': 0, 'len': 11}]}]
 
 
 def run_sql(year, period):
@@ -1137,6 +1553,7 @@ def run_sql(year, period):
         result_sum = {mo_data[0]: [value for value in mo_data[1:]]
                       for mo_data in cursor.fetchall()}
         cursor.close()
+        print '***'
         return result_sum
     return lambda query: run(query)
 
@@ -1164,6 +1581,7 @@ def print_act(year, period, rule):
             result_data = condition['query']
             if result_data:
                 total_sum = [0, ]*len(result_data.values()[0])
+                print '*', len(total_sum)
                 for mo_code, value in result_data.iteritems():
                     act_book.set_cursor(ACT_CELL_POSITION[mo_code], block_index)
                     for index, cell_value in enumerate(value):
@@ -1172,9 +1590,8 @@ def print_act(year, period, rule):
                 act_book.set_cursor(101, block_index)
                 for cell_value in total_sum:
                     act_book.write_cell(cell_value, 'c')
-
-                block_index += len(total_sum) + \
-                    condition['separator_length']
+            block_index += condition['len'] + \
+                condition['separator_length']
 
 
 class Command(BaseCommand):
@@ -1195,7 +1612,9 @@ class Command(BaseCommand):
             get_preliminary_med_exam_structure(calc),
             get_preventive_med_exam_structure(calc),
             get_capitation_amb_care_structure(year, period),
-            get_capitation_acute_care_structure(year, period)
+            get_capitation_acute_care_structure(year, period),
+            get_examination_children_without(calc),
+            get_examination_children_difficult_situation(calc)
         ]
 
         for structure in acts_structure:
