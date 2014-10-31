@@ -268,6 +268,7 @@ def get_service_df_mini(year, period, mo_list):
         'division__term__pk',
         'organization__code',
         'event__record__patient__gender__pk',
+        'quantity',
         'tariff',
         'accepted_payment'
     )
@@ -284,6 +285,7 @@ def get_service_df_mini(year, period, mo_list):
         'division_term',
         'mo_code',
         'gender',
+        'quantity_days',
         'tariff',
         'accepted_payment',
 

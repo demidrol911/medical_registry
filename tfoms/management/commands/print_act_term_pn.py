@@ -16,7 +16,7 @@ class Act():
     DIVISION_BY_AGE = "AGE"
     AVAILABLE_FIELDS = {'patient_id': 'patients', 'id': 'services',
                         'tariff': 'tariff', 'accepted_payment': 'accepted_payment',
-                        'index07': 'index07'}
+                        'index07': 'index07', 'quantity_days': 'days'}
     ACT_PATH = ur'{dir}\{title}_{month}_{year}'
     TEMP_PATH = ur'{base}\templates\excel_pattern\end_of_month\{template}.xls'
 
@@ -614,6 +614,528 @@ def day_hospital_services():
     return act
 
 
+# Дневной стационар (пациенто-дни)
+def day_hospital_days():
+    act = Act()
+    act.title = u'Дневной стационар (пациенто-дни)'
+    act.pattern = 'day_hospital_days'
+    profile_group_column = ('days', )
+    act.columns = {
+        (0, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': False},
+        (1, 2, 3, 5, 11, 16): {
+            'column': profile_group_column,
+            'division': None,
+            'all_column': False},
+        (17, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([('quantity_days', 'sum')])
+        general_con = service_df.group.isnull() & service_df.division_term.isin([10, 11])
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 39),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 40),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 41),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 42),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 43),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 44),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 45),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 46),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 47),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 48),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 49),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 50),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 51),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 52),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 53),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': rec_group},
+            {'con': service_df.group == 17,
+             'func': rec_group},
+            {'con': (general_con & (service_df.term == 2)) | (service_df.group.isin([28, 17])),
+             'func': rec_group}
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар (стоимость)
+def day_hospital_cost():
+    act = Act()
+    act.title = u'Дневной стационар (стоимость)'
+    act.pattern = 'day_hospital_cost'
+    profile_group_column = ('accepted_payment', )
+    act.columns = {
+        (0, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': False},
+        (1, 2, 3, 5, 11, 16): {
+            'column': profile_group_column,
+            'division': None,
+            'all_column': False},
+        (17, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([('accepted_payment', 'sum')])
+        general_con = service_df.group.isnull() & service_df.division_term.isin([10, 11])
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 39),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 40),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 41),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 42),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 43),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 44),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 45),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 46),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 47),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 48),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 49),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 50),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 51),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 52),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 53),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': rec_group},
+            {'con': service_df.group == 17,
+             'func': rec_group},
+            {'con': (general_con & (service_df.term == 2)) | (service_df.group.isin([28, 17])),
+             'func': rec_group}
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар свод
+def day_hospital():
+    act = Act()
+    act.title = u'Дневной стационар свод'
+    act.pattern = 'day_hospital'
+    group_column = ('patients', 'services', 'days', 'accepted_payment', )
+
+    act.columns = {
+        (0, 1, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True}
+    }
+
+    act.separator[0] = 2
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        general_con = (service_df.group.isnull() &
+                       (service_df.term == 2) &
+                       service_df.division_term.isin([10, 11]))
+        rules = [
+            {'con': general_con | (service_df.group == 17),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': rec_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар на дому (численность лиц)
+def day_hospital_home_patients():
+    act = Act()
+    act.title = u'Дневной стационар на дому (численность лиц)'
+    act.pattern = 'day_hospital_home_patients'
+    profile_group_column = ('patients', )
+    act.columns = {
+        (0, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': False},
+        (1, 2, 3, 5, 11, 16): {
+            'column': profile_group_column,
+            'division': None,
+            'all_column': False},
+        (17, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict(
+            [('patient_id', lambda x: len(service_df.ix[x.index]
+            [['tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
+        total_group = OrderedDict(
+            [('patient_id', lambda x: len(service_df.ix[x.index]
+            [['group', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
+        null_group = OrderedDict([('patient_id', lambda x: 0)])
+        general_con = service_df.group.isnull() & (service_df.division_term == 12)
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 39),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 40),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 41),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 42),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 43),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 44),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 45),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 46),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 47),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 48),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 49),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 50),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 51),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 52),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 53),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': null_group},
+            {'con': service_df.group == 17,
+             'func': null_group},
+            {'con': general_con & (service_df.term == 2),
+             'func': total_group}
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар на дому (стоимость)
+def day_hospital_home_cost():
+    act = Act()
+    act.title = u'Дневной стационар на дому (стоимость)'
+    act.pattern = 'day_hospital_home_cost'
+    profile_group_column = ('accepted_payment', )
+    act.columns = {
+        (0, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': False},
+        (1, 2, 3, 5, 11, 16): {
+            'column': profile_group_column,
+            'division': None,
+            'all_column': False},
+        (17, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([('accepted_payment', 'sum')])
+        null_group = OrderedDict([('accepted_payment', lambda x: 0)])
+        general_con = service_df.group.isnull() & (service_df.division_term == 12)
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 39),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 40),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 41),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 42),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 43),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 44),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 45),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 46),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 47),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 48),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 49),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 50),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 51),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 52),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 53),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': null_group},
+            {'con': service_df.group == 17,
+             'func': null_group},
+            {'con': general_con & (service_df.term == 2),
+             'func': rec_group}
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар на дому (выбывшие больные)
+def day_hospital_home_services():
+    act = Act()
+    act.title = u'Дневной стационар на дому (выбывшие больные)'
+    act.pattern = 'day_hospital_home_services'
+    profile_group_column = ('services', )
+    act.columns = {
+        (0, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': False},
+        (1, 2, 3, 5, 11, 16): {
+            'column': profile_group_column,
+            'division': None,
+            'all_column': False},
+        (17, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([('id', 'nunique')])
+        null_group = OrderedDict([('id', lambda x: 0)])
+        general_con = service_df.group.isnull() & (service_df.division_term == 12)
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 39),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 40),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 41),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 42),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 43),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 44),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 45),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 46),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 47),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 48),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 49),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 50),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 51),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 52),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 53),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': null_group},
+            {'con': service_df.group == 17,
+             'func': null_group},
+            {'con': general_con & (service_df.term == 2),
+             'func': rec_group}
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар на дому (пациенто-дни)
+def day_hospital_home_days():
+    act = Act()
+    act.title = u'Дневной стационар на дому (пациенто-дни)'
+    act.pattern = 'day_hospital_home_days'
+    profile_group_column = ('days', )
+    act.columns = {
+        (0, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': False},
+        (1, 2, 3, 5, 11, 16): {
+            'column': profile_group_column,
+            'division': None,
+            'all_column': False},
+        (17, ): {
+            'column': profile_group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([('quantity_days', 'sum')])
+        null_group = OrderedDict([('quantity_days', lambda x: 0)])
+        general_con = service_df.group.isnull() & (service_df.division_term == 12)
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 39),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 40),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 41),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 42),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 43),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 44),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 45),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 46),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 47),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 48),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 49),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 50),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 51),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 52),
+             'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 53),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': null_group},
+            {'con': service_df.group == 17,
+             'func': null_group},
+            {'con': general_con & (service_df.term == 2),
+             'func': rec_group}
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар на дому свод
+def day_hospital_home():
+    act = Act()
+    act.title = u'Дневной стационар на дому свод'
+    act.pattern = 'day_hospital_home'
+    group_column = ('patients', 'services', 'days', 'accepted_payment', )
+
+    act.columns = {
+        (0, 1, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True}
+    }
+
+    act.separator[0] = 2
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        rules = [
+            {'con': service_df.group.isnull() &
+                (service_df.term == 2) &
+                (service_df.division_term == 12),
+             'func': rec_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Дневной стационар свод + на дому свод
+def day_hospital_all():
+    act = Act()
+    act.title = u'Дневной стационар свод + на дому свод'
+    act.pattern = 'day_hospital_all'
+    group_column = ('patients', 'services', 'days', 'accepted_payment', )
+
+    act.columns = {
+        (0, 1, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True}
+    }
+
+    act.separator[0] = 2
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        general_con = (service_df.group.isnull() &
+                       (service_df.term == 2) &
+                       service_df.division_term.isin([10, 11, 12]))
+        rules = [
+            {'con': general_con | (service_df.group == 17),
+             'func': rec_group},
+            {'con': service_df.group == 28,
+             'func': rec_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
@@ -643,7 +1165,25 @@ class Command(BaseCommand):
             # 7 Дневной стационар (численность лиц)
             #day_hospital_patients(),
             # 8 Дневной стационар (выбывшие больные)
-            day_hospital_services(),
+            # day_hospital_services(),
+            # 9 Дневной стационар (пациенто-дни)
+            #day_hospital_days(),
+            # 10 Дневной стационар (стоимость)
+            #day_hospital_cost(),
+            # 11 Дневной стационар (свод)
+            #day_hospital(),
+            # 12 Дневной стационар на дому (численность лиц)
+            #day_hospital_home_patients(),
+            # 13 Дневной стационар на дому (стоимость)
+            #day_hospital_home_cost(),
+            # 14 Дневной стационар на дому (выбывшие больные)
+            #day_hospital_home_services(),
+            # 15 Дневной стационар на дому (пациенто-дни)
+            #day_hospital_home_days(),
+            # 16 Дневной стационар на дому свод
+            #day_hospital_home(),
+            # 17 Дневной стационар свод + на дому свод
+            #day_hospital_all()
         ]
 
         last_pos = 0
@@ -654,6 +1194,10 @@ class Command(BaseCommand):
                 act.calculate_all(service_df_mini)
             print cur_pos,
             last_pos = cur_pos
+
+        print 'print'
+        for act in acts:
+            act.print_excel(year, period)
 
         elapsed = time.clock() - start
         print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
