@@ -7,6 +7,7 @@ from shutil import copy2
 from dbfpy import dbf
 
 from django.db.models import Q, Sum
+from pandas.core.series import Series
 from tfoms.models import (MedicalError, ProvidedService, MedicalRegister,
                           TariffFap, PaymentFailureCause,
                           MedicalRegisterRecord, Sanction,
@@ -199,7 +200,7 @@ def get_service_df(year, period, mo_code):
         'department__old_code',                             # Код филиала
         'event__record__patient__pk'                        # Ид патиента
     ).order_by('event__record__patient__last_name',
-               'event__record__patient__first')
+               'event__record__patient__first_name')
 
     fields = ['id', 'xml_id', 'anamnesis_number', 'term',
               'worker_code', 'quantity', 'comment',
@@ -212,8 +213,111 @@ def get_service_df(year, period, mo_code):
               'worker_speciality', 'payment_type',
               'tariff', 'invoiced_payment', 'accepted_payment',
               'calculated_payment', 'provided_tariff',
-              'uet', 'event_id', 'department', 'patient_id']
-    services_df = DataFrame(services_values, index=fields)
+              'uet', 'event_id', 'department', 'patient_id',
+
+              'index015', 'index_6', 'index2',
+              'index07', 'indexFAP', 'index_7']
+
+    coefficients = ProvidedServiceCoefficient.objects.filter(
+        service__event__record__register__year=year,
+        service__event__record__register__period=period,
+        service__event__record__register__is_active=True,
+        service__event__record__register__organization_code=mo_code
+    )
+
+    coefficients_list = coefficients.values(
+        'service__pk', 'coefficient__pk'
+    ).distinct()
+    coefficients_dict = {}
+    for coefficient in coefficients_list:
+        if coefficient['coefficient__pk'] not in coefficients_dict:
+            coefficients_dict[coefficient['coefficient__pk']] = []
+        coefficients_dict[coefficient['coefficient__pk']].append(coefficient['service__pk'])
+
+    coef_type = get_coefficient_type()
+    code_to_field = {2: 'index015', 3: 'index_6', 4: 'index2',
+                     5: 'index07', 1: 'indexFAP', 6: 'index_7'}
+
+    services_df = DataFrame([list(row)+[0, 0, 0, 0, 0, 0] for row in services_values],
+                            columns=fields)
+
+    for coef, service_list in coefficients_dict.iteritems():
+        services_df.loc[services_df.id.isin(service_list), code_to_field[coef]] = \
+            services_df[services_df.id.isin(service_list)].\
+            apply(lambda s: (s.tariff+s.index015)*(coef_type[coef]['value']-1), axis=1)
+    return services_df
+
+
+def get_service_df_mini(year, period, mo_list):
+    services = ProvidedService.objects.filter(
+        event__record__register__year=year,
+        event__record__register__period=period,
+        event__record__register__is_active=True,
+        event__record__register__organization_code__in=mo_list,
+        payment_type__in=[2, 4]
+    ).values_list(
+        'id_pk',
+        'event__record__patient__pk',
+        'event__pk',
+        'code__code',
+        'code__group__pk',
+        'code__subgroup__pk',
+        'code__division__pk',
+        'code__tariff_profile__pk',
+        'event__term__pk',
+        'division__term__pk',
+        'organization__code',
+        'event__record__patient__gender__pk',
+        'tariff',
+        'accepted_payment'
+    )
+    columns_df = [
+        'id',
+        'patient_id',
+        'event_id',
+        'code',
+        'group',
+        'subgroup',
+        'code_division',
+        'tariff_profile',
+        'term',
+        'division_term',
+        'mo_code',
+        'gender',
+        'tariff',
+        'accepted_payment',
+
+        'index015', 'index_6', 'index2',
+        'index07', 'indexFAP', 'index_7',
+
+        'is_children'
+    ]
+
+    coefficients = ProvidedServiceCoefficient.objects.filter(
+        service__event__record__register__year=year,
+        service__event__record__register__period=period,
+        service__event__record__register__is_active=True,
+        service__event__record__register__organization_code__in=mo_list
+    ).values(
+        'service__pk', 'coefficient__pk'
+    ).distinct()
+    coefficients_dict = {}
+    for coefficient in coefficients:
+        if coefficient['coefficient__pk'] not in coefficients_dict:
+            coefficients_dict[coefficient['coefficient__pk']] = []
+        coefficients_dict[coefficient['coefficient__pk']].append(coefficient['service__pk'])
+
+    coe_type = get_coefficient_type()
+    code_to_field = {2: 'index015', 3: 'index_6', 4: 'index2',
+                     5: 'index07', 1: 'indexFAP', 6: 'index_7'}
+
+    services_df = DataFrame([list(row)+[0, 0, 0, 0, 0, 0, row[3][0] == '1'] for row in services],
+                            columns=columns_df)
+
+    for coe, service_list in coefficients_dict.iteritems():
+        services_df.loc[services_df.id.isin(service_list), code_to_field[coe]] = \
+            services_df[services_df.id.isin(service_list)].\
+            apply(lambda s: (s.tariff+s.index015)*(coe_type[coe]['value']-1), axis=1)
     return services_df
 
 

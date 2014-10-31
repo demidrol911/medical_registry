@@ -631,7 +631,7 @@ def get_acute_care_structure(calc):
     acute_care_query = """
          SELECT
          medical_register.organization_code,
-         COUNT(DISTINCT (patient.id_pk, medical_service.division_fk)) AS all_population,
+         COUNT(DISTINCT (patient.id_pk, medical_service.division_fk, medical_service.code like '0%')) AS all_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
                THEN (patient.id_pk, medical_service.division_fk) END) AS adult_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
@@ -1604,17 +1604,17 @@ class Command(BaseCommand):
         calc = run_sql(year, period)
 
         acts_structure = [
-            get_day_hospital_structure(calc),
-            get_stomatology_structure(calc),
-            get_hospital_structure(calc),
-            get_acute_care_structure(calc),
-            get_periodic_med_exam_structure(calc),
-            get_preliminary_med_exam_structure(calc),
-            get_preventive_med_exam_structure(calc),
-            get_capitation_amb_care_structure(year, period),
-            get_capitation_acute_care_structure(year, period),
-            get_examination_children_without(calc),
-            get_examination_children_difficult_situation(calc)
+            #get_day_hospital_structure(calc),
+            #get_stomatology_structure(calc),
+            #get_hospital_structure(calc),
+            #get_acute_care_structure(calc),
+            ##get_periodic_med_exam_structure(calc),
+            ##get_preliminary_med_exam_structure(calc),
+            ##get_preventive_med_exam_structure(calc),
+            #get_capitation_amb_care_structure(year, period),
+            #get_capitation_acute_care_structure(year, period),
+            ##get_examination_children_without(calc),
+            ##get_examination_children_difficult_situation(calc)
         ]
 
         for structure in acts_structure:
