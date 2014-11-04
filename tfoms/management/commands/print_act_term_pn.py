@@ -1248,18 +1248,309 @@ def hospital_services():
             {'con': general_con & (service_df.tariff_profile == 33), 'func': rec_group},
             {'con': general_con & (service_df.tariff_profile == 34), 'func': rec_group},
             {'con': general_con & (service_df.tariff_profile == 35), 'func': rec_group},
-            {'con': service_df.code.isin(['049021', '049023', '149021', '149023']), 'func': rec_group},
-            {'con': service_df.code.isin(['049022', '149022', '049024', '149024']), 'func': rec_group},
+            {'con': service_df.code.isin(['049023', '149023']), 'func': rec_group},
+            {'con': service_df.code.isin(['049024', '149024']), 'func': rec_group},
             {'con': general_con & (service_df.tariff_profile == 64), 'func': rec_group},
             {'con': service_df.code.isin(['098951']), 'func': rec_group},
             {'con': service_df.code.isin(['098948']), 'func': rec_group},
             {'con': service_df.code.isin(['098949', '098975']), 'func': rec_group},
             {'con': service_df.code.isin(['098950']), 'func': rec_group},
             {'con': general_con | service_df.code.isin(
-                ['049021', '049023', '149021', '149023',
-                 '049022', '149022', '049024', '149024',
+                ['049023', '149023', '049024', '149024',
                  '098951', '098948', '098949', '098975',
                  '098950']), 'func': rec_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Круглосуточный стационар (стоимость)
+def hospital_cost():
+    act = Act()
+    act.title = u'Круглосуточный стационар (стоимость)'
+    act.pattern = 'hospital_cost'
+    group_column = ('accepted_payment', )
+    act.columns = {
+        (0, 2, 3, 4, 5, 6, 7, 8, 13, 14,
+         16, 17, 18, 19, 20, 21, 22, 23,
+         24, 25, 26, 27, 28, 29, 30, 31,
+         32, 34, 36, 37, 38, 39, 40, 41,
+         42, 43, 44): {'column': group_column,
+                       'division': Act.DIVISION_BY_AGE,
+                       'all_column': False},
+        (1, 9, 10, 11, 12, 15, 33, 35, ): {
+            'column': group_column,
+            'division': None,
+            'all_column': False},
+        (45, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([('accepted_payment', 'sum')])
+        general_con = ((service_df.term == 1) & service_df.group.isnull())
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 1), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 2), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 3), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 4), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 5), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 6), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 7), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 8), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 9), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 10), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 37), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 11), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 36), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 12), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 13), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 38), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 14), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 15), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 16), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 17), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 18), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 19), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 20), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 21), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 22), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 23), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 24), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 25), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 26), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 27), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 28), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 29), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 30), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 31), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 32), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 33), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 34), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 35), 'func': rec_group},
+            {'con': service_df.code.isin(['049023', '149023']), 'func': rec_group},
+            {'con': service_df.code.isin(['049024', '149024']), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 64), 'func': rec_group},
+            {'con': service_df.code.isin(['098951']), 'func': rec_group},
+            {'con': service_df.code.isin(['098948']), 'func': rec_group},
+            {'con': service_df.code.isin(['098949', '098975']), 'func': rec_group},
+            {'con': service_df.code.isin(['098950']), 'func': rec_group},
+            {'con': general_con | service_df.code.isin(
+                ['049023', '149023', '049024', '149024',
+                 '098951', '098948', '098949', '098975',
+                 '098950']), 'func': rec_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Круглосуточный стационар (число койко-дней)
+def hospital_days():
+    act = Act()
+    act.title = u'Круглосуточный стационар (число койко-дней)'
+    act.pattern = 'hospital_days'
+    group_column = ('days', )
+    act.columns = {
+        (0, 2, 3, 4, 5, 6, 7, 8, 13, 14,
+         16, 17, 18, 19, 20, 21, 22, 23,
+         24, 25, 26, 27, 28, 29, 30, 31,
+         32, 34, 36, 37, 38, 39, 40, 41,
+         42, 43, 44): {'column': group_column,
+                       'division': Act.DIVISION_BY_AGE,
+                       'all_column': False},
+        (1, 9, 10, 11, 12, 15, 33, 35, ): {
+            'column': group_column,
+            'division': None,
+            'all_column': False},
+        (45, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([('quantity_days', 'sum')])
+        general_con = ((service_df.term == 1) & service_df.group.isnull())
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 1), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 2), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 3), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 4), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 5), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 6), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 7), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 8), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 9), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 10), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 37), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 11), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 36), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 12), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 13), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 38), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 14), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 15), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 16), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 17), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 18), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 19), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 20), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 21), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 22), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 23), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 24), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 25), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 26), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 27), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 28), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 29), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 30), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 31), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 32), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 33), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 34), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 35), 'func': rec_group},
+            {'con': service_df.code.isin(['049023', '149023']), 'func': rec_group},
+            {'con': service_df.code.isin(['049024', '149024']), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 64), 'func': rec_group},
+            {'con': service_df.code.isin(['098951']), 'func': rec_group},
+            {'con': service_df.code.isin(['098948']), 'func': rec_group},
+            {'con': service_df.code.isin(['098949', '098975']), 'func': rec_group},
+            {'con': service_df.code.isin(['098950']), 'func': rec_group},
+            {'con': general_con | service_df.code.isin(
+                ['049023', '149023', '049024', '149024',
+                 '098951', '098948', '098949', '098975',
+                 '098950']), 'func': rec_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Круглосуточный стационар (численность лиц)
+def hospital_patients():
+    act = Act()
+    act.title = u'Круглосуточный стационар (численность лиц)'
+    act.pattern = 'hospital_patients'
+    group_column = ('patients', )
+    act.columns = {
+        (0, 2, 3, 4, 5, 6, 7, 8, 13, 14,
+         16, 17, 18, 19, 20, 21, 22, 23,
+         24, 25, 26, 27, 28, 29, 30, 31,
+         32, 34, 36, 37, 38, 39, 40, 41,
+         42, 43, 44): {'column': group_column,
+                       'division': Act.DIVISION_BY_AGE,
+                       'all_column': False},
+        (1, 9, 10, 11, 12, 15, 33, 35, ): {
+            'column': group_column,
+            'division': None,
+            'all_column': False},
+        (45, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True},
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict(
+            [('patient_id', lambda x: len(service_df.ix[x.index]
+            [['tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
+        serv_group = OrderedDict(
+            [('patient_id', lambda x: len(service_df.ix[x.index]
+            [['code', 'patient_id', 'is_children']].drop_duplicates()))])
+        total_group = OrderedDict(
+            [('patient_id', lambda x: len(service_df.ix[x.index]
+            [['group', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
+        general_con = ((service_df.term == 1) & service_df.group.isnull())
+        rules = [
+            {'con': general_con & (service_df.tariff_profile == 1), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 2), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 3), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 4), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 5), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 6), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 7), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 8), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 9), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 10), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 37), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 11), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 36), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 12), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 13), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 38), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 14), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 15), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 16), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 17), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 18), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 19), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 20), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 21), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 22), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 23), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 24), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 25), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 26), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 27), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 28), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 29), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 30), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 31), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 32), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 33), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 34), 'func': rec_group},
+            {'con': general_con & (service_df.tariff_profile == 35), 'func': rec_group},
+            {'con': service_df.code.isin(['049023', '149023']), 'func': serv_group},
+            {'con': service_df.code.isin(['049024', '149024']), 'func': serv_group},
+            {'con': general_con & (service_df.tariff_profile == 64), 'func': rec_group},
+            {'con': service_df.code.isin(['098951']), 'func': serv_group},
+            {'con': service_df.code.isin(['098948']), 'func': serv_group},
+            {'con': service_df.code.isin(['098949', '098975']), 'func': serv_group},
+            {'con': service_df.code.isin(['098950']), 'func': serv_group},
+            {'con': general_con | service_df.code.isin(
+                ['049023', '149023', '049024', '149024',
+                 '098951', '098948', '098949', '098975',
+                 '098950']), 'func': total_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Круглосуточный стационар свод
+def hospital():
+    act = Act()
+    act.title = u'Круглосуточный стационар свод'
+    act.pattern = 'hospital_all'
+    group_column = ('patients', 'services', 'days', 'accepted_payment', )
+
+    act.columns = {
+        (0, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True}
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        rules = [
+            {'con': (service_df.group.isnull() & (service_df.term == 1)) |
+                service_df.code.isin(['049023', '149023', '049024', '149024',
+                                      '098951', '098948', '098949', '098975',
+                                      '098950']),
+             'func': rec_group},
         ]
         return rules
 
@@ -1270,7 +1561,6 @@ def hospital_services():
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        #print 'Current memory usage: %iMB' % (hpy().heap().stat.size/(1024*1024))
         start = time.clock()
         year = args[0]
         period = args[1]
@@ -1282,43 +1572,51 @@ class Command(BaseCommand):
 
         acts = [
             # 1 Диспансеризация детей - сирот в трудной жизненной ситуации
-            exam_children_difficult_situation(),
+            #exam_children_difficult_situation(),
             # 2 Диспансеризация детей - сирот без попечения родителей
-            exam_children_without_care(),
+            #exam_children_without_care(),
             # 3 Профосмотры несовешенолетних
-            prev_exam_children(),
+            #prev_exam_children(),
             # 4 СМП финансирование по подушевому нормативу
-            acute_care(),
+            #acute_care(),
             # 5 Периодический медосмотр несовершеннолетних
-            period_exam_children(),
+            #period_exam_children(),
             # 6 Предварительные медосмотры несовершеннолетних
-            prelim_exam_children(),
+            #prelim_exam_children(),
             # 7 Дневной стационар (численность лиц)
-            day_hospital_patients(),
+            #day_hospital_patients(),
             # 8 Дневной стационар (выбывшие больные)
-            day_hospital_services(),
+            #day_hospital_services(),
             # 9 Дневной стационар (пациенто-дни)
-            day_hospital_days(),
+            #day_hospital_days(),
             # 10 Дневной стационар (стоимость)
-            day_hospital_cost(),
+            #day_hospital_cost(),
             # 11 Дневной стационар (свод)
-            day_hospital(),
+            #day_hospital(),
             # 12 Дневной стационар на дому (численность лиц)
-            day_hospital_home_patients(),
+            #day_hospital_home_patients(),
             # 13 Дневной стационар на дому (стоимость)
-            day_hospital_home_cost(),
+            #day_hospital_home_cost(),
             # 14 Дневной стационар на дому (выбывшие больные)
-            day_hospital_home_services(),
+            #day_hospital_home_services(),
             # 15 Дневной стационар на дому (пациенто-дни)
-            day_hospital_home_days(),
+            #day_hospital_home_days(),
             # 16 Дневной стационар на дому свод
-            day_hospital_home(),
+            #day_hospital_home(),
             # 17 Дневной стационар свод + на дому свод
-            day_hospital_all(),
+            #day_hospital_all(),
             # 18 Круглосуточный стационар ВМП
-            hospital_hmc(),
+            #hospital_hmc(),
             # 19 Круглосуточный стационар (число госпитализаций)
-            hospital_services()
+            #hospital_services(),
+            # 20 Круглосуточный стационар (стоимость)
+            #hospital_cost(),
+            # 21 Круглосуточный стационар (число койко-дней)
+            #hospital_days(),
+            # 22 Круглосуточный стационар (численность лиц)
+            #hospital_patients(),
+            # 23 Круглосуточный стационар свод
+            #hospital(),
         ]
 
         last_pos = 0
