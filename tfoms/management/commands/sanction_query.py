@@ -26,7 +26,7 @@ select dr.fio, --Фамилия Имя Отчество,
        '' as tn1, --табельный номер врача (TN1), (- в базе нет)
        dr.sum_usl, --сумма предъявленная, (- вместе с доплатами по ффомс и тфомс,
        strtofloat(getheap(dr.heap,'FFOMS')) as ffoms, --федеральная доплата,
-       strtofloat(getheap(dr.heap,'TFOMS')) as tfoms,--территориальная доплата,
+       strtofloat(getheap(dr.heap,'TFOMS')) as tfoms, --территориальная доплата,
        '' as s_ppp, --сумма оплаченная (после первой проверки), (- в базе нет)
        strtofloat(getheap(dr.heap,'SUM_BONUS')) as s_snk, --сумма санкции, (- вывожу сумму штрафа (без снятой суммы))
        '' as snils, --СНИЛС (если есть). (- в базе нет)

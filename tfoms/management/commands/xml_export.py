@@ -56,7 +56,7 @@ def get_patients(period):
                     where
                         person_fk = person.version_id_pk
                         and status_fk = 1
-                        and confirmation_date <= %s
+                        and date <= %s
                         and attachment.is_active)
             LEFT join medical_organization medOrg
                 on (
@@ -83,8 +83,7 @@ def get_patients(period):
                 medical_register.is_active
                 and medical_register.year = '2014'
                 and medical_register.period = %s
-                --and medical_register.organization_code in ('280017', '280020',
-                --                                           '280084')
+                --and medical_register.organization_code in ('280036')
             )
         """
     return Patient.objects.raw(query, [attachment_date, period])
@@ -326,7 +325,7 @@ def get_records(register_pk):
                 on referred.id_pk = provided_event.refer_organization_fk
             left join idc idc_initial
                 on idc_initial.id_pk = provided_event.initial_disease_fk
-            join idc idc_basic
+            LEFT join idc idc_basic
                 on idc_basic.id_pk = provided_event.basic_disease_fk
             left join provided_event_concomitant_disease pecd
                 on pecd.event_fk = provided_event.id_pk
@@ -343,7 +342,7 @@ def get_records(register_pk):
 
             left JOIN medical_division service_division
                 on service_division.id_pk = provided_service.division_fk
-            JOIN medical_organization service_department
+            LEFT JOIN medical_organization service_department
                 ON service_department.id_pk = provided_service.department_fk
             LEFT join idc service_idc_basic
                 on service_idc_basic.id_pk = provided_service.basic_disease_fk
@@ -351,9 +350,9 @@ def get_records(register_pk):
                 on service_profile.id_pk = provided_service.profile_fk
             LEFT JOin medical_worker_speciality service_worker_speciality
                 on service_worker_speciality.id_pk = provided_service.worker_speciality_fk
-            JOIN medical_service
+            LEFT JOIN medical_service
                 on provided_service.code_fk = medical_service.id_pk
-            JOIN payment_type
+            LEFT JOIN payment_type
                 on provided_service.payment_type_fk = payment_type.id_pk
             left join provided_service_sanction
                 on provided_service_sanction.service_fk = provided_service.id_pk
@@ -376,12 +375,12 @@ def get_records(register_pk):
 
 
 def main():
-    period = '07'
+    period = '09'
     year = '2014'
     print datetime.datetime.now()
     registers = MedicalRegister.objects.filter(
         is_active=True, period=period, year=year,
-        #organization_code__in=('280017', '280020', '280084')
+        #organization_code__in=('280036', )
     ).order_by('organization_code')
     print u'Регистры: ', registers
 
@@ -428,7 +427,7 @@ def main():
         lm_xml.put('OKATOG', safe_str(patient.okato_registration))
         lm_xml.put('OKATOP', safe_str(patient.okato_residence))
         attachment_code = patient.attachment_code
-        lm_xml.put('COMENTP', patient.comment or '')
+        lm_xml.put('COMENTP', attachment_code or '')
         lm_xml.end('PERS')
 
     lm_xml.end('PERS_LIST')
@@ -437,6 +436,8 @@ def main():
     XML_TYPES = dict(SERVICE_XML_TYPES)
     EXAMINIATIONS = dict(EXAMINATION_TYPES)
     for register_type in XML_TYPES:
+        if register_type == 0:
+            continue
         print register_type
         name = '%sS28002T28_14%s1' % (XML_TYPES[register_type].upper(),
                                       period)
@@ -640,10 +641,11 @@ def main():
                 if register_type in (1, 2):
                     hm_xml.put('KOL_USL', record.quantity or '')
                 hm_xml.put('TARIF', round(float(record.service_tariff or 0), 2) or 0)
-                if record.service_payment_type_code != 2:
-                    accepted_payment = record.service_accepted_payment or 0
-                else:
+                accepted_payment = record.service_accepted_payment or 0
+
+                if record.service_payment_type_code == 2:
                     accepted_payment = 0
+
                 sumv_usl = round(float(accepted_payment), 2)
                 hm_xml.put('SUMV_USL', sumv_usl or 0)
                 hm_xml.put('PRVS', record.service_worker_speciality_code or '')

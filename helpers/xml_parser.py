@@ -54,6 +54,7 @@ class XmlLikeFileReader(object):
 
                 if element.tag in tags:
                     node_weight -= 1
+                    element.clear()
                     yield item
 
                 parent = parents.pop()

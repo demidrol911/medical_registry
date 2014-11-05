@@ -2,16 +2,10 @@
 
 from django.core.management.base import BaseCommand
 from django.db.models import Max
-from tfoms.models import (ProvidedEvent, ProvidedService, MedicalRegister,
-                          Patient, ProvidedEventConcomitantDisease,
+from tfoms.models import (ProvidedEvent, ProvidedService, Patient,
+                          ProvidedEventConcomitantDisease,
                           ProvidedEventComplicatedDisease,
-                          Person, InsurancePolicy, MedicalRegisterRecord,
-                          PersonIDType, MedicalServiceTerm,
-                          MedicalServiceKind, MedicalServiceForm,
-                          MedicalDivision, MedicalServiceProfile,
-                          TreatmentResult, TreatmentOutcome, Special,
-                          MedicalWorkerSpeciality, PaymentMethod,
-                          PaymentType, PaymentFailureCause, MedicalRegister,
+                          MedicalRegisterRecord, MedicalRegister,
                           MedicalRegisterStatus, MedicalOrganization,
                           SERVICE_XML_TYPES)
 
@@ -24,10 +18,44 @@ from helpers import xml_writer
 import os
 import re
 from datetime import datetime
+from zipfile import ZipFile
+import shutil
+
+OUTBOX_DIR = '//alpha/vipnet/medical_registry/outbox/'
+OUTBOX_SUCCESS = u'D:/work/medical_service_register/templates/outcoming_messages/ФЛК пройден.txt'
+register_dir = "d:/work/register_import/"
+temp_dir = "d:/work/register_temp/"
+flk_dir = "d:/work/medical_register/"
+IMPORT_ARCHIVE_DIR = u"d:/work/register_import_archive/"
+REGISTER_IN_PROCESS_DIR = u'd:/work/register_import_in_process/'
+
+
+def get_outbox_dict(dir):
+    dirs = os.listdir(dir)
+    outbox_dict = {}
+
+    for d in dirs:
+        t = d.decode('cp1251')
+        code, name = t[:6], t[7:]
+        outbox_dict[code] = name
+
+    return outbox_dict
+
+
+def move_files_to_process(files_list):
+    for name in files_list:
+        shutil.move(register_dir+name, REGISTER_IN_PROCESS_DIR)
+
+
+def move_files_to_archive(files_list):
+    for name in files_list:
+        if os.path.exists(IMPORT_ARCHIVE_DIR+name):
+            os.remove(IMPORT_ARCHIVE_DIR+name)
+        shutil.move(REGISTER_IN_PROCESS_DIR+name, IMPORT_ARCHIVE_DIR)
 
 
 def get_valid_xmls_info(files):
-    valid_name_pattern = re.compile(r'^[hm|tm|dp|dv|do|ds|du|df|dd|dr]{2}M?28\d{4}s28002_\d{4}\d+.xml',
+    valid_name_pattern = re.compile(r'^[hm|tm|dp|dv|do|ds|du|df|dd|dr]{2}M?(28\d{4})s28002_(\d{2})(\d{2})\d+.xml',
                                     re.IGNORECASE)
     XML_TYPE = {}
 
@@ -44,15 +72,14 @@ def get_valid_xmls_info(files):
 
         if not match:
             continue
-
         type = XML_TYPE[name[:2].lower()]
-        code_token = re.search(r'28\d{4}', name)
-        organization_code = code_token.group()
-
+        organization_code = match.group(1)
+        year = '20' + match.group(2)
         #xml_code = name[15:-4]
+        period = match.group(3)
 
         info = {'type': type, 'organization_code': organization_code,
-                'filename': name}
+                'filename': name, 'year': year, 'period': period}
 
         if info not in valid_xmls_info:
             valid_xmls_info.append(info)
@@ -61,10 +88,9 @@ def get_valid_xmls_info(files):
 
 def main():
     patients = {}
-    register_dir = "d:/work/register_import"
-    flk_dir = "d:/work/medical_register/"
     files = os.listdir(register_dir)
 
+    outbox = get_outbox_dict(OUTBOX_DIR)
     valid_xmls = get_valid_xmls_info(files)
     register_set = {}
 
@@ -74,7 +100,13 @@ def main():
         else:
             register_set[xml['organization_code']] = {
                 'patients': 'LM'+xml['filename'][2:].strip('M'),
-                'services': [xml]}
+                'services': [xml],
+                'year': xml['year'],
+                'period': xml['period']}
+
+    for code in register_set:
+        files = [rec['filename'] for rec in register_set[code]['services']] + [register_set[code]['patients']]
+        move_files_to_process(files)
 
     patient_pk = Patient.objects.all().aggregate(max_pk=Max('id_pk'))['max_pk'] + 1
     register_pk = \
@@ -95,21 +127,28 @@ def main():
         services_super_set = []
         concomitant_disease_super_set = []
         complicated_disease_super_set = []
-
+        registers_set_id = []
+        patient_errors = []
         error_organization = False
+        errors_filenames = []
+
         print u'Обрабатаываю МО ', organization, \
             MedicalOrganization.objects.get(code=organization, parent=None).name
-        patients_errors = []
 
-        lflk = xml_writer.Xml("V%s" % register_set[organization]['patients'])
-        lflk.plain_put('<?xml version="2.1" encoding="windows-1251"?>')
-        lflk.start('FLK_P')
-        lflk.put('FNAME', "V%s" % register_set[organization]['patients'][:-4])
-        lflk.put('FNAME_I', '%s' % register_set[organization]['patients'][:-4])
+        old_register_status = MedicalRegister.objects.filter(
+            is_active=True, year=register_set[organization]['year'],
+            period=register_set[organization]['period'],
+            organization_code=organization
+        ).values_list('status_id', flat=True).distinct()
+
+        print old_register_status
+
+        if old_register_status and old_register_status[0] in (4, 6, 8):
+            continue
 
         if register_set[organization]['patients']:
             person_file = XmlLikeFileReader('{0:s}/LM{1:s}'.format(
-                register_dir, register_set[organization]['patients'][2:]))
+                REGISTER_IN_PROCESS_DIR, register_set[organization]['patients'][2:]))
         else:
             raise ValueError("Patients file not exists!")
 
@@ -151,16 +190,26 @@ def main():
             patient_pk += 1
 
         for service_xml in register_set[organization]['services']:
-            service_file = XmlLikeFileReader(
-                '{0:s}/{1:s}'.format(register_dir, service_xml['filename']))
 
-            errors = []
+            registers_set_id.append(register_pk)
+
+            service_file = XmlLikeFileReader(
+                '{0:s}/{1:s}'.format(REGISTER_IN_PROCESS_DIR, service_xml['filename']))
+
+            copy_path = '%s%s %s/' % (OUTBOX_DIR,
+                                      service_xml['organization_code'],
+                                      outbox[service_xml['organization_code']])
+
+            service_errors = []
             patients_set = []
             records_set = []
             events_set = []
             services_set = []
             concomitant_disease_set = []
             complicated_disease_set = []
+            record_numbers = []
+            event_numbers = []
+            service_numbers = []
 
             invoiced = False
 
@@ -182,17 +231,19 @@ def main():
                         is_active=True,
                         year=invoice['year'],
                         period=invoice['period'],
-                        status=MedicalRegisterStatus.objects.get(pk=1),
+                        status=MedicalRegisterStatus.objects.get(pk=12),
                         invoice_date=invoice['date'])
+                    registers_set_id.append(register_pk)
 
                     old_registers = MedicalRegister.objects.filter(
-                        type=service_xml['type'],
+                        #type=service_xml['type'],
                         year=invoice['year'],
                         period=invoice['period'],
                         is_active=True,
                         organization_code=invoice['organization'])
 
                 if 'N_ZAP' in item:
+                    event_numbers = []
                     patient = patients.get(item['PACIENT']['ID_PAC'], None)
 
                     if not patient:
@@ -202,6 +253,13 @@ def main():
                                              patient['id_pk'])
 
                     record_pk += 1
+
+                    if record_obj.id in record_numbers:
+                        service_errors.append((
+                            True, '904', 'ZAP', 'N_ZAP', record_obj.id, 0, 0,
+                            u'Дубликат уникального номера записи %s' % record_obj.id))
+                    else:
+                        record_numbers.append(record_obj.id)
 
                     records_set.append(record_obj.get_object())
                     if patient:
@@ -216,12 +274,13 @@ def main():
 
                         patients_set.append(patient_obj.get_object())
 
-                        errors += patient_obj.validate()
+                        patient_errors += filter(lambda a: a[0] is False, patient_obj.validate())
+                        service_errors += filter(lambda a: a[0] is True, patient_obj.validate())
 
                     else:
-                        errors += [False, 904, 'PACIENT', 'ID_PAC', record_obj.id,
+                        patient_errors += [False, 904, 'PACIENT', 'ID_PAC', record_obj.id,
                                    None, None, u'Отстутствуют сведения о пациенте']
-                    errors += record_obj.validate()
+                    service_errors += record_obj.validate()
 
                     events = [item['SLUCH']] if type(item['SLUCH']) != list else \
                         item['SLUCH']
@@ -230,11 +289,17 @@ def main():
                         if not event:
                             raise ValueError("EVENT is None in RECORD %s" % record_obj.id)
                         event_obj = ValidEvent(event, event_pk, record_obj)
+                        if event_obj.id in event_numbers:
+                            service_errors.append((True, '904', 'SLUCH', 'IDCASE', record_obj.id,
+                                       event_obj.id, 0,
+                                       u'Дубликат номера случая %s в записи' % event_obj.id))
+                        else:
+                            event_numbers.append(event_obj.id)
 
                         concomitant_diseases = [event['DS2']]
                         for disease in concomitant_diseases:
                             disease_instance = ValidConcomitantDisease(disease, event_obj)
-                            errors += disease_instance.validate()
+                            service_errors += disease_instance.validate()
                             disease_obj = disease_instance.get_object()
                             if disease_obj:
                                 concomitant_disease_set.append(disease_obj)
@@ -242,24 +307,24 @@ def main():
                         complicated_diseases = [event['DS3']]
                         for disease in complicated_diseases:
                             disease_instance = ValidComplicatedDisease(disease, event_obj)
-                            errors += disease_instance.validate()
+                            service_errors += disease_instance.validate()
                             disease_obj = disease_instance.get_object()
                             if disease_obj:
                                 complicated_disease_set.append(disease_obj)
 
-                        errors += event_obj.validate()
+                        service_errors += event_obj.validate()
                         event_pk += 1
                         events_set.append(event_obj.get_object())
 
                         if not event['USL']:
-                            errors.append((True, '904', 'SLUCH', 'USL', record_obj.id,
+                            service_errors.append((True, '904', 'SLUCH', 'USL', record_obj.id,
                                        event_obj.id, 0,
                                        u'Отсутствие услуги в случае'))
                             services = []
                         else:
                             services = [event['USL']] if type(
                                 event['USL']) != list else event['USL']
-
+                        service_numbers = []
                         for service in services:
                             try:
                                 service_obj = ValidService(service, service_pk,
@@ -267,53 +332,48 @@ def main():
                             except TypeError:
                                 print services
                                 raise TypeError("Oops!")
+
+                            if service_obj.id in service_numbers:
+                                service_errors.append((True, '904', 'USL', 'IDSERVE', record_obj.id,
+                                           event_obj.id, service_obj.id,
+                                           u'Дубликат номера услуги %s в случае' % service_obj.id))
+                            else:
+                                service_numbers.append(service_obj.id)
+
                             service_pk += 1
-                            errors += service_obj.validate()
+                            service_errors += service_obj.validate()
                             services_set.append(service_obj.get_object())
                             #print service_obj.id_pk, service_obj.event
                             if service_obj.get_object() is None:
                                 print service_obj
+
             register_pk += 1
 
-            if errors:
+            if service_errors:
                 error_organization = True
-                print u'Есть ошибки: ', len(errors)
-                hflk = xml_writer.Xml("V%s" % service_xml['filename'])
+                print u'Есть ошибки: ', len(service_errors)
+                errors_filenames.append("V%s" % service_xml['filename'])
+                hflk = xml_writer.Xml(temp_dir+"V%s" % service_xml['filename'])
                 hflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
                 hflk.start('FLK_P')
                 hflk.put('FNAME', "V%s" % service_xml['filename'][:-4])
                 hflk.put('FNAME_I', '%s' % service_xml['filename'][:-4])
 
-                for rec in errors:
-                    if rec[0]:
-                        hflk.start('PR')
-                        hflk.put('OSHIB', rec[1])
-                        hflk.put('IM_POL', rec[3])
-                        hflk.put('BASE_EL', rec[2])
-                        hflk.put('N_ZAP', rec[4])
-                        hflk.put('IDCASE', rec[5].encode('cp1251') if rec[5] else 0)
-                        hflk.put('IDSERV', rec[6].encode('cp1251') if rec[6] else 0)
-                        hflk.put('COMMENT', rec[7].encode('cp1251'))
-                        hflk.end('PR')
-                    else:
-                        try:
-                            lflk.start('PR')
-                            lflk.put('OSHIB', rec[1])
-                            lflk.put('IM_POL', rec[3])
-                            lflk.put('BASE_EL', rec[2])
-                            lflk.put('N_ZAP', rec[4])
-                            lflk.put('IDCASE', rec[5].encode('cp1251') if rec[5] else 0)
-                            lflk.put('IDSERV', rec[6].encode('cp1251') if rec[6] else 0)
-                            lflk.put('COMMENT', rec[7].encode('cp1251'))
-                            hflk.end('PR')
-                        except:
-                            print rec, rec[-1]
-                            raise ValueError('custom raise')
+                for rec in service_errors:
+                    hflk.start('PR')
+                    hflk.put('OSHIB', rec[1])
+                    hflk.put('IM_POL', rec[3])
+                    hflk.put('BASE_EL', rec[2])
+                    hflk.put('N_ZAP', rec[4])
+                    hflk.put('IDCASE', rec[5].encode('cp1251') if rec[5] else 0)
+                    hflk.put('IDSERV', rec[6].encode('cp1251') if rec[6] else 0)
+                    hflk.put('COMMENT', rec[7].encode('cp1251'))
+                    hflk.end('PR')
 
                 hflk.end('FLK_P')
-                lflk.end('FLK_P')
+                hflk.close()
             else:
-                old_registers.update(is_active=False)
+                #old_registers.update(is_active=False)
                 new_register.save()
                 patients_super_set += patients_set
                 records_super_set += records_set
@@ -322,22 +382,79 @@ def main():
                 concomitant_disease_super_set += concomitant_disease_set
                 complicated_disease_super_set += complicated_disease_set
 
+        if patient_errors:
+            error_organization = True
+            errors_filenames.append("V%s" % register_set[organization]['patients'])
+            lflk = xml_writer.Xml(temp_dir+"V%s" % register_set[organization]['patients'])
+            lflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
+            lflk.start('FLK_P')
+            lflk.put('FNAME', "V%s" % register_set[organization]['patients'][:-4])
+            lflk.put('FNAME_I', '%s' % register_set[organization]['patients'][:-4])
+
+            for rec in patient_errors:
+                lflk.start('PR')
+                lflk.put('OSHIB', rec[1])
+                lflk.put('IM_POL', rec[3])
+                lflk.put('BASE_EL', rec[2])
+                lflk.put('N_ZAP', rec[4])
+                lflk.put('IDCASE', rec[5].encode('cp1251') if rec[5] else 0)
+                lflk.put('IDSERV', rec[6].encode('cp1251') if rec[6] else 0)
+                lflk.put('COMMENT', rec[7].encode('cp1251'))
+                lflk.end('PR')
+
+            lflk.end('FLK_P')
+            lflk.close()
+
         if error_organization:
+
             MedicalRegister.objects.filter(organization_code=organization,
                                            year=invoice['year'],
                                            period=invoice['period'],
-                                           is_active=True)\
+                                           is_active=True,
+                                           status_id=12)\
                                    .update(status=MedicalRegisterStatus.objects.get(pk=100),
                                            is_active=False)
+
             print u'Ошибки ФЛК'
+            #transaction.rollback()
+            zipname = temp_dir+'VM%sS28002_%s.zip' % (
+                service_xml['organization_code'],
+                service_xml['filename'][service_xml['filename'].index('_')+1:-4]
+            )
+
+            with ZipFile(zipname, 'w') as zipfile:
+                for filename in errors_filenames:
+                    zipfile.write(temp_dir+filename, filename, 8)
+                    os.remove(temp_dir+filename)
+
+            shutil.copy2(zipname, 'd:/work/xml_archive/')
+
+            if os.path.exists(copy_path):
+                shutil.copy2(zipname, copy_path)
+
+            os.remove(zipname)
+
         else:
             print u'ФЛК пройдён.'
+
             Patient.objects.bulk_create(set(patients_super_set))
             MedicalRegisterRecord.objects.bulk_create(set(records_super_set))
             ProvidedEvent.objects.bulk_create(set(events_super_set))
             ProvidedEventConcomitantDisease.objects.bulk_create(set(concomitant_disease_super_set))
             ProvidedEventComplicatedDisease.objects.bulk_create(set(complicated_disease_super_set))
             ProvidedService.objects.bulk_create(set(services_super_set))
+
+            old_registers.update(is_active=False)
+            MedicalRegister.objects.filter(pk__in=registers_set_id).update(
+                status=MedicalRegisterStatus.objects.get(pk=1), is_active=True)
+            #transaction.commit()
+            if os.path.exists(copy_path):
+                shutil.copy2(OUTBOX_SUCCESS, copy_path)
+
+
+    for code in register_set:
+        files = [rec['filename'] for rec in register_set[code]['services']] + [register_set[code]['patients']]
+        move_files_to_archive(files)
 
 
 class Command(BaseCommand):

@@ -6,6 +6,7 @@ from django.db.models.query import QuerySet
 from django.db.models import Sum
 import datetime
 
+SERVICE_XML_TYPE_PERSON = 0
 SERVICE_XML_TYPE_REGULAR = 1
 SERVICE_XML_TYPE_HITECH = 2
 SERVICE_XML_TYPE_EXAMINATION_ADULT_1 = 3 #comment: F000
@@ -18,6 +19,7 @@ SERVICE_XML_TYPE_EXAMINATION_CHILDREN_PRELIMINARY = 9
 SERVICE_XML_TYPE_EXAMINATION_CHILDREN_PERIODICALLY = 10
 # 10, 9, 8, 7, 6, 5, 4, 3
 SERVICE_XML_TYPES = (
+    (SERVICE_XML_TYPE_PERSON, 'l'),
     (SERVICE_XML_TYPE_REGULAR, 'h'),
     (SERVICE_XML_TYPE_HITECH, 't'),
     (SERVICE_XML_TYPE_EXAMINATION_ADULT_1, 'dp'),
@@ -56,7 +58,7 @@ class ExtendedObjectManager(models.Manager):
 
 
 class Gender(models.Model):
-    ID = models.IntegerField(primary_key=True, db_column='id_pk')
+    id_pk = models.IntegerField(primary_key=True, db_column='id_pk')
     code = models.IntegerField()
     name = models.CharField(max_length=20)
 
@@ -333,9 +335,9 @@ class MedicalOrganization(models.Model):
 
             where
             ambulanceMO.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.confirmation_date <= %(date)s and attachment.is_active = true and
+            and attachment.date <= %(date)s and attachment.is_active = true and
             attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.confirmation_date <= %(date)s group by person_fk)
+            where is_active = true and attachment.date <= %(date)s group by person_fk)
             group by medical_organization.id_pk
         """
 
@@ -368,9 +370,9 @@ class MedicalOrganization(models.Model):
             join active_insurance_policy on active_insurance_policy.version_fk = insurance_policy.version_id_pk
             where
             medical_organization.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.confirmation_date <= %(date)s and attachment.is_active = true and
+            and attachment.date <= %(date)s and attachment.is_active = true and
             attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.confirmation_date <= %(date)s group by person_fk)
+            where is_active = true and attachment.date <= %(date)s group by person_fk)
             group by medical_organization.id_pk
         """
         result = {'adults_count': 0, 'children_count': 0}
@@ -417,7 +419,7 @@ class MedicalOrganization(models.Model):
                           SELECT MAX(id_pk)
                           FROM attachment
                           WHERE person_fk = person.version_id_pk AND status_fk = 1
-                             AND confirmation_date <= %(date)s AND attachment.is_active)
+                             AND date <= %(date)s AND attachment.is_active)
                  JOIN medical_organization med_org
                       ON (med_org.id_pk = attachment.medical_organization_fk
                           AND med_org.parent_fk IS NULL)
@@ -464,9 +466,9 @@ class MedicalOrganization(models.Model):
 
             where
             ambulanceMO.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.confirmation_date <= %(date)s and attachment.is_active = true and
+            and attachment.date <= %(date)s and attachment.is_active = true and
             attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.confirmation_date <= %(date)s group by person_fk)
+            where is_active = true and attachment.date <= %(date)s group by person_fk)
             group by medical_organization.id_pk
         """
 
@@ -503,9 +505,9 @@ class MedicalOrganization(models.Model):
             join active_insurance_policy on active_insurance_policy.version_fk = insurance_policy.version_id_pk
             where
             medical_organization.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.confirmation_date <= %(date)s and attachment.is_active = true and
+            and attachment.date <= %(date)s and attachment.is_active = true and
             attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.confirmation_date <= %(date)s group by person_fk)
+            where is_active = true and attachment.date <= %(date)s group by person_fk)
             group by medical_organization.id_pk
         """
         result = {'adults_male_count': 0, 'children_male_count': 0,
@@ -845,7 +847,7 @@ class Attachment(models.Model):
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='medical_organization_fk')
     status = models.IntegerField(db_column='status_fk')
-    confirmation_date = models.DateField()
+    date = models.DateField()
     is_active = models.BooleanField()
 
     class Meta:
@@ -906,7 +908,7 @@ class Patient(models.Model):
         version_id_pk = insurance_policy.person_fk) and is_active)
         join attachment on attachment.id_pk = (select max(id_pk)
         from attachment where person_fk = person.version_id_pk and status_fk = 1
-        and confirmation_date <= %s and attachment.is_active)
+        and date <= %s and attachment.is_active)
         join medical_organization medOrg on (
         medOrg.id_pk = attachment.medical_organization_fk and
         medOrg.parent_fk is null) or medOrg.id_pk =
@@ -1232,7 +1234,7 @@ class InpatientDivision(models.Model):
 
 class ProvidedService(models.Model):
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')
-    id = models.CharField(max_length=80, null=True)
+    id = models.CharField(max_length=36, null=True)
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='organization_fk', null=True)
     department = models.ForeignKey(MedicalOrganization,
