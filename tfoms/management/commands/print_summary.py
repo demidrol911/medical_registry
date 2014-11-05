@@ -1,15 +1,14 @@
 #! -*- coding: utf-8 -*-
+
 from time import clock
-
 from django.core.management.base import BaseCommand
-
 from register_function import (get_patients, get_services,
-                               get_sanctions, get_mo_name,
+                               get_sanctions, get_mo_info,
                                get_failure_causes, get_errors,
                                pse_export)
-from medical_service_register.path import REESTR_EXP, BASE_DIR, MONTH_NAME
-from tfoms.management.commands import register_function
-from tfoms.management.commands.utils import excel_writer_1
+from medical_service_register.path import REESTR_EXP, BASE_DIR
+from helpers.excel_writer import ExcelWriter
+from helpers.const import MONTH_NAME
 
 
 ### Печать сокращённого сводного акта для экспертов
@@ -80,11 +79,11 @@ def print_summary(year, period, mo_code, data, handbooks):
         failure_cause_dict[failure_cause_id] += 1
 
     # Печать акта
-    with excel_writer_1.ExcelWriter(ur'%s/__%s' % (target_dir, mo_code),
-                                    template=ur'%s/templates/summary_1.xls' % BASE_DIR) as act_book:
+    with ExcelWriter(ur'%s/__%s' % (target_dir, mo_code),
+                     template=ur'%s/templates/excel_pattern/summary_1.xls' % BASE_DIR) as act_book:
         act_book.set_sheet(0)
         act_book.set_cursor(0, 0)
-        act_book.write_cell(get_mo_name(mo_code), 'c', 1)
+        act_book.write_cell(handbooks['mo_name'], 'c', 1)
         act_book.write_cell(u'{month} {year} года'.format(month=MONTH_NAME[period], year=year), 'c', 1)
 
         for value in mo_sum.itervalues():
@@ -93,7 +92,7 @@ def print_summary(year, period, mo_code, data, handbooks):
 
         act_book.set_sheet(1)
         act_book.set_cursor(0, 0)
-        act_book.write_cell(get_mo_name(mo_code), 'c', 1)
+        act_book.write_cell(handbooks['mo_name'], 'c', 1)
         act_book.write_cell(u'{month} {year} года'.format(month=MONTH_NAME[period], year=year), 'c', 1)
 
         act_book.set_sheet(1)
@@ -122,6 +121,7 @@ class Command(BaseCommand):
         for mo_code in mo_register:
             start = clock()
             print u'Выгружается...', mo_code
+            handbooks['mo_name'] = get_mo_info(mo_code)['name']
             data = {'invoiced_services': get_services(year, period, mo_code, is_include_operation=True),
                     'patients': get_patients(year, period, mo_code),
                     'sanctions': get_sanctions(year, period, mo_code)}
@@ -131,7 +131,7 @@ class Command(BaseCommand):
             print u'Выгружен', mo_code
             print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
             print
-            printed_act.append((act_name, register_function.get_mo_name(mo_code)))
+            printed_act.append((act_name, handbooks['mo_name']))
 
         print u'-'*50
         print u'Напечатанные акты:'

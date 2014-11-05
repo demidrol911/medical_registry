@@ -3,6 +3,7 @@
 from datetime import datetime
 from django.core.management.base import BaseCommand
 from tfoms.models import ProvidedService, ProvidedServiceCoefficient, Sanction
+from register_function import change_register_status
 
 
 ### Проставляет ошибки PA (частичная оплата)
@@ -12,7 +13,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         year = '2014'
-        period = '08'
+        period = '09'
 
         mo_code = args[0]
         term = args[1]
@@ -66,23 +67,22 @@ class Command(BaseCommand):
         print u'PA будет проставлено на %d услугах из %d' % (len(service_pa), count_pa)
 
         # Проставляем PA
-        i = ProvidedServiceCoefficient.objects.all().order_by('-id_pk')[0].pk + 1
-        print i
-
         for service in service_pa:
             print service.pk, service.payment_type_id, service.tariff, \
                 service.accepted_payment, service.calculated_payment, \
                 service.provided_tariff, service.start_date
+            accepted_payment = service.accepted_payment
             service.payment_type_id = 4
-            service.accepted_payment = float(service.tariff) - round(0.7*float(service.tariff), 2)
-            service.calculated_payment = round(0.3*float(service.tariff), 2)
-            service.provided_tariff = round(0.7*float(service.tariff), 2)
+            service.accepted_payment = float(accepted_payment) - round(0.7*float(accepted_payment), 2)
+            service.calculated_payment = round(0.3*float(accepted_payment), 2)
+            service.provided_tariff = round(0.7*float(accepted_payment), 2)
             service.save()
             ProvidedServiceCoefficient.objects.create(
-                id_pk=i, service=service, coefficient_id=6
+                service=service, coefficient_id=6
             )
             Sanction.objects.create(
-                type_id=1, service=service, underpayment=round(0.7*float(service.tariff), 3),
+                type_id=1, service=service, underpayment=round(0.7*float(accepted_payment), 3),
                 error_id=75)
-            i += 1
+
+        change_register_status(year, period, mo_code, 8)
 

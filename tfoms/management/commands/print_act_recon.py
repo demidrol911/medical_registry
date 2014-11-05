@@ -1,16 +1,12 @@
 #! -*- coding: utf-8 -*-
 
 import time
-
 from django.core.management.base import BaseCommand
 from django.db.models import Sum
-
-from medical_service_register.path import REESTR_EXP, BASE_DIR, MONTH_NAME
-from tfoms.management.commands.utils import excel_writer_1
-from tfoms.management.commands.utils.excel_style import (VALUE_STYLE,
-                                                         TITLE_STYLE,
-                                                         TOTAL_STYLE)
-from tfoms.models import ProvidedService, AdministrativeArea
+from medical_service_register.path import REESTR_EXP, BASE_DIR
+from helpers.excel_writer import ExcelWriter
+from helpers.const import ACT_CELL_POSITION, MONTH_NAME
+from tfoms.models import ProvidedService
 
 
 ### Печатает сводный акт принятых услуг за месяц
@@ -30,40 +26,25 @@ class Command(BaseCommand):
             event__record__register__is_active=True,
             payment_type_id__in=[2, 4]).\
             values('organization__code',
-                   'organization__name',
-                   'organization__region__ID').\
+                   'organization__name').\
             annotate(sum_tariff=Sum('tariff'),
                      sum_invoiced=Sum('invoiced_payment'),
-                     sum_accepted=Sum('accepted_payment')).\
-            order_by('organization__region__name', 'organization__name')
+                     sum_accepted=Sum('accepted_payment'))
         total_sum = {'sum_tariff': 0, 'sum_invoiced': 0, 'sum_accepted': 0}
 
         # Распечатка акта
-        with excel_writer_1.ExcelWriter(u'%s/сверка_%s_%s' % (reestr_path,
-                                                              year,
-                                                              MONTH_NAME[period]),
-                                        template=ur'%s/templates/recon.xls' % BASE_DIR) as act_book:
-            act_book.set_overall_style({'font_size': 11})
-            act_book.set_style(VALUE_STYLE)
-            current_region = 0
-            act_book.set_cursor(1, 0)
+        with ExcelWriter(u'%s/сверка_%s_%s' % (reestr_path, year, MONTH_NAME[period]),
+                         template=ur'%s/templates/excel_pattern/recon.xls' % BASE_DIR) as act_book:
+            act_book.set_style({'align': 'center'})
+            act_book.set_cursor(5, 1)
+            act_book.write_cell(u'за %s %s года' % (MONTH_NAME[period], year))
+            act_book.set_style()
             for mo_data in reconciliation_data:
-                # Печать названия региона в заголовке
-                if current_region != mo_data['organization__region__ID']:
-                    current_region = mo_data['organization__region__ID']
-                    admin_area = AdministrativeArea.objects.filter(ID=current_region)
-                    name = admin_area[0].name if admin_area else ''
-                    act_book.set_style(TITLE_STYLE)
-                    act_book.set_style_property('align', 'center')
-                    act_book.write_cell(name, 'r', 4)
-                    act_book.set_style(VALUE_STYLE)
-
+                act_book.set_cursor(ACT_CELL_POSITION[mo_data['organization__code']], 2)
                 # Распечатка сумм
-                act_book.write_cell(mo_data['organization__code'], 'c')
-                act_book.write_cell(mo_data['organization__name'], 'c')
                 act_book.write_cell(mo_data['sum_tariff'], 'c')
                 act_book.write_cell(mo_data['sum_invoiced'], 'c')
-                act_book.write_cell(mo_data['sum_accepted'], 'r')
+                act_book.write_cell(mo_data['sum_accepted'])
 
                 # Рассчёт итоговой суммы
                 total_sum['sum_tariff'] += mo_data['sum_tariff']
@@ -71,12 +52,10 @@ class Command(BaseCommand):
                 total_sum['sum_accepted'] += mo_data['sum_accepted']
 
             # Распечатка итоговой суммы
-            act_book.set_style(TOTAL_STYLE)
-            act_book.write_cell(u'Итого', 'c')
-            act_book.write_cell(u' ', 'c')
+            act_book.set_cursor(101, 2)
             act_book.write_cell(total_sum['sum_tariff'], 'c')
             act_book.write_cell(total_sum['sum_invoiced'], 'c')
-            act_book.write_cell(total_sum['sum_accepted'], 'r')
+            act_book.write_cell(total_sum['sum_accepted'])
         finish = time.time()
         print u'Время выполнения: {:.3f} минут'.format((finish - start)/60)
 
