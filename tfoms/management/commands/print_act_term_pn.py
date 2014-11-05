@@ -500,7 +500,8 @@ def day_hospital_patients():
             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         total_group = OrderedDict(
             [('patient_id', lambda x: len(service_df.ix[x.index]
-            [['group', 'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
+            [[#'group',
+              'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         general_con = service_df.group.isnull() & service_df.division_term.isin([10, 11])
         rules = [
             {'con': general_con & (service_df.tariff_profile == 39),
@@ -769,16 +770,21 @@ def day_hospital():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+             [[#'group',
+               'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        serv_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['code', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         general_con = (service_df.group.isnull() &
                        (service_df.term == 2) &
                        service_df.division_term.isin([10, 11]))
         rules = [
-            {'con': general_con | (service_df.group == 17),
+            {'con': general_con | (service_df.group.isin([17, 28])),
              'func': rec_group},
             {'con': service_df.group == 28,
-             'func': rec_group},
+             'func': serv_group},
         ]
         return rules
 
@@ -1119,16 +1125,21 @@ def day_hospital_all():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+             [[#'group',
+               'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        serv_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['code', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         general_con = (service_df.group.isnull() &
                        (service_df.term == 2) &
                        service_df.division_term.isin([10, 11, 12]))
         rules = [
-            {'con': general_con | (service_df.group == 17),
+            {'con': general_con | (service_df.group.isin([28, 17])),
              'func': rec_group},
             {'con': service_df.group == 28,
-             'func': rec_group},
+             'func': serv_group},
         ]
         return rules
 

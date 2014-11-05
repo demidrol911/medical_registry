@@ -2,6 +2,7 @@
 
 from django.core.management.base import BaseCommand
 from django.db.models import Max
+from medical_service_register.path import BASE_DIR
 from tfoms.models import (ProvidedEvent, ProvidedService, Patient,
                           ProvidedEventConcomitantDisease,
                           ProvidedEventComplicatedDisease,
@@ -22,12 +23,12 @@ from zipfile import ZipFile
 import shutil
 
 OUTBOX_DIR = '//alpha/vipnet/medical_registry/outbox/'
-OUTBOX_SUCCESS = u'D:/work/medical_service_register/templates/outcoming_messages/ФЛК пройден.txt'
-register_dir = "d:/work/register_import/"
-temp_dir = "d:/work/register_temp/"
-flk_dir = "d:/work/medical_register/"
-IMPORT_ARCHIVE_DIR = u"d:/work/register_import_archive/"
-REGISTER_IN_PROCESS_DIR = u'd:/work/register_import_in_process/'
+OUTBOX_SUCCESS = os.path.join(BASE_DIR, u'templates/outcoming_messages/ФЛК пройден.txt')
+register_dir = "c:/work/register_import/"
+temp_dir = "c:/work/register_temp/"
+flk_dir = "c:/work/medical_register/"
+IMPORT_ARCHIVE_DIR = u"c:/work/register_import_archive/"
+REGISTER_IN_PROCESS_DIR = u'c:/work/register_import_in_process/'
 
 
 def get_outbox_dict(dir):

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
+from medical_service_register.path import BASE_DIR
 from tfoms.models import MedicalOrganization
 
 import os
@@ -13,10 +14,10 @@ from zipfile import ZipFile, is_zipfile, BadZipfile
 
 INBOX_DIR = u'//alpha/vipnet/medical_registry/inbox/'
 OUTBOX_DIR = u'//alpha/vipnet/medical_registry/outbox/'
-ARCHIVE_DIR = u'd:/work/register_import_archive/'
-register_dir = u"d:/work/register_import/"
+ARCHIVE_DIR = u'c:/work/register_import_archive/'
+register_dir = u"c:/work/register_import/"
 other_files_dir = u'x:/vipnet/'
-IDENT_TABLE = u'd:/work/medical_service_register/templates/ident_table/table.xls'
+IDENT_TABLE = os.path.join(BASE_DIR, 'templates/ident_table/table.xls')
 MO_CODE_PATTERN = r'^28\d{4}$'
 ARCHIVE_TYPE_MISMATCH_ERROR = u'Архив не соответствует формату ZIP.'
 NO_ARCHIVE_ERROR = u'Пакет должен быть упакован в архив формата ZIP.'
@@ -24,7 +25,7 @@ ARCHIVE_EXTRA_FILES_ERROR = u'В архиве присутствуют данн�
 ARCHIVE_FILES_NOT_EXISTS = u'В архиве отсутствуют файлы относящихся к предмету информационного обмена.'
 ARCHIVE_NAME_ERROR = u'Недопустимое имя пакета.'
 ARCHIVE_AND_FILE_NAME_MISMATCH = u'Имя архива не соответствует упакованному файлу.'
-LOGGING_FILE = u'd:/work/medical_register_log/get_files_log.txt'
+LOGGING_FILE = u'c:/work/medical_register_log/get_files_log.txt'
 
 ZIP_PATTERN = r'^(hm|hl_m)(2800\d{2})s28002_\d+.zip$'
 REGISTER_FILES_PATTERN = r'^(h|l|t|dp|do|dv|dd|dr|ds|du|dv|df)m(2800\d{2})s28002_\d+.xml$'
@@ -57,7 +58,7 @@ def get_completed_mo():
 def natural_sort(l):
     convert = lambda text: int(text) if text.isdigit() else text.lower()
     alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
-    return sorted(l, key = alphanum_key)
+    return sorted(l, key=alphanum_key)
 
 
 def get_inbox_dict(dir):
@@ -87,6 +88,7 @@ archive_name = re.compile(ZIP_PATTERN)
 registry_filename = re.compile(REGISTER_FILES_PATTERN)
 inbox_dict = get_inbox_dict(INBOX_DIR)
 outbox_dict = get_outbox_dict(OUTBOX_DIR)
+
 
 def send_error_file(path='', filename=None, message=''):
     f = open(path+u'Ошибка обработки %s.txt' % filename, 'w')
@@ -121,7 +123,6 @@ def main():
             mo_send_path = '%s%s %s/' % (OUTBOX_DIR, dir_mo_code,
                                          outbox_dict[dir_mo_code])
 
-
             if not os.path.exists(vipnet_path):
                 os.makedirs(vipnet_path)
 
@@ -141,7 +142,6 @@ def main():
 
                     zip_file_name_list = zfile.namelist()
                     print zip_file_name_list
-
 
                     is_include_services_files = False
                     for zip_file_name in zfile.namelist():
@@ -195,6 +195,7 @@ def main():
                 os.remove(filepath)
             except:
                 pass
+
 
 class Command(BaseCommand):
     help = 'import MO xml'

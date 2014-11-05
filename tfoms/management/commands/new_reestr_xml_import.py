@@ -2,6 +2,7 @@
 
 from django.core.management.base import BaseCommand
 from django.db.models import Max
+from medical_service_register.path import BASE_DIR
 from tfoms.models import (
     ProvidedEvent, ProvidedService, Patient, ProvidedEventConcomitantDisease,
     ProvidedEventComplicatedDisease, MedicalRegisterRecord, MedicalRegister,
@@ -20,17 +21,17 @@ from datetime import datetime
 from zipfile import ZipFile
 from collections import defaultdict
 import shutil
-import valideer as V
+#import valideer as V
 
 cursor = connection.cursor()
 
 OUTBOX_DIR = '//alpha/vipnet/medical_registry/outbox/'
-OUTBOX_SUCCESS = u'D:/work/medical_service_register/templates/outcoming_messages/ФЛК пройден.txt'
-REGISTER_DIR = "d:/work/register_import/"
-temp_dir = "d:/work/register_temp/"
-flk_dir = "d:/work/medical_register/"
-IMPORT_ARCHIVE_DIR = u"d:/work/register_import_archive/"
-REGISTER_IN_PROCESS_DIR = u'd:/work/register_import_in_process/'
+OUTBOX_SUCCESS = os.path.join(BASE_DIR, u'templates/outcoming_messages/ФЛК пройден.txt')
+REGISTER_DIR = "c:/work/register_import/"
+temp_dir = "c:/work/register_temp/"
+flk_dir = "c:/work/medical_register/"
+IMPORT_ARCHIVE_DIR = u"c:/work/register_import_archive/"
+REGISTER_IN_PROCESS_DIR = u'c:/work/register_import_in_process/'
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
 
@@ -162,6 +163,7 @@ def get_policy_patient_data(record):
 
     return patient
 
+
 def get_registry_data(record):
     pass
 
@@ -173,6 +175,7 @@ def get_next_patient_pk():
     patient_pk = cursor.fetchall()
 
     return list(reversed([rec[0] for rec in patient_pk]))
+
 
 def main():
 
