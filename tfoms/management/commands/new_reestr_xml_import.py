@@ -221,7 +221,10 @@ def main():
 
                 for item in patient_file.find(tags=('PERS')):
                     try:
-                        patient_pk =  #q
+                        pass
+                    except:
+                        pass
+                        #patient_pk =  #q
 
             else:
                 pass
