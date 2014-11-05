@@ -967,13 +967,13 @@ def sanctions_on_cross_dates_services(register_element):
 
     services1 = ProvidedService.objects.raw(
         query1, dict(year=register_element['year'],
-                    period=register_element['period'],
-                    organization=register_element['organization_code']))
+                     period=register_element['period'],
+                     organization=register_element['organization_code']))
 
     services2 = ProvidedService.objects.raw(
         query2, dict(year=register_element['year'],
-                    period=register_element['period'],
-                    organization=register_element['organization_code']))
+                     period=register_element['period'],
+                     organization=register_element['organization_code']))
 
     return get_sanction_tuple(services1, 73) + get_sanction_tuple(services2, 73)
 
@@ -1152,10 +1152,17 @@ def sanctions_on_wrong_examination_age_group(register_element):
             and mr.period = %s
             and mr.organization_code = %s
             and date_part('year', age(ps.end_date, p.birthdate)) >= 4
-            and ms.examination_group != (
-                select "group"
-                from examination_age_bracket
-                where "year" = date_part('year', p.birthdate)
+            and ((group_fk = 11
+                and ps.tariff > 0
+                and ms.examination_group != (
+                    select "group"
+                    from examination_age_bracket
+                    where age = date_part('year', age(ps.end_date, p.birthdate))
+                )) or (group_fk != 11
+                and ms.examination_group != (
+                    select "group"
+                    from examination_age_bracket
+                    where "year" = date_part('year', p.birthdate)))
             )
             and (select count(1) from provided_service_sanction where service_fk = ps.id_pk
                            and error_fk = 35) = 0
@@ -2173,6 +2180,7 @@ def main():
                         duration_coefficient = 50
 
                     if service.service_group == 20:
+
                         if service.service_code in (
                                 "023040", "123040", "023047", "123047",
                                 "023091", "123091", "123097", "123098"):
@@ -2181,9 +2189,22 @@ def main():
 
                         else:
                             duration_coefficient = 0
+
                         if service.end_date < date(2014, 4, 1):
                             duration_coefficient = 50
+                    #P05.0, P05.1,
+                    if service.service_tariff_profile == 56:
+                        duration_coefficient = 0
 
+                    if service.service_tariff_profile == 31 and service.end_date >= date(2014, 8, 1):
+                        duration_coefficient = 0
+
+                    if service.service_tariff_profile == 58:
+                        duration_coefficient = 90
+
+                    if service.basic_disease_id in (7124, 7125, 7128, 7129,
+                                                    7130, 7131, 7132, ):
+                        nkd = 70
                     duration = (days / float(nkd)) * 100
 
                     if duration < duration_coefficient:
@@ -2256,6 +2277,7 @@ def main():
 
             print u'stomat, outpatient, examin'
             sanctions_on_invalid_stomatology_event(register_element)
+            sanctions_on_wrong_examination_age_group(register_element)
             drop_outpatient_event(register_element)
             sanctions_on_invalid_outpatient_event(register_element)
             drop_examination_event(register_element)

@@ -1,14 +1,18 @@
 #! -*- coding: utf-8 -*-
-from copy import deepcopy
 
+from copy import deepcopy
 from django.core.management.base import BaseCommand
-from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR, MONTH_NAME
-from tfoms.management.commands.utils import excel_writer_1
+from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR
+from helpers.excel_writer import ExcelWriter
+from helpers.const import MONTH_NAME
 import time
-from utils.correct_1 import date_correct
+from helpers.correct import date_correct
 import register_function
 
-from utils.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
+from helpers.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
+
+
+DEBUG = True
 
 
 ### Рвспечатка сводного реестра принятых услуг
@@ -150,6 +154,7 @@ def print_accepted_service(act_book, year, period, mo,
 
     accepted_services = data['accepted_services']                      # Принятые услуги
     coefficients = data['coefficients']                                # Тарифные коэффициенты
+    patients = data['patients']
 
     total_sum_mo = deepcopy(init_sum)                                  # Итоговая сумма по МО
 
@@ -174,8 +179,12 @@ def print_accepted_service(act_book, year, period, mo,
             if event_data not in adult_examination_event:
                 adult_examination_event[event_data] = service['subgroup']
 
+    if DEBUG:
+        file_viewed_service = file('log.csv', 'w')
+
     # Рассчёт сводных сумм
     for service in accepted_services:
+        gender = 'male' if patients[service['patient_id']]['gender_code'] == 1 else 'female'
         # Список коэффициентов для текущей услуги
         coefficient_service = coefficients.get(service['id'], [])
 
@@ -314,7 +323,8 @@ def print_accepted_service(act_book, year, period, mo,
         sum_tariff_coefficient = float(service['tariff'])
         for code in sorted(coef_to_field):
             field = coef_to_field[code]
-            prec = 3 if code == 2 else 2
+            prec = 3 if code == 2 or \
+                (code == 6 and handbooks['mo_info']['is_agma_cathedra'])else 2
             if code in coefficient_service:
                 if code == 6:
                     value = round(float((handbooks['coefficient_type'][code]['value']-1))*sum_tariff_coefficient, prec)
@@ -370,6 +380,8 @@ def print_accepted_service(act_book, year, period, mo,
                     else:
                         value = value_default[sum_key]
                     sum_division_nogroup[term][section][division][sum_key][age] += value
+                if DEBUG:
+                    file_viewed_service.write(str(service['id'])+'\n')
         # Рассчёт сумм для услуг, имеющих обычные группы
         elif service['group'] and service['group'] not in exception_group \
                 and not term == 'unidentified':
@@ -382,10 +394,19 @@ def print_accepted_service(act_book, year, period, mo,
             if service['subgroup']:
                 division = service['subgroup']
                 if division not in sum_division_group[term][section]['subgroup']:
-                    sum_division_group[term][section]['subgroup'][division] = deepcopy(init_sum)
+                    sum_division_group[term][section]['subgroup'][division] = {'male': deepcopy(init_sum),
+                                                                               'female':  deepcopy(init_sum)}
+
                 # Рассчёт сумм
-                for sum_key in sum_division_group[term][section]['subgroup'][division]:
-                    sum_division_group[term][section]['subgroup'][division][sum_key][age] += value_default[sum_key]
+                if service['group'] in [11, 12, 13]:
+                    for sum_key in sum_division_group[term][section]['subgroup'][division][gender]:
+                        sum_division_group[term][section]['subgroup'][division][gender][sum_key][age] += \
+                            value_default[sum_key]
+                else:
+                    for sum_key in sum_division_group[term][section]['subgroup'][division]['male']:
+                        sum_division_group[term][section]['subgroup'][division]['male'][sum_key][age] += value_default[sum_key]
+                if DEBUG:
+                    file_viewed_service.write(str(service['id'])+'\n')
             # Группировка по кодам для всех остальных
             else:
                 division = service['code_id']
@@ -394,12 +415,17 @@ def print_accepted_service(act_book, year, period, mo,
                 # Рассчёт сумм
                 for sum_key in sum_division_group[term][section]['code'][division]:
                     sum_division_group[term][section]['code'][division][sum_key][age] += value_default[sum_key]
+                if DEBUG:
+                    file_viewed_service.write(str(service['id'])+'\n')
 
         if not is_viewed_event:
             viewed_event.append(service['event_id'])
 
         if not is_viewed_patient:
             viewed_patient[term].append(patient)
+
+    if DEBUG:
+        file_viewed_service.close()
 
     # Рассчёт подушевого по поликлинике
     capitation_policlinic = {'male': deepcopy(init_sum), 'female': deepcopy(init_sum)}
@@ -458,7 +484,7 @@ def print_accepted_service(act_book, year, period, mo,
     # Распечатка сводного акта
     act_book.set_sheet(0)
     act_book.set_cursor(2, 0)
-    act_book.write_cell(mo+' '+handbooks['mo_name'])
+    act_book.write_cell(mo+' '+handbooks['mo_info']['name'])
     act_book.set_cursor(2, 9)
     act_book.write_cell(u'за %s %s г.' % (MONTH_NAME[period], year))
     act_book.set_cursor(3, 0)
@@ -491,7 +517,10 @@ def print_accepted_service(act_book, year, period, mo,
                     total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
                     division_name = division_name_handbook[division]['name'] \
                         if division_name_handbook.get(division, None) else u' '
-                    print_sum(act_book, division_name, sum_value, column_keys)
+                    if term == 'hospital' and handbooks['mo_info']['is_agma_cathedra']:
+                        print_sum(act_book, division_name, sum_value, column_keys, prec=3)
+                    else:
+                        print_sum(act_book, division_name, sum_value, column_keys)
 
                 total_sum_mo = calculate_total_sum_adv(total_sum_mo, total_sum_section, column_keys)
 
@@ -520,10 +549,20 @@ def print_accepted_service(act_book, year, period, mo,
                     print_sum(act_book, handbooks['medical_code'][division]['name'], sum_value, column_keys)
 
                 # Распечатка услуг, разделённых по подгруппам
-                for division in sorted(sum_division_group[term][section]['subgroup']):
-                    sum_value = sum_division_group[term][section]['subgroup'][division]
-                    total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
-                    print_sum(act_book, handbooks['medical_subgroups'][division]['name'], sum_value, column_keys)
+                if term == 'examination' and section in [11, 12, 13]:
+                    for division in sorted(sum_division_group[term][section]['subgroup']):
+                        sum_value = sum_division_group[term][section]['subgroup'][division]['female']
+                        total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
+                        print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', девочки', sum_value, column_keys)
+                        sum_value = sum_division_group[term][section]['subgroup'][division]['male']
+                        total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
+                        print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', мальчики', sum_value, column_keys)
+
+                else:
+                    for division in sorted(sum_division_group[term][section]['subgroup']):
+                        sum_value = sum_division_group[term][section]['subgroup'][division]['male']
+                        total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
+                        print_sum(act_book, handbooks['medical_subgroups'][division]['name'], sum_value, column_keys)
 
                 total_sum_mo = calculate_total_sum_adv(total_sum_mo, total_sum_section, column_keys)
 
@@ -610,7 +649,7 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
                         MONTH_NAME[period])
     act_book.set_cursor(5, 0)
     act_book.write_cell(u'в медицинской организации: %s'
-                        % handbooks['mo_name'])
+                        % handbooks['mo_info']['name'])
     act_book.set_cursor(7, 0)
     for failure_cause_id in failure_causes_group:
 
@@ -773,7 +812,7 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
     act_book.set_sheet(2)
     act_book.set_cursor(2, 0)
     act_book.set_style()
-    act_book.write_cell(handbooks['mo_name'])
+    act_book.write_cell(handbooks['mo_info']['name'])
     act_book.set_cursor(2, 5)
     act_book.write_cell(u'%s %s года' % (MONTH_NAME[period], year))
     act_book.set_cursor(3, 0)
@@ -906,10 +945,11 @@ def print_total_sum_error(act_book, title, total_sum):
 
 
 ### Распечатка суммы (по отделению, причинам отказа, виду помощи и т. д
-def print_sum(act_book, title, total_sum, sum_keys, style=VALUE_STYLE):
+def print_sum(act_book, title, total_sum, sum_keys, prec=2, style=VALUE_STYLE):
     act_book.set_style(style)
     if title:
         act_book.write_cell(title, 'c')
+    act_book.set_number_precision(prec)
     for title_key, column_keys in sum_keys:
         for column_key in column_keys:
             act_book.write_cell(total_sum[title_key][column_key], 'c')
@@ -1268,16 +1308,142 @@ def print_order_146(act_book, year, period, mo, capitation_events,
                 sum_service_kind[service_kind][sum_kind[0]]['children']
 
     # Распечатка сумм по видам помощи
-    act_book.set_sheet(3)
+    act_book.set_sheet(4)
     act_book.set_style()
     act_book.set_cursor(2, 0)
-    act_book.write_cell(handbooks['mo_name'])
+    act_book.write_cell(handbooks['mo_info']['name'])
     act_book.set_cursor(3, 10)
     act_book.write_cell(u'за %s %s г.' % (MONTH_NAME[period], year))
 
     for service_kind, row_index in service_kind_keys:
         act_book.set_cursor(row_index, 3)
         print_sum(act_book, '', sum_service_kind[service_kind], sum_kind_keys)
+
+
+def print_error_pk(act_book, year, period, mo, capitation_events, treatment_events, data, handbooks):
+    print u'Распечатка справки по ошибке PK'
+    services_mek = data['discontinued_services']
+    sanctions_mek = data['sanctions']
+    patients = data['patients']
+
+    services_pk = []
+
+    # Поиск услуг снятых по ошибке PK
+    for index, service in enumerate(services_mek):
+        active_error = sanctions_mek[service['id']][0]['error']
+        if active_error == 54:
+            services_pk.append(index)
+
+    service_term_keys = (
+        'hospital',                        # Стационар
+        'day_hospital',                    # Дневной стационар
+        'policlinic',                      # Поликлиника + Диспасеризация + Профосмотры
+        'ambulance',                       # Скорая помощь
+        'stomatology',                     # Стоматология
+        'total'                            # Итоговая сумма
+    )
+
+    sum_error_pk = {term_key: {'count_service': 0, 'sum_sanctions': 0}
+                    for term_key in service_term_keys}
+
+    sum_error_pk['population'] = 0
+    unique_patient = []
+
+    # Рассчёт сумм по ошибкe PK
+    for index in services_pk:
+        service = services_mek[index]
+        is_capitation = service['event_id'] in capitation_events or service['term'] == 4
+        # Словарь, в котором описываются условия разбивки услуг (по стационару, поликлинике и т. д.)
+        # и переопределяются значения рассчёта по умолчанию
+        rules_dict = [
+            # Круглосуточный стационар
+            {'condition': service['term'] == 1,
+             'term': 'hospital',
+             'column_condition': {
+                 'count_service': {'condition': service['group'] == 27, 'value': 0}
+             }},
+
+            # Дневной стационар
+            {'condition': service['term'] == 2,
+            'term': 'day_hospital',
+            'column_condition': {
+                'count_service': {'condition': service['group'] == 27, 'value': 0}
+            }},
+
+            # Поликлиника
+            {'condition': (service['term'] == 3 and not service['group'] == 19)
+                or not service['term'],
+            'term': 'policlinic',
+            'column_condition': {
+                'sum_sanctions': {'condition': is_capitation, 'value': 0}
+            }},
+
+            # Стоматология
+            {'condition': service['term'] == 3 and service['group'] == 19,
+             'term': 'stomatology',
+             'column_condition': {}},
+
+            # Скорая помощь
+            {'condition': service['term'] == 4,
+             'term': 'ambulance',
+             'column_condition': {
+                 'sum_sanctions': {'condition': is_capitation, 'value': 0}
+             }}
+        ]
+
+        # Значения для рассчёта по умолчанию
+        value_default = {
+            'count_service': 1,
+            'sum_sanctions': service['provided_tariff']
+        }
+
+        if service['patient_id'] not in unique_patient:
+            unique_patient.append(service['patient_id'])
+
+        # Поиск к какому виду помощи относится услуга
+        term = None
+        column_conditions = None
+        for rule in rules_dict:
+            if rule['condition']:
+                term = rule['term']
+                column_conditions = rule['column_condition']
+
+        if term:
+            for column_key in sum_error_pk[term]:
+                if column_key in column_conditions:
+                    column_condition = column_conditions[column_key]
+                    if column_condition['condition']:
+                        value = column_condition['value']
+                    else:
+                        value = value_default[column_key]
+
+                else:
+                    value = value_default[column_key]
+                sum_error_pk[term][column_key] += value
+
+    for term_key in service_term_keys[:-1]:
+        sum_error_pk['total']['count_service'] += sum_error_pk[term_key]['count_service']
+        sum_error_pk['total']['sum_sanctions'] += sum_error_pk[term_key]['sum_sanctions']
+
+    sum_error_pk['population'] = len(unique_patient)
+
+    # Распечатка сумм в акт
+    act_book.set_sheet(3)
+    act_book.set_cursor(2, 0)
+    act_book.set_style()
+    act_book.write_cell(handbooks['mo_info']['name'])
+    act_book.set_cursor(2, 5)
+    act_book.write_cell(u'%s %s года' % (MONTH_NAME[period], year))
+    act_book.set_cursor(3, 0)
+    partial_register = ','.join(handbooks['partial_register'])
+    act_book.write_cell(u'Частичный реестр: %s' % partial_register)
+    act_book.set_style(VALUE_STYLE)
+    act_book.set_cursor(6, 0)
+
+    act_book.write_cell(sum_error_pk['population'], 'c')
+    for term_key in service_term_keys:
+        act_book.write_cell(sum_error_pk[term_key]['count_service'], 'c')
+        act_book.write_cell(sum_error_pk[term_key]['sum_sanctions'], 'c')
 
 
 ### Распечатка ошибок МЭК (в табличной форме)
@@ -1356,10 +1522,10 @@ def print_error_fund(act_book, year, period, mo, data, handbooks):
         division_group[term]['data'][division]['invoiced_payment']['count'] += 1
         division_group[term]['data'][division]['invoiced_payment']['sum'] += service['invoiced_payment']
 
-    act_book.set_sheet(5)
+    act_book.set_sheet(6)
     act_book.set_style({'align': 'center'})
     act_book.set_cursor(3, 0)
-    act_book.write_cell(u'в медицинской организации: %s' % register_function.get_mo_name(mo))
+    act_book.write_cell(u'в медицинской организации: %s' % handbooks['mo_info']['name'])
     act_book.set_cursor(11, 0)
 
     # Распечатка услуг снятых с оплаты или частично оплаченных
@@ -1464,7 +1630,7 @@ class Command(BaseCommand):
         status = int(args[2])
         is_partial_register = args[3] if len(args) == 4 else 0
         printed_act = []
-        template = BASE_DIR + r'\templates\reestr_201408_test.xls'
+        template = BASE_DIR + r'\templates\excel_pattern\reestr_201408_test.xls'
         target_dir = REESTR_DIR if status in (8, 6) else REESTR_EXP
         handbooks = {'failure_causes': register_function.get_failure_causes(),
                      'errors_code': register_function.get_errors(),
@@ -1483,7 +1649,7 @@ class Command(BaseCommand):
             start = time.clock()
             partial_register = register_function.get_partial_register(year, period, mo)
             handbooks['partial_register'] = partial_register
-            handbooks['mo_name'] = register_function.get_mo_name(mo)
+            handbooks['mo_info'] = register_function.get_mo_info(mo)
             print u'Сборка сводного реестра для', mo
             print u'Загрузка данных...'
             data = {
@@ -1503,13 +1669,14 @@ class Command(BaseCommand):
             print u'Поиск случаев с подушевым...'
             capitation_events = register_function.get_capitation_events(year, period, mo)
 
-            sum_capitation_policlinic = register_function.calculate_capitation_tariff_1(3, year, period, mo)
-            sum_capitation_ambulance = register_function.calculate_capitation_tariff_1(4, year, period, mo)
+            sum_capitation_policlinic = register_function.calculate_capitation_tariff(3, year, period, mo)
+            sum_capitation_ambulance = register_function.calculate_capitation_tariff(4, year, period, mo)
 
-            target = target_dir % (year, period) + r'\%s' % handbooks['mo_name'].replace('"', '').replace(' ', '_')
+            target = target_dir % (year, period) + r'\%s' % \
+                handbooks['mo_info']['name'].replace('"', '').strip()
             print u'Печать акта: %s ...' % target
 
-            with excel_writer_1.ExcelWriter(target, template=template) as act_book:
+            with ExcelWriter(target, template=template) as act_book:
                 act_book.set_overall_style({'font_size': 11})
                 print_accepted_service(act_book, year, period, mo, capitation_events,
                                        treatment_events,
@@ -1518,6 +1685,9 @@ class Command(BaseCommand):
                                        data, handbooks)
                 print_errors_page(act_book, year, period, mo, capitation_events,
                                   treatment_events, data, handbooks)
+                print_error_pk(act_book, year, period, mo,
+                               capitation_events, treatment_events,
+                               data, handbooks)
                 print_order_146(act_book, year, period, mo,
                                 capitation_events, treatment_events,
                                 sum_capitation_policlinic,
@@ -1534,7 +1704,8 @@ class Command(BaseCommand):
                 print u'Сборка сводного реестра по прикреплённым больницам...'
                 for department in partial_register:
                     print u'Загрузка данных...'
-                    handbooks['mo_name'] = register_function.get_mo_name(mo, department)
+                    handbooks['mo_info'] = register_function.get_mo_info(mo, department)
+                    print handbooks['mo_info'], department
                     handbooks['partial_register'] = [department, ]
 
                     data['invoiced_services'] = register_function.get_services(year, period, mo,
@@ -1547,11 +1718,11 @@ class Command(BaseCommand):
                                                                                    payment_type=[3, 4],
                                                                                    is_include_operation=True,
                                                                                    department_code=department)
-                    target = target_dir % (year, period) + r'\%s' % handbooks['mo_name'].\
-                        replace('"', '').replace(' ', '_')
+                    target = target_dir % (year, period) + r'\%s' % handbooks['mo_info']['name'].\
+                        replace('"', '').strip()
                     print u'Печать акта: %s ...' % target
 
-                    with excel_writer_1.ExcelWriter(target, template=template) as act_book:
+                    with ExcelWriter(target, template=template) as act_book:
                         act_book.set_overall_style({'font_size': 11})
                         print_accepted_service(act_book, year, period, mo,
                                                capitation_events, treatment_events,
@@ -1560,6 +1731,9 @@ class Command(BaseCommand):
                         print_errors_page(act_book, year, period, mo,
                                           capitation_events, treatment_events,
                                           data, handbooks)
+                        print_error_pk(act_book, year, period, mo,
+                                       capitation_events, treatment_events,
+                                       data, handbooks)
                         print_order_146(act_book, year, period, mo,
                                         capitation_events, treatment_events,
                                         sum_capitation_policlinic, sum_capitation_ambulance,
