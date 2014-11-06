@@ -57,7 +57,7 @@ def get_completed_mo():
 
 def natural_sort(l):
     convert = lambda text: int(text) if text.isdigit() else text.lower()
-    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ]
+    alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
     return sorted(l, key=alphanum_key)
 
 
@@ -172,7 +172,7 @@ def main():
                 shutil.copy2(filepath, vipnet_path)
                 os.remove(filepath)
                 logging.info(u'%s документ скопирован' % filename)
-            elif ext in ('.rar'):
+            elif ext in ('.rar', ):
                 send_error_file(mo_send_path,
                                 filename, ARCHIVE_TYPE_MISMATCH_ERROR)
 

@@ -428,7 +428,7 @@ def main():
                     zipfile.write(temp_dir+filename, filename, 8)
                     os.remove(temp_dir+filename)
 
-            shutil.copy2(zipname, 'd:/work/xml_archive/')
+            shutil.copy2(zipname, 'c:/work/xml_archive/')
 
             if os.path.exists(copy_path):
                 shutil.copy2(zipname, copy_path)

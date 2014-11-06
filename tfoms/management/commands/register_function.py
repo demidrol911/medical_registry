@@ -105,6 +105,7 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
         'code__division__pk',                               # Ид отделения (для поликлиники)
         'code__tariff_profile__pk',                         # Тарифный профиль (для стационара и дн. стационара)
         'profile__pk',                                      # Профиль услуги
+        'is_children_profile',                              # Возрастной профиль
         'worker_speciality__pk',                            # Специалист
         'payment_type__pk',                                 # Тип оплаты
         'tariff',                                           # Основной тариф

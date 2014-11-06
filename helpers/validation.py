@@ -61,7 +61,7 @@ ADULT_EXAMINATION_COMMENT_PATTERN = r'^F(0|1)(0|1)[0-3]{1}(0|1)$'
 ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
 KIND_TERM_DICT = {1: [2, 3, 21, 22, 31, 32, 4],
-                  2: [2, 3, 21, 22, 31, 32, 4],
+                  2: [1, 2, 3, 21, 22, 31, 32, 4],
                   3: [1, 11, 12, 13, 4]}
 
 class ValidPatient(object):

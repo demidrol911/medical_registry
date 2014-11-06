@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection, transaction
 from django.db.models import Max, Q, F
 from django.db import transaction
+import time
 from tfoms.models import (
     TariffBasic, ProvidedService, MedicalRegister, TariffNkd,
     ProvidedServiceCoefficient, MedicalOrganization, Sanction,
@@ -2095,6 +2096,7 @@ def main():
 
     register_element = get_register_element()
     while register_element:
+        start = time.clock()
         print register_element
         errors = []
 
@@ -2369,6 +2371,10 @@ def main():
             set_status(register_element, 3)
         elif register_element['status'] in (5, 500):
             set_status(register_element, 8)
+
+        elapsed = time.clock() - start
+        print register_element['organization_code'], \
+            u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
 
         register_element = get_register_element()
 
