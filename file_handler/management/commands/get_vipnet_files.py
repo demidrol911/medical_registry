@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from tfoms.models import MedicalOrganization
+from main.models import MedicalOrganization
+
 from medical_service_register.path import INBOX_DIR, OUTBOX_DIR, ARCHIVE_DIR
-from medical_service_register.path import register_dir, other_files_dir
+from medical_service_register.path import REGISTRY_IMPORT_DIR, OTHER_FILES_DIR
 from medical_service_register.path import IDENT_TABLE
+from file_handler.funcs import get_outbox_dict, get_inbox_dict, send_error_file
+
 import os
 import re
 import shutil
@@ -16,10 +19,13 @@ from zipfile import ZipFile, is_zipfile, BadZipfile
 MO_CODE_PATTERN = r'^28\d{4}$'
 ARCHIVE_TYPE_MISMATCH_ERROR = u'Архив не соответствует формату ZIP.'
 NO_ARCHIVE_ERROR = u'Пакет должен быть упакован в архив формата ZIP.'
-ARCHIVE_EXTRA_FILES_ERROR = u'В архиве присутствуют данные не относящихся к предмету информационного обмена.'
-ARCHIVE_FILES_NOT_EXISTS = u'В архиве отсутствуют файлы относящихся к предмету информационного обмена.'
+ARCHIVE_EXTRA_FILES_ERROR = (u'В архиве присутствуют данные не относящихся к '
+                             u'предмету информационного обмена.')
+ARCHIVE_FILES_NOT_EXISTS = (u'В архиве отсутствуют файлы относящихся к предмету'
+                            u' информационного обмена.')
 ARCHIVE_NAME_ERROR = u'Недопустимое имя пакета.'
-ARCHIVE_AND_FILE_NAME_MISMATCH = u'Имя архива не соответствует упакованному файлу.'
+ARCHIVE_AND_FILE_NAME_MISMATCH = (u'Имя архива не соответствует упакованному '
+                                  u'файлу.')
 LOGGING_FILE = u'd:/work/medical_register_log/get_files_log.txt'
 
 ZIP_PATTERN = r'^(hm|hl_m)(2800\d{2})s28002_\d+.zip$'
@@ -56,39 +62,10 @@ def natural_sort(l):
     return sorted(l, key = alphanum_key)
 
 
-def get_inbox_dict(dir):
-    dirs = os.listdir(dir)
-    inbox_dict = {}
-
-    for d in dirs:
-        t = d#.decode('cp1251')
-        code, name = t[:6], t[7:]
-        inbox_dict[code] = name
-
-    return inbox_dict
-
-
-def get_outbox_dict(dir):
-    dirs = os.listdir(dir)
-    outbox_dict = {}
-
-    for d in dirs:
-        t = d#.encode('cp1251')
-        code, name = t[:6], t[7:]
-        outbox_dict[code] = name
-
-    return outbox_dict
-
 archive_name = re.compile(ZIP_PATTERN)
 registry_filename = re.compile(REGISTER_FILES_PATTERN)
 inbox_dict = get_inbox_dict(INBOX_DIR)
 outbox_dict = get_outbox_dict(OUTBOX_DIR)
-
-
-def send_error_file(path='', filename=None, message=''):
-    f = open(path+u'Ошибка обработки %s.txt' % filename, 'w')
-    f.write(message.encode('utf-8'))
-    f.close()
 
 
 def main():
@@ -114,10 +91,10 @@ def main():
             dir_organization = MedicalOrganization.objects.get(
                 code=dir_mo_code, parent=None)
             dir_organization_name = dir_organization.name.replace('"', '')
-            vipnet_path = other_files_dir+dir_organization_name+'/'
-            mo_send_path = '%s%s %s/' % (OUTBOX_DIR, dir_mo_code,
-                                         outbox_dict[dir_mo_code])
-
+            vipnet_path = os.path.join(OTHER_FILES_DIR, dir_organization_name)
+            mo_send_path = os.path.join(OUTBOX_DIR,
+                                        '%s %s' % (dir_mo_code,
+                                                   outbox_dict[dir_mo_code]))
 
             if not os.path.exists(vipnet_path):
                 os.makedirs(vipnet_path)
@@ -139,13 +116,14 @@ def main():
                     zip_file_name_list = zfile.namelist()
                     print zip_file_name_list
 
-
                     is_include_services_files = False
                     for zip_file_name in zfile.namelist():
                         if registry_filename.match(zip_file_name.lower()):
-                            zfile.extract(zip_file_name, path=register_dir)
+                            zfile.extract(zip_file_name,
+                                          path=REGISTRY_IMPORT_DIR)
                             is_include_services_files = True
-                            logging.info(u'%s реестр извлечён из архива' % zip_file_name)
+                            logging.info(
+                                u'%s реестр извлечён из архива' % zip_file_name)
                         elif os.path.splitext(zip_file_name)[1] in (
                                 '.doc', 'docx', '.xls', 'xlsx',
                                 '.pdf', '.jpeg', '.jpg'):
@@ -161,7 +139,8 @@ def main():
                             logging.error(u'%s нет файлов с услугами' % zip_file_name)
                     zfile.close()
                 else:
-                    send_error_file(mo_send_path, filename, u'Неверный формат или повреждённый архив.')
+                    send_error_file(mo_send_path, filename,
+                                    u'Неверный формат или повреждённый архив.')
                     logging.error(u'%s неверный файл' % filename)
             elif ext in ('.doc', '.docx', '.xls', '.xlsx', '.pdf', '.jpeg',
                          '.jpg'):
@@ -185,6 +164,7 @@ def main():
                 os.remove(filepath)
             except:
                 pass
+
         for filename in set(files) - set(sorted_files):
             print ARCHIVE_DIR+filename
             try:

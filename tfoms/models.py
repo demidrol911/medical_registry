@@ -307,7 +307,7 @@ class MedicalOrganization(models.Model):
     class Meta:
         db_table = "medical_organization"
 
-<<<<<<< HEAD
+
     def get_ambulance_attachment_count(self, date):
         query = """
             select
@@ -383,8 +383,7 @@ class MedicalOrganization(models.Model):
             result['children_count'] += population_object.children_count
         return result
 
-=======
->>>>>>> develop
+
     def get_capitation_events(self, year, period, date):
         query = """
         SELECT DISTINCT medical_organization.id_pk, provided_event.id_pk AS event_id
@@ -422,11 +421,8 @@ class MedicalOrganization(models.Model):
                           SELECT MAX(id_pk)
                           FROM attachment
                           WHERE person_fk = person.version_id_pk AND status_fk = 1
-<<<<<<< HEAD
                              AND date <= %(date)s AND attachment.is_active)
-=======
-                             AND attachment.date <= %(date)s AND attachment.is_active)
->>>>>>> develop
+
                  JOIN medical_organization med_org
                       ON (med_org.id_pk = attachment.medical_organization_fk
                           AND med_org.parent_fk IS NULL)
@@ -527,73 +523,46 @@ class MedicalOrganization(models.Model):
     ### Расчёт количества обращений (в разрезе взрослые, дети) для указаной причины отказа
     def get_policlinic_treatment_error(self, year, period, failure_cause):
         query = """
-<<<<<<< HEAD
-            select medical_organization.id_pk, count(*) as attachment_count,
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_male_count,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_female_count,
-
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '59 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '59 years' then 1 else 0 end) as adults_male_count,
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '54 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '54 years' then 1 else 0 end) as adults_female_count
-
-            from attachment
-            join medical_organization on (medical_organization.id_pk = medical_organization_fk and
-                medical_organization.parent_fk is null) or medical_organization.id_pk =
-                (select parent_fk from medical_organization where id_pk = medical_organization_fk)
-            join person on attachment.person_fk = person.version_id_pk
-            join insurance_policy on insurance_policy.person_fk = person.version_id_pk
-            join active_insurance_policy on active_insurance_policy.version_fk = insurance_policy.version_id_pk
-            where
-            medical_organization.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.date <= %(date)s and attachment.is_active = true and
-            attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.date <= %(date)s group by person_fk)
-            group by medical_organization.id_pk
-=======
-        SELECT
-        medical_organization.id_pk,
-        COUNT(DISTINCT provided_event.id_pk) AS all,
-        COUNT(DISTINCT CASE WHEN medical_service.code like %(adult)s
-              THEN provided_event.id_pk END) AS adult,
-        COUNT(DISTINCT CASE WHEN medical_service.code like %(children)s
-              THEN provided_event.id_pk END) AS children
-        FROM provided_service
-        JOIN provided_event
-             ON provided_event.id_pk = provided_service.event_fk
-        JOIN medical_register_record
-             ON medical_register_record.id_pk = provided_event.record_fk
-        JOIN medical_register
-             ON medical_register.id_pk = medical_register_record.register_fk
-        JOIN medical_service
-             ON medical_service.id_pk = provided_service.code_fk
-        JOIN provided_service_sanction
-             ON provided_service_sanction.service_fk = provided_service.id_pk
-        JOIN medical_error
-             ON medical_error.id_pk = provided_service_sanction.error_fk
-        JOIN medical_organization
-             ON medical_organization.id_pk = provided_service.organization_fk
-        WHERE medical_register.period=%(period)s
-              AND medical_register.year=%(year)s
-              AND medical_register.is_active
-              AND medical_organization.code = %(organization)s
-              AND provided_service.payment_type_fk = 3
-              AND (provided_event.term_fk = 3
-                   AND medical_service.reason_fk = 1
-                   AND (medical_service.group_fk IS NULL
-                        OR medical_service.group_fk != 19)
+            SELECT
+            medical_organization.id_pk,
+            COUNT(DISTINCT provided_event.id_pk) AS all,
+            COUNT(DISTINCT CASE WHEN medical_service.code like %(adult)s
+                  THEN provided_event.id_pk END) AS adult,
+            COUNT(DISTINCT CASE WHEN medical_service.code like %(children)s
+                  THEN provided_event.id_pk END) AS children
+            FROM provided_service
+            JOIN provided_event
+                 ON provided_event.id_pk = provided_service.event_fk
+            JOIN medical_register_record
+                 ON medical_register_record.id_pk = provided_event.record_fk
+            JOIN medical_register
+                 ON medical_register.id_pk = medical_register_record.register_fk
+            JOIN medical_service
+                 ON medical_service.id_pk = provided_service.code_fk
+            JOIN provided_service_sanction
+                 ON provided_service_sanction.service_fk = provided_service.id_pk
+            JOIN medical_error
+                 ON medical_error.id_pk = provided_service_sanction.error_fk
+            JOIN medical_organization
+                 ON medical_organization.id_pk = provided_service.organization_fk
+            WHERE medical_register.period=%(period)s
+                  AND medical_register.year=%(year)s
+                  AND medical_register.is_active
+                  AND medical_organization.code = %(organization)s
+                  AND provided_service.payment_type_fk = 3
+                  AND (provided_event.term_fk = 3
+                       AND medical_service.reason_fk = 1
+                       AND (medical_service.group_fk IS NULL
+                            OR medical_service.group_fk != 19)
+                      )
+                  AND medical_error.failure_cause_fk = %(failure_cause)s
+                  AND medical_error.weight = (
+                       SELECT MAX(medical_error1.weight)
+                       FROM provided_service_sanction provided_service_sanction1
+                       JOIN medical_error medical_error1 ON provided_service_sanction1.error_fk = medical_error1.id_pk
+                       WHERE provided_service_sanction1.service_fk = provided_service.id_pk
                   )
-              AND medical_error.failure_cause_fk = %(failure_cause)s
-              AND medical_error.weight = (
-                   SELECT MAX(medical_error1.weight)
-                   FROM provided_service_sanction provided_service_sanction1
-                   JOIN medical_error medical_error1 ON provided_service_sanction1.error_fk = medical_error1.id_pk
-                   WHERE provided_service_sanction1.service_fk = provided_service.id_pk
-              )
-        GROUP BY medical_organization.id_pk
->>>>>>> develop
+            GROUP BY medical_organization.id_pk
         """
         return MedicalOrganization.objects.raw(query, dict(adult='0%', children='1%',
                                                            year=year, period=period,
@@ -927,11 +896,7 @@ class Attachment(models.Model):
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='medical_organization_fk')
     status = models.IntegerField(db_column='status_fk')
-<<<<<<< HEAD
-    date = models.DateField()
-=======
-    #confirmation_date = models.DateField()
->>>>>>> develop
+    confirmation_date = models.DateField()
     is_active = models.BooleanField()
     date = models.DateField(db_column='date')
 
@@ -993,11 +958,7 @@ class Patient(models.Model):
         version_id_pk = insurance_policy.person_fk) and is_active)
         join attachment on attachment.id_pk = (select max(id_pk)
         from attachment where person_fk = person.version_id_pk and status_fk = 1
-<<<<<<< HEAD
         and date <= %s and attachment.is_active)
-=======
-        and attachment.date <= %s and attachment.is_active)
->>>>>>> develop
         join medical_organization medOrg on (
         medOrg.id_pk = attachment.medical_organization_fk and
         medOrg.parent_fk is null) or medOrg.id_pk =

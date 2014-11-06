@@ -9,23 +9,13 @@ from tfoms.models import (
     Gender, InsurancePolicyType, MedicalHospitalization, MedicalService,
     ProvidedEventConcomitantDisease, ProvidedEventComplicatedDisease,
     MedicalServiceHiTechKind, MedicalServiceHiTechMethod, ExaminationResult)
+
+from main.funcs import safe_int, queryset_to_dict
+
 from lxml import etree
 import re
 from datetime import datetime
 import re
-
-
-def safe_int(string):
-    try:
-        integer = int(string)
-    except:
-        integer = 0
-
-    return integer
-
-
-def queryset_to_dict(qs):
-    return {rec.code: rec for rec in qs}
 
 
 GENDERS = queryset_to_dict(Gender.objects.all())
@@ -61,8 +51,9 @@ ADULT_EXAMINATION_COMMENT_PATTERN = r'^F(0|1)(0|1)[0-3]{1}(0|1)$'
 ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
 KIND_TERM_DICT = {1: [2, 3, 21, 22, 31, 32, 4],
-                  2: [2, 3, 21, 22, 31, 32, 4],
+                  2: [1, 2, 3, 21, 22, 31, 32, 4],
                   3: [1, 11, 12, 13, 4]}
+
 
 class ValidPatient(object):
     def __init__(self, item, record_id=None):

@@ -1,35 +1,22 @@
 #! -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from django.db.models import Max
-from tfoms.models import (
-    ProvidedEvent, ProvidedService, Patient, ProvidedEventConcomitantDisease,
-    ProvidedEventComplicatedDisease, MedicalRegisterRecord, MedicalRegister,
-    MedicalRegisterStatus, MedicalOrganization, SERVICE_XML_TYPES,
-    SERVICE_XML_TYPE_PERSON, SERVICE_XML_TYPE_REGULAR, Gender)
+from django.db import connection
 
-from django.db import transaction, connection
-from helpers.xml_parser import XmlLikeFileReader
-from helpers.validation import ValidPatient, ValidRecord, ValidEvent,\
-    ValidService, ValidConcomitantDisease, ValidComplicatedDisease
-from helpers import xml_writer
+from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender
+
+from registry_import.xml_parser import XmlLikeFileReader
 
 import os
 import re
 from datetime import datetime
-from zipfile import ZipFile
 from collections import defaultdict
 import shutil
 
+
 cursor = connection.cursor()
 
-OUTBOX_DIR = '//alpha/vipnet/medical_registry/outbox/'
-OUTBOX_SUCCESS = u'D:/work/medical_service_register/templates/outcoming_messages/ФЛК пройден.txt'
-REGISTER_DIR = "d:/work/register_import_test/"
-temp_dir = "d:/work/register_temp/"
-flk_dir = "d:/work/medical_register/"
-IMPORT_ARCHIVE_DIR = u"d:/work/register_import_archive/"
-REGISTER_IN_PROCESS_DIR = u'd:/work/register_import_in_process/'
+
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
 
@@ -57,34 +44,7 @@ def is_files_completeness(files):
     return True if check == 2 else False
 
 
-def get_outbox_dict(dir):
-    dirs = os.listdir(dir)
-    outbox_dict = {}
 
-    for d in dirs:
-        t = d.decode('cp1251')
-        code, name = t[:6], t[7:]
-        outbox_dict[code] = name
-
-    return outbox_dict
-
-
-def move_files_to_process(files_list):
-    for name in files_list:
-        shutil.move(os.path.join(REGISTER_DIR, name), REGISTER_IN_PROCESS_DIR)
-
-
-def move_files_to_archive(files_list):
-    for name in files_list:
-        if os.path.exists(IMPORT_ARCHIVE_DIR+name):
-            os.remove(IMPORT_ARCHIVE_DIR+name)
-        shutil.move(REGISTER_IN_PROCESS_DIR+name, IMPORT_ARCHIVE_DIR)
-
-
-def send_error_file(path='', filename=None, message=''):
-    f = open(path+u'Ошибка обработки %s.txt' % filename, 'w')
-    f.write(message.encode('utf-8'))
-    f.close()
 
 
 def get_registry_files_dict(files):

@@ -1,57 +1,30 @@
 #! -*- coding: utf-8 -*-
 
-from django.core.management.base import BaseCommand
-from django.db.models import Max
-from tfoms.models import (ProvidedEvent, ProvidedService, Patient,
-                          ProvidedEventConcomitantDisease,
-                          ProvidedEventComplicatedDisease,
-                          MedicalRegisterRecord, MedicalRegister,
-                          MedicalRegisterStatus, MedicalOrganization,
-                          SERVICE_XML_TYPES)
-
-from django.db import transaction
-from helpers.xml_parser import XmlLikeFileReader
-from helpers.validation import ValidPatient, ValidRecord, ValidEvent,\
-    ValidService, ValidConcomitantDisease, ValidComplicatedDisease
-from helpers import xml_writer
-
 import os
 import re
 from datetime import datetime
 from zipfile import ZipFile
 import shutil
 
-OUTBOX_DIR = '//alpha/vipnet/medical_registry/outbox/'
-OUTBOX_SUCCESS = u'D:/work/medical_service_register/templates/outcoming_messages/ФЛК пройден.txt'
-register_dir = "d:/work/register_import/"
-temp_dir = "d:/work/register_temp/"
-flk_dir = "d:/work/medical_register/"
-IMPORT_ARCHIVE_DIR = u"d:/work/register_import_archive/"
-REGISTER_IN_PROCESS_DIR = u'd:/work/register_import_in_process/'
+from django.core.management.base import BaseCommand
+from django.db.models import Max
 
-
-def get_outbox_dict(dir):
-    dirs = os.listdir(dir)
-    outbox_dict = {}
-
-    for d in dirs:
-        t = d.decode('cp1251')
-        code, name = t[:6], t[7:]
-        outbox_dict[code] = name
-
-    return outbox_dict
-
-
-def move_files_to_process(files_list):
-    for name in files_list:
-        shutil.move(register_dir+name, REGISTER_IN_PROCESS_DIR)
-
-
-def move_files_to_archive(files_list):
-    for name in files_list:
-        if os.path.exists(IMPORT_ARCHIVE_DIR+name):
-            os.remove(IMPORT_ARCHIVE_DIR+name)
-        shutil.move(REGISTER_IN_PROCESS_DIR+name, IMPORT_ARCHIVE_DIR)
+from tfoms.models import (ProvidedEvent, ProvidedService, Patient,
+                          ProvidedEventConcomitantDisease,
+                          ProvidedEventComplicatedDisease,
+                          MedicalRegisterRecord, MedicalRegister,
+                          MedicalRegisterStatus, MedicalOrganization,
+                          SERVICE_XML_TYPES)
+from registry_import.xml_parser import XmlLikeFileReader
+from helpers.validation import ValidPatient, ValidRecord, ValidEvent,\
+    ValidService, ValidConcomitantDisease, ValidComplicatedDisease
+from medical_service_register.path import OUTBOX_DIR, OUTBOX_SUCCESS
+from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR
+from medical_service_register.path import IMPORT_ARCHIVE_DIR
+from medical_service_register.path import REGISTRY_PROCESSING_DIR
+from helpers import xml_writer
+from file_handler.funcs import get_outbox_dict, move_files_to_archive
+from file_handler.funcs import move_files_to_process
 
 
 def get_valid_xmls_info(files):
@@ -88,7 +61,7 @@ def get_valid_xmls_info(files):
 
 def main():
     patients = {}
-    files = os.listdir(register_dir)
+    files = os.listdir(REGISTRY_IMPORT_DIR)
 
     outbox = get_outbox_dict(OUTBOX_DIR)
     valid_xmls = get_valid_xmls_info(files)
@@ -148,7 +121,7 @@ def main():
 
         if register_set[organization]['patients']:
             person_file = XmlLikeFileReader('{0:s}/LM{1:s}'.format(
-                REGISTER_IN_PROCESS_DIR, register_set[organization]['patients'][2:]))
+                REGISTRY_PROCESSING_DIR, register_set[organization]['patients'][2:]))
         else:
             raise ValueError("Patients file not exists!")
 
@@ -194,7 +167,7 @@ def main():
             registers_set_id.append(register_pk)
 
             service_file = XmlLikeFileReader(
-                '{0:s}/{1:s}'.format(REGISTER_IN_PROCESS_DIR, service_xml['filename']))
+                '{0:s}/{1:s}'.format(REGISTRY_PROCESSING_DIR, service_xml['filename']))
 
             copy_path = '%s%s %s/' % (OUTBOX_DIR,
                                       service_xml['organization_code'],
@@ -353,7 +326,7 @@ def main():
                 error_organization = True
                 print u'Есть ошибки: ', len(service_errors)
                 errors_filenames.append("V%s" % service_xml['filename'])
-                hflk = xml_writer.Xml(temp_dir+"V%s" % service_xml['filename'])
+                hflk = xml_writer.Xml(TEMP_DIR+"V%s" % service_xml['filename'])
                 hflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
                 hflk.start('FLK_P')
                 hflk.put('FNAME', "V%s" % service_xml['filename'][:-4])
@@ -385,7 +358,7 @@ def main():
         if patient_errors:
             error_organization = True
             errors_filenames.append("V%s" % register_set[organization]['patients'])
-            lflk = xml_writer.Xml(temp_dir+"V%s" % register_set[organization]['patients'])
+            lflk = xml_writer.Xml(TEMP_DIR+"V%s" % register_set[organization]['patients'])
             lflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
             lflk.start('FLK_P')
             lflk.put('FNAME', "V%s" % register_set[organization]['patients'][:-4])
@@ -417,15 +390,15 @@ def main():
 
             print u'Ошибки ФЛК'
             #transaction.rollback()
-            zipname = temp_dir+'VM%sS28002_%s.zip' % (
+            zipname = TEMP_DIR+'VM%sS28002_%s.zip' % (
                 service_xml['organization_code'],
                 service_xml['filename'][service_xml['filename'].index('_')+1:-4]
             )
 
             with ZipFile(zipname, 'w') as zipfile:
                 for filename in errors_filenames:
-                    zipfile.write(temp_dir+filename, filename, 8)
-                    os.remove(temp_dir+filename)
+                    zipfile.write(TEMP_DIR+filename, filename, 8)
+                    os.remove(TEMP_DIR+filename)
 
             shutil.copy2(zipname, 'd:/work/xml_archive/')
 

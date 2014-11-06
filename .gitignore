@@ -1,5 +1,4 @@
 settings.py
-settings.pyc
 log.csv
 *.pyc
 *.xml
@@ -7,3 +6,5 @@ log.csv
 /static/fonts/
 /static/icons/
 /.idea/
+path.py
+service.csv
