@@ -8,7 +8,11 @@ import shutil
 
 from django.core.management.base import BaseCommand
 from django.db.models import Max
+<<<<<<< HEAD
 
+=======
+from medical_service_register.path import BASE_DIR
+>>>>>>> develop
 from tfoms.models import (ProvidedEvent, ProvidedService, Patient,
                           ProvidedEventConcomitantDisease,
                           ProvidedEventComplicatedDisease,
@@ -23,8 +27,49 @@ from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR
 from medical_service_register.path import IMPORT_ARCHIVE_DIR
 from medical_service_register.path import REGISTRY_PROCESSING_DIR
 from helpers import xml_writer
+<<<<<<< HEAD
 from file_handler.funcs import get_outbox_dict, move_files_to_archive
 from file_handler.funcs import move_files_to_process
+=======
+
+import os
+import re
+from datetime import datetime
+from zipfile import ZipFile
+import shutil
+
+OUTBOX_DIR = '//alpha/vipnet/medical_registry/outbox/'
+OUTBOX_SUCCESS = os.path.join(BASE_DIR, u'templates/outcoming_messages/ФЛК пройден.txt')
+register_dir = "c:/work/register_import/"
+temp_dir = "c:/work/register_temp/"
+flk_dir = "c:/work/medical_register/"
+IMPORT_ARCHIVE_DIR = u"c:/work/register_import_archive/"
+REGISTER_IN_PROCESS_DIR = u'c:/work/register_import_in_process/'
+
+
+def get_outbox_dict(dir):
+    dirs = os.listdir(dir)
+    outbox_dict = {}
+
+    for d in dirs:
+        t = d.decode('cp1251')
+        code, name = t[:6], t[7:]
+        outbox_dict[code] = name
+
+    return outbox_dict
+
+
+def move_files_to_process(files_list):
+    for name in files_list:
+        shutil.move(register_dir+name, REGISTER_IN_PROCESS_DIR)
+
+
+def move_files_to_archive(files_list):
+    for name in files_list:
+        if os.path.exists(IMPORT_ARCHIVE_DIR+name):
+            os.remove(IMPORT_ARCHIVE_DIR+name)
+        shutil.move(REGISTER_IN_PROCESS_DIR+name, IMPORT_ARCHIVE_DIR)
+>>>>>>> develop
 
 
 def get_valid_xmls_info(files):
@@ -400,7 +445,7 @@ def main():
                     zipfile.write(TEMP_DIR+filename, filename, 8)
                     os.remove(TEMP_DIR+filename)
 
-            shutil.copy2(zipname, 'd:/work/xml_archive/')
+            shutil.copy2(zipname, 'c:/work/xml_archive/')
 
             if os.path.exists(copy_path):
                 shutil.copy2(zipname, copy_path)

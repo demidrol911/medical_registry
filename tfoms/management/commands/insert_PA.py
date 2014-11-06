@@ -13,7 +13,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         year = '2014'
-        period = '09'
+        period = '10'
 
         mo_code = args[0]
         term = args[1]

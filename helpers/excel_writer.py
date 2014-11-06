@@ -151,6 +151,9 @@ class ExcelWriter(Workbook):
         self.cursor['row'] = row_index
         self.cursor['column'] = column_index
 
+    def hide_column(self, diap):
+        self.sheet.set_column(diap, 20, None, {'hidden': 1})
+
     ### Закрывает книгу
     def close(self):
         super(ExcelWriter, self).close()

@@ -7,7 +7,6 @@ from shutil import copy2
 from dbfpy import dbf
 
 from django.db.models import Q, Sum
-from pandas.core.series import Series
 from tfoms.models import (MedicalError, ProvidedService, MedicalRegister,
                           TariffFap, PaymentFailureCause,
                           MedicalRegisterRecord, Sanction,
@@ -48,7 +47,8 @@ def get_patients(year, period, mo_code):
         'patient__first_name',               # Имя пациента
         'patient__middle_name',              # Отчество пациента
         'patient__birthdate',                # Дата рождения
-        'patient__gender__code').distinct()
+        'patient__gender__code',
+        'id').distinct()
 
     patients_dict = {patient['patient__pk']
                      : {'policy_series': patient['patient__insurance_policy_series'],
@@ -57,7 +57,8 @@ def get_patients(year, period, mo_code):
                         'first_name': patient['patient__first_name'],
                         'middle_name': patient['patient__middle_name'],
                         'birthdate': patient['patient__birthdate'],
-                        'gender_code': patient['patient__gender__code']}
+                        'gender_code': patient['patient__gender__code'],
+                        'xml_id': patient['id']}
 
                      for patient in patients}
     return patients_dict
@@ -104,6 +105,7 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
         'code__division__pk',                               # Ид отделения (для поликлиники)
         'code__tariff_profile__pk',                         # Тарифный профиль (для стационара и дн. стационара)
         'profile__pk',                                      # Профиль услуги
+        'is_children_profile',                              # Возрастной профиль
         'worker_speciality__pk',                            # Специалист
         'payment_type__pk',                                 # Тип оплаты
         'tariff',                                           # Основной тариф
