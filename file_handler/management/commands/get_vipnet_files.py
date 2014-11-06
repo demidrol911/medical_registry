@@ -1,17 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-<<<<<<< HEAD:file_handler/management/commands/get_vipnet_files.py
 from main.models import MedicalOrganization
 
 from medical_service_register.path import INBOX_DIR, OUTBOX_DIR, ARCHIVE_DIR
 from medical_service_register.path import REGISTRY_IMPORT_DIR, OTHER_FILES_DIR
 from medical_service_register.path import IDENT_TABLE
 from file_handler.funcs import get_outbox_dict, get_inbox_dict, send_error_file
-=======
-from medical_service_register.path import BASE_DIR
-from tfoms.models import MedicalOrganization
->>>>>>> develop:tfoms/management/commands/get_processed_files.py
 
 import os
 import re
@@ -21,15 +16,6 @@ import logging
 from zipfile import ZipFile, is_zipfile, BadZipfile
 
 
-<<<<<<< HEAD:file_handler/management/commands/get_vipnet_files.py
-=======
-INBOX_DIR = u'//alpha/vipnet/medical_registry/inbox/'
-OUTBOX_DIR = u'//alpha/vipnet/medical_registry/outbox/'
-ARCHIVE_DIR = u'c:/work/register_import_archive/'
-register_dir = u"c:/work/register_import/"
-other_files_dir = u'x:/vipnet/'
-IDENT_TABLE = os.path.join(BASE_DIR, 'templates/ident_table/table.xls')
->>>>>>> develop:tfoms/management/commands/get_processed_files.py
 MO_CODE_PATTERN = r'^28\d{4}$'
 ARCHIVE_TYPE_MISMATCH_ERROR = u'Архив не соответствует формату ZIP.'
 NO_ARCHIVE_ERROR = u'Пакет должен быть упакован в архив формата ZIP.'
@@ -38,14 +24,9 @@ ARCHIVE_EXTRA_FILES_ERROR = (u'В архиве присутствуют данн
 ARCHIVE_FILES_NOT_EXISTS = (u'В архиве отсутствуют файлы относящихся к предмету'
                             u' информационного обмена.')
 ARCHIVE_NAME_ERROR = u'Недопустимое имя пакета.'
-<<<<<<< HEAD:file_handler/management/commands/get_vipnet_files.py
 ARCHIVE_AND_FILE_NAME_MISMATCH = (u'Имя архива не соответствует упакованному '
                                   u'файлу.')
-LOGGING_FILE = u'd:/work/medical_register_log/get_files_log.txt'
-=======
-ARCHIVE_AND_FILE_NAME_MISMATCH = u'Имя архива не соответствует упакованному файлу.'
 LOGGING_FILE = u'c:/work/medical_register_log/get_files_log.txt'
->>>>>>> develop:tfoms/management/commands/get_processed_files.py
 
 ZIP_PATTERN = r'^(hm|hl_m)(2800\d{2})s28002_\d+.zip$'
 REGISTER_FILES_PATTERN = r'^(h|l|t|dp|do|dv|dd|dr|ds|du|dv|df)m(2800\d{2})s28002_\d+.xml$'
@@ -86,16 +67,6 @@ registry_filename = re.compile(REGISTER_FILES_PATTERN)
 inbox_dict = get_inbox_dict(INBOX_DIR)
 outbox_dict = get_outbox_dict(OUTBOX_DIR)
 
-<<<<<<< HEAD:file_handler/management/commands/get_vipnet_files.py
-=======
-
-def send_error_file(path='', filename=None, message=''):
-    f = open(path+u'Ошибка обработки %s.txt' % filename, 'w')
-    f.write(message.encode('utf-8'))
-    f.close()
-
->>>>>>> develop:tfoms/management/commands/get_processed_files.py
-
 def main():
     logging.basicConfig(filename=LOGGING_FILE,
                         format='%(asctime)s %(message)s',
@@ -119,16 +90,10 @@ def main():
             dir_organization = MedicalOrganization.objects.get(
                 code=dir_mo_code, parent=None)
             dir_organization_name = dir_organization.name.replace('"', '')
-<<<<<<< HEAD:file_handler/management/commands/get_vipnet_files.py
             vipnet_path = os.path.join(OTHER_FILES_DIR, dir_organization_name)
             mo_send_path = os.path.join(OUTBOX_DIR,
                                         '%s %s' % (dir_mo_code,
                                                    outbox_dict[dir_mo_code]))
-=======
-            vipnet_path = other_files_dir+dir_organization_name+'/'
-            mo_send_path = '%s%s %s/' % (OUTBOX_DIR, dir_mo_code,
-                                         outbox_dict[dir_mo_code])
->>>>>>> develop:tfoms/management/commands/get_processed_files.py
 
             if not os.path.exists(vipnet_path):
                 os.makedirs(vipnet_path)

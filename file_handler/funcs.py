@@ -14,7 +14,7 @@ def get_outbox_dict(dir):
     outbox_dict = {}
 
     for d in dirs:
-        t = d.decode('cp1251')
+        t = d#.decode('cp1251')
         code, name = t[:6], t[7:]
         outbox_dict[code] = name
 

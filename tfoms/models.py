@@ -307,12 +307,7 @@ class MedicalOrganization(models.Model):
     class Meta:
         db_table = "medical_organization"
 
-<<<<<<< HEAD
-
-    def get_ambulance_attachment_count(self, date):
-=======
     def get_ambulance_attachment_count_old(self, date):
->>>>>>> develop
         query = """
             select
             medical_organization.id_pk, count(*) as ambulance_attachment_count,
@@ -387,10 +382,6 @@ class MedicalOrganization(models.Model):
             result['children_count'] += population_object.children_count
         return result
 
-<<<<<<< HEAD
-
-=======
->>>>>>> develop
     def get_capitation_events(self, year, period, date):
         query = """
         SELECT DISTINCT medical_organization.id_pk, provided_event.id_pk AS event_id
@@ -428,12 +419,7 @@ class MedicalOrganization(models.Model):
                           SELECT MAX(id_pk)
                           FROM attachment
                           WHERE person_fk = person.version_id_pk AND status_fk = 1
-<<<<<<< HEAD
-                             AND date <= %(date)s AND attachment.is_active)
-
-=======
                              AND attachment.date <= %(date)s AND attachment.is_active)
->>>>>>> develop
                  JOIN medical_organization med_org
                       ON (med_org.id_pk = attachment.medical_organization_fk
                           AND med_org.parent_fk IS NULL)
@@ -907,12 +893,8 @@ class Attachment(models.Model):
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='medical_organization_fk')
     status = models.IntegerField(db_column='status_fk')
-<<<<<<< HEAD
-    confirmation_date = models.DateField()
-=======
     date = models.DateField()
     #confirmation_date = models.DateField()
->>>>>>> develop
     is_active = models.BooleanField()
 
     class Meta:
