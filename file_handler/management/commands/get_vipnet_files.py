@@ -2,7 +2,9 @@
 
 from django.core.management.base import BaseCommand
 from tfoms.models import MedicalOrganization
-
+from medical_service_register.path import INBOX_DIR, OUTBOX_DIR, ARCHIVE_DIR
+from medical_service_register.path import register_dir, other_files_dir
+from medical_service_register.path import IDENT_TABLE
 import os
 import re
 import shutil
@@ -11,12 +13,6 @@ import logging
 from zipfile import ZipFile, is_zipfile, BadZipfile
 
 
-INBOX_DIR = u'//alpha/vipnet/medical_registry/inbox/'
-OUTBOX_DIR = u'//alpha/vipnet/medical_registry/outbox/'
-ARCHIVE_DIR = u'd:/work/register_import_archive/'
-register_dir = u"d:/work/register_import/"
-other_files_dir = u'x:/vipnet/'
-IDENT_TABLE = u'd:/work/medical_service_register/templates/ident_table/table.xls'
 MO_CODE_PATTERN = r'^28\d{4}$'
 ARCHIVE_TYPE_MISMATCH_ERROR = u'Архив не соответствует формату ZIP.'
 NO_ARCHIVE_ERROR = u'Пакет должен быть упакован в архив формата ZIP.'
@@ -87,6 +83,7 @@ archive_name = re.compile(ZIP_PATTERN)
 registry_filename = re.compile(REGISTER_FILES_PATTERN)
 inbox_dict = get_inbox_dict(INBOX_DIR)
 outbox_dict = get_outbox_dict(OUTBOX_DIR)
+
 
 def send_error_file(path='', filename=None, message=''):
     f = open(path+u'Ошибка обработки %s.txt' % filename, 'w')
