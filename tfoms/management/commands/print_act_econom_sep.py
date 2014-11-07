@@ -202,14 +202,14 @@ def print_accepted_service(act_book, year, period, mo,
             # Круглосуточный стационар
             {'condition': service['term'] == 1,
              'term': 'hospital',
-             'unique_patient': (service['patient_id'], service['tariff_profile_id'], age),
+             'unique_patient': (service['patient_id'], service['tariff_profile_id'], service['group'], age),
              'column_condition': {}},
 
             # Дневной стационар
             {'condition': service['term'] == 2,
              'term': 'day_hospital',
              'unique_patient': (service['patient_id'], service['division_term'],
-                                service['tariff_profile_id'], age),
+                                service['tariff_profile_id'], service['group'], age),
              'column_condition': {}},
 
             # Поликлиника (подушевое)
@@ -634,10 +634,10 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
     }
 
     title_table = [
-        u'Полис', u'ФИО', u'Дата рожд', u'Соц.п', u'Номер карты',
+        u'Полис', u'ФИО', u'Дата рожд', u'Номер карты',
         u'Дата усл', u'Пос\госп', u'Кол дн', u'УЕТ', u'Код',
-        u'Диагн', u'Отд.', u'№ случая', u'Предъявл',
-        u'Расч.\Сумма', u'Снят.\Сумма'
+        u'Диагн', u'Отд.', u'№ случая', u'ID_SERV', u'ID_PAC',
+        u'Предъявл', u'Расч.\Сумма', u'Снят.\Сумма'
     ]
 
     total_sum = deepcopy(init_sum)
@@ -689,7 +689,6 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
 
                 act_book.write_cell(date_correct(patient['birthdate']).
                                     strftime('%d.%m.%Y'), 'c')                        # Печать даты рождения
-                act_book.write_cell('', 'c')
 
                 act_book.write_cell(service['anamnesis_number'], 'c')                 # Номер карты
 
@@ -709,6 +708,10 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
                 act_book.write_cell(service['name'], 'c')                             # Название услуги
 
                 act_book.write_cell(service['event_id'], 'c')                         # Ид случая
+
+                act_book.write_cell(service['xml_id'], 'c')                           # Ид услуги в xml
+
+                act_book.write_cell(patient['xml_id'], 'c')                           # Ид патиента в xml
 
                 act_book.write_cell(service['tariff'], 'c')                           # Основной тариф
 
@@ -781,6 +784,8 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
     act_book.write_cell('', 'r', 5)
     act_book.set_style()
     act_book.write_cell(u'Дата'+'_'*30, size=8)
+
+    act_book.hide_column('M:N')
 
     # Сводная информация по причинам отказа
     value_keys = (
@@ -929,10 +934,11 @@ def print_total_sum_error(act_book, title, total_sum):
     act_book.write_cell('', 'c')
     act_book.write_cell('', 'c')
     act_book.write_cell('', 'c')
-    act_book.write_cell('', 'c')
     act_book.write_cell(total_sum['sum_visited'], 'c')
     act_book.write_cell(total_sum['sum_day'], 'c')
     act_book.write_cell(total_sum['sum_uet'], 'c')
+    act_book.write_cell('', 'c')
+    act_book.write_cell('', 'c')
     act_book.write_cell('', 'c')
     act_book.write_cell('', 'c')
     act_book.write_cell('', 'c')
@@ -1115,7 +1121,7 @@ def print_order_146(act_book, year, period, mo, capitation_events,
             # Дневной стационар (на дому)
             {'condition': service['term'] == 2
             and not service['group'] and service['division_term'] == 12,
-             'patient_division': (service['patient_id'], service['tariff_profile_id'],
+             'patient_division': (service['patient_id'], service['tariff_profile_id'], service['group'],
                                   is_children_profile),
              'term': 'day_hospital_home',
              'column_condition': {}},
@@ -1184,7 +1190,7 @@ def print_order_146(act_book, year, period, mo, capitation_events,
              and not service['group']
              and service['division_term'] in (10, 11))
              or service['group'] == 28,
-             'patient_division': (service['patient_id'], service['division_term'],
+             'patient_division': (service['patient_id'], service['division_term'], service['group'],
                                   service['tariff_profile_id'], is_children_profile),
              'term': 'day_hospital_policlinic',
              'column_condition': {}},

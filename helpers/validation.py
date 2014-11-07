@@ -57,10 +57,12 @@ HITECH_KINDS = queryset_to_dict(MedicalServiceHiTechKind.objects.all())
 HITECH_METHODS = queryset_to_dict(MedicalServiceHiTechMethod.objects.all())
 EXAMINATION_RESULTS = queryset_to_dict(ExaminationResult.objects.all())
 
-
 ADULT_EXAMINATION_COMMENT_PATTERN = r'^F(0|1)(0|1)[0-3]{1}(0|1)$'
 ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
+KIND_TERM_DICT = {1: [2, 3, 21, 22, 31, 32, 4],
+                  2: [1, 2, 3, 21, 22, 31, 32, 4],
+                  3: [1, 11, 12, 13, 4]}
 
 class ValidPatient(object):
     def __init__(self, item, record_id=None):
@@ -299,6 +301,10 @@ class ValidEvent(object):
         if self.kind and safe_int(self.kind) not in KINDS:
             errors.append((True, '902', 'SLUCH', 'VIDPOM', record_id, self.id, 0,
                            u'Недопустимый код вида помощи'))
+
+        if self.term in KIND_TERM_DICT and self.kind not in KIND_TERM_DICT[self.term]:
+            errors.append((True, '904', 'SLUCH', 'VIDPOM', record_id, self.id, 0,
+                           u'Вид медицинской помощи не соответствует условиям оказания'))
 
         if self.form not in FORMS and self.record.register.type not in list(range(3, 11)):
             errors.append((True, '904', 'SLUCH', 'FOR_POM', record_id, self.id, 0,
@@ -698,7 +704,7 @@ class ValidService(object):
             speciality = SPECIALITIES_OLD.get(self.worker_speciality, None)
 
         service = ProvidedService(
-            id=self.id,
+            id=str(self.id or ''),
             id_pk=self.id_pk,
             organization=ORGANIZATIONS.get(self.organization, None),
             department=DEPARTMENTS.get(self.department, None),

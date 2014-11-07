@@ -51,7 +51,7 @@ def q_to_d_2(qs):
 def q_to_d_3(qs):
     t = {}
     for rec in qs:
-        t[rec.idc_code] = rec.pk
+        t[rec.idc_code] = rec
     return t
 
 GENDERS = q_to_d(Gender.objects.all())
@@ -78,7 +78,7 @@ CODES = q_to_d(MedicalService.objects.all())
 def patient_converter(record):
     d = dict(
         id=record['id_pac'], newborn_code=record['novor'].strip(),
-        is_newborn=False,
+        #is_newborn=False,
         last_name=record['fam'].strip(),
         first_name=record['im'].strip(),
         middle_name=record['ot'].strip(),
@@ -102,7 +102,7 @@ def patient_converter(record):
 
 def registry_converter(tfile):
     code_mo=tfile.filename[29:-4]
-    d = dict(year='2010', period=tfile.filename[25:27],
+    d = dict(year='2013', period=tfile.filename[25:27],
         invoice_date=datetime.now(), filename=tfile.filename[28:],
         organization_id=ORGANIZATIONS.get(tfile.filename[29:-4], None),)
 
@@ -191,7 +191,7 @@ def service_converter(record):
         profile_id=PROFILES.get(record['profil'], None),
         is_children_profile=True if record['det'] == '1' else False,
         start_date=record['date_in'], end_date=record['date_out'],
-        basic_disease_id=DISEASES.get(record['ds'].strip(), None),
+        basic_disease=DISEASES.get(record['ds'].strip(), None),
         code_id=CODES.get(record['code_usl'].strip(), None),
         quantity=record['kol_usl'], comment=record['comentu'].strip(),
         worker_speciality_id=SPECIALITIES.get(record['prvs'], None),
@@ -209,14 +209,13 @@ def service_converter(record):
     return d
 
 
-@transaction.commit_on_success()
 def main():
     dirs, files = getsubs('d:/work/try_reestr')
 
-    patient_pk = Patient.objects.latest('id_pk').pk
-    record_pk = MedicalRegisterRecord.objects.latest('id_pk').pk
-    event_pk = ProvidedEvent.objects.latest('id_pk').pk
-    service_pk = ProvidedService.objects.latest('id_pk').pk
+    patient_pk = Patient.objects.latest('id_pk').pk + 1
+    record_pk = MedicalRegisterRecord.objects.latest('id_pk').pk + 1
+    event_pk = ProvidedEvent.objects.latest('id_pk').pk + 1
+    service_pk = ProvidedService.objects.latest('id_pk').pk + 1
 
     for filename in files:
         start = datetime.now()
@@ -237,7 +236,7 @@ def main():
             period=registry['period'], year=registry['year'], is_active=True,
             organization_id=registry['organization_id'])
         active_registries.update(is_active=False)
-
+        print registry
         registry_insert = MedicalRegister(**registry)
         registry_insert.save()
 
@@ -280,7 +279,6 @@ def main():
         ProvidedService.objects.bulk_create(services)
         end = datetime.now()
         print end-start
-        transaction.commit()
 
 
 class Command(BaseCommand):

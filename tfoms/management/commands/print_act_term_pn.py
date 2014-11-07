@@ -500,7 +500,8 @@ def day_hospital_patients():
             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         total_group = OrderedDict(
             [('patient_id', lambda x: len(service_df.ix[x.index]
-            [['group', 'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
+            [[#'group',
+              'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         general_con = service_df.group.isnull() & service_df.division_term.isin([10, 11])
         rules = [
             {'con': general_con & (service_df.tariff_profile == 39),
@@ -769,16 +770,21 @@ def day_hospital():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+             [[#'group',
+               'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        serv_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['code', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         general_con = (service_df.group.isnull() &
                        (service_df.term == 2) &
                        service_df.division_term.isin([10, 11]))
         rules = [
-            {'con': general_con | (service_df.group == 17),
+            {'con': general_con | (service_df.group.isin([17, 28])),
              'func': rec_group},
             {'con': service_df.group == 28,
-             'func': rec_group},
+             'func': serv_group},
         ]
         return rules
 
@@ -1119,16 +1125,21 @@ def day_hospital_all():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+             [[#'group',
+               'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        serv_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [['code', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         general_con = (service_df.group.isnull() &
                        (service_df.term == 2) &
                        service_df.division_term.isin([10, 11, 12]))
         rules = [
-            {'con': general_con | (service_df.group == 17),
+            {'con': general_con | (service_df.group.isin([28, 17])),
              'func': rec_group},
             {'con': service_df.group == 28,
-             'func': rec_group},
+             'func': serv_group},
         ]
         return rules
 
@@ -1461,7 +1472,8 @@ def hospital_patients():
     def get_rules(service_df):
         rec_group = OrderedDict(
             [('patient_id', lambda x: len(service_df.ix[x.index]
-            [['tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
+            [[#'group',
+              'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         serv_group = OrderedDict(
             [('patient_id', lambda x: len(service_df.ix[x.index]
             [['code', 'patient_id', 'is_children']].drop_duplicates()))])
@@ -1530,6 +1542,39 @@ def hospital_patients():
 def hospital():
     act = Act()
     act.title = u'Круглосуточный стационар свод'
+    act.pattern = 'hospital'
+    group_column = ('patients', 'services', 'days', 'accepted_payment', )
+
+    act.columns = {
+        (0, ): {
+            'column': group_column,
+            'division': Act.DIVISION_BY_AGE,
+            'all_column': True}
+    }
+
+    def get_rules(service_df):
+        rec_group = OrderedDict([
+            ('patient_id', lambda x: len(service_df.ix[x.index]
+             [[# group,
+             'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+            ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
+        rules = [
+            {'con': (service_df.group.isnull() & (service_df.term == 1)) |
+                service_df.code.isin(['049023', '149023', '049024', '149024',
+                                      '098951', '098948', '098949', '098975',
+                                      '098950']),
+             'func': rec_group},
+        ]
+        return rules
+
+    act.method_rules = get_rules
+    return act
+
+
+# Круглосуточный стационар + ВМП (свод)
+def hospital_all():
+    act = Act()
+    act.title = u'Круглосуточный стационар + ВМП (свод)'
     act.pattern = 'hospital_all'
     group_column = ('patients', 'services', 'days', 'accepted_payment', )
 
@@ -1543,13 +1588,14 @@ def hospital():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [['tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
+             [[# group,
+             'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         rules = [
             {'con': (service_df.group.isnull() & (service_df.term == 1)) |
                 service_df.code.isin(['049023', '149023', '049024', '149024',
                                       '098951', '098948', '098949', '098975',
-                                      '098950']),
+                                      '098950']) | (service_df.group == 20),
              'func': rec_group},
         ]
         return rules
@@ -1606,17 +1652,19 @@ class Command(BaseCommand):
             # 17 Дневной стационар свод + на дому свод
             #day_hospital_all(),
             # 18 Круглосуточный стационар ВМП
-            #hospital_hmc(),
+            hospital_hmc(),
             # 19 Круглосуточный стационар (число госпитализаций)
-            #hospital_services(),
+            hospital_services(),
             # 20 Круглосуточный стационар (стоимость)
-            #hospital_cost(),
+            hospital_cost(),
             # 21 Круглосуточный стационар (число койко-дней)
-            #hospital_days(),
+            hospital_days(),
             # 22 Круглосуточный стационар (численность лиц)
-            #hospital_patients(),
+            hospital_patients(),
             # 23 Круглосуточный стационар свод
-            #hospital(),
+            hospital(),
+            # 24 Круглосуточный стационар + ВМП (свод)
+            hospital_all(),
         ]
 
         last_pos = 0

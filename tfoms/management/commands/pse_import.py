@@ -64,8 +64,8 @@ mo_query = """
 def main():
     ERRORS_CODES = get_errors_dict()
 
-    pse_dir = 'd:/work/pse'
-    year, period = '2014', '08'
+    pse_dir = 'c:/work/pse'
+    year, period = '2014', '10'
     files = os.listdir(pse_dir)
     departments = set([filename[1:-4] for filename in files if '.dbf' in filename])
     registers = []

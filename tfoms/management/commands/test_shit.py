@@ -78,3 +78,11 @@ class XmlLikeFileReader(object):
                 item = parent
 
         file_stream.close()
+
+sum = 0
+xml = XmlLikeFileReader(file_name='D:/work/medical_service_register/HS28002T28_14081.XML')
+for i, rec in enumerate(xml.find(tags=('USL'))):
+    sum += float(rec['SUMV_USL'] or 0)
+    #print i, rec['SUMV_USL'], rec['IDSERV']
+
+print sum
