@@ -4,7 +4,7 @@
 def safe_int(string):
     try:
         integer = int(string)
-    except ValueError:
+    except:
         integer = 0
 
     return integer
