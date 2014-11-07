@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from validation.collection import Collection
-from validation.field import Field
-from validation.rules import Regex, IsInList, IsLengthBetween, IsRequired
+from validator.collection import Collection
+from validator.field import Field
+from validator.rules import Regex, IsInList, IsLengthBetween, IsRequired
 
 ERROR_MESSAGES = {
     'length exceeded': (u'904;Количество символов в поле не соответствует '

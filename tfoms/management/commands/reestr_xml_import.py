@@ -19,7 +19,7 @@ from helpers.validation import ValidPatient, ValidRecord, ValidEvent,\
     ValidService, ValidConcomitantDisease, ValidComplicatedDisease
 from medical_service_register.path import OUTBOX_DIR, OUTBOX_SUCCESS
 from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR
-from medical_service_register.path import IMPORT_ARCHIVE_DIR
+from medical_service_register.path import IMPORT_ARCHIVE_DIR, FLC_DIR
 from medical_service_register.path import REGISTRY_PROCESSING_DIR
 from helpers import xml_writer
 from file_handler.funcs import get_outbox_dict, move_files_to_archive
@@ -405,7 +405,7 @@ def main():
                     zipfile.write(TEMP_DIR+filename, filename, 8)
                     os.remove(TEMP_DIR+filename)
 
-            shutil.copy2(zipname, 'c:/work/xml_archive/')
+            shutil.copy2(zipname, FLC_DIR)
 
             if os.path.exists(copy_path):
                 shutil.copy2(zipname, copy_path)
