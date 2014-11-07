@@ -389,7 +389,7 @@ def get_treatment_events(year, period, mo_code):
         filter(
             Q(code__subgroup__pk=12, code__group__pk=19) |
             (Q(code__reason__pk=1, event__term__pk=3) &
-             (Q(code__group__isnull=True) | ~Q(code__group__pk=19)))
+             (Q(code__group__isnull=True) | Q(code__group__pk=24)))
         )
     return events.values_list('event__pk', flat=True).distinct()
 
