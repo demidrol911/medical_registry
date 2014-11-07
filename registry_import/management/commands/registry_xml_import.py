@@ -3,9 +3,10 @@
 from django.core.management.base import BaseCommand
 from django.db import connection
 
+from medical_service_register.path import REGISTRY_IMPORT_DIR
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender
-
-from registry_import.xml_parser import XmlLikeFileReader
+from registry_xml_import.validator import get_person_patient_validation
+from registry_xml_import.validator import get_policy_patient_validation
 
 import os
 import re
@@ -13,10 +14,7 @@ from datetime import datetime
 from collections import defaultdict
 import shutil
 
-
 cursor = connection.cursor()
-
-
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
 
@@ -42,9 +40,6 @@ def is_files_completeness(files):
                 check += 1
 
     return True if check == 2 else False
-
-
-
 
 
 def get_registry_files_dict(files):
@@ -165,7 +160,7 @@ def get_next_provided_service_pk():
 
 def main():
 
-    files = os.listdir(REGISTER_DIR)
+    files = os.listdir(REGISTRY_IMPORT_DIR)
     registry_types = get_registry_type_dict(SERVICE_XML_TYPES)
 
     registries, files_errors = get_registry_files_dict(files)
@@ -192,11 +187,14 @@ def main():
         registry_pk_list = []
         record_pk_list = []
 
+        patients_errors = []
+
         for registry in registries[organization]:
             if registry in files_errors:
                 #send_error_file(OUTBOX_DIR, registry, files_errors[registry])
                 continue
 
+            services_errors = []
             _type, organization_code, year, period = get_registry_info(registry)
 
             if current_year \
@@ -213,8 +211,8 @@ def main():
             registry_type = registry_types.get(_type.lower())
 
             if registry_type == 0:
-                patient_path = os.path.join(REGISTER_DIR, registry)
-                patient_file = XmlLikeFileReader(patient_path)
+                patient_path = os.path.join(REGISTRY_IMPORT_DIR, registry)
+                patient_file = parser.XmlLikeFileReader(patient_path)
 
                 for item in patient_file.find(tags=('PERS', )):
                     if patient_pk_list:
@@ -233,8 +231,8 @@ def main():
                     registry_pk_list = get_next_medical_register_pk()
                     registry_pk = registry_pk_list.pop()
 
-                service_path = os.path.join(REGISTER_DIR, registry)
-                service_file = XmlLikeFileReader(service_path)
+                service_path = os.path.join(REGISTRY_IMPORT_DIR, registry)
+                service_file = parser.XmlLikeFileReader(service_path)
 
                 invoiced = False
 
@@ -271,11 +269,18 @@ def main():
 
                         item['record_pk'] = record_pk
 
-                        patient = patients.get(item['PACIENT']['ID_PAC'])
-                        policy = {'VPOLIS': item['PACIENT']['VPOLIS'],
-                                  'SPOLIS': item['PACIENT']['SPOLIS'],
-                                  'NPOLIS': item['PACIENT']['NPOLIS'],
-                                  'NOVOR':  item['PACIENT']['NOVOR']}
+                        raw_patient = patients.get(item['PACIENT']['ID_PAC'])
+                        raw_policy = {'VPOLIS': item['PACIENT']['VPOLIS'],
+                                      'SPOLIS': item['PACIENT']['SPOLIS'],
+                                      'NPOLIS': item['PACIENT']['NPOLIS'],
+                                      'NOVOR':  item['PACIENT']['NOVOR']}
+
+                        patient = get_person_patient_validation(raw_patient)
+                        policy = get_policy_patient_validation(raw_policy)
+
+                        print patient.errors()
+                        print policy.errors()
+
 
         print organization, current_year, current_period
 
