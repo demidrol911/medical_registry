@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from main.models import MedicalOrganization
-
 from medical_service_register.path import INBOX_DIR, OUTBOX_DIR, ARCHIVE_DIR
 from medical_service_register.path import REGISTRY_IMPORT_DIR, OTHER_FILES_DIR
 from medical_service_register.path import IDENT_TABLE
 from file_handler.funcs import get_outbox_dict, get_inbox_dict, send_error_file
+from main.models import MedicalOrganization
 
 import os
 import re
@@ -14,7 +13,6 @@ import shutil
 import xlrd
 import logging
 from zipfile import ZipFile, is_zipfile, BadZipfile
-
 
 MO_CODE_PATTERN = r'^28\d{4}$'
 ARCHIVE_TYPE_MISMATCH_ERROR = u'Архив не соответствует формату ZIP.'
@@ -26,7 +24,7 @@ ARCHIVE_FILES_NOT_EXISTS = (u'В архиве отсутствуют файлы 
 ARCHIVE_NAME_ERROR = u'Недопустимое имя пакета.'
 ARCHIVE_AND_FILE_NAME_MISMATCH = (u'Имя архива не соответствует упакованному '
                                   u'файлу.')
-LOGGING_FILE = u'c:/work/medical_register_log/get_files_log.txt'
+LOGGING_FILE = u'd:/work/medical_register_log/get_files_log.txt'
 
 ZIP_PATTERN = r'^(hm|hl_m)(2800\d{2})s28002_\d+.zip$'
 REGISTER_FILES_PATTERN = r'^(h|l|t|dp|do|dv|dd|dr|ds|du|dv|df)m(2800\d{2})s28002_\d+.xml$'
@@ -67,6 +65,7 @@ registry_filename = re.compile(REGISTER_FILES_PATTERN)
 inbox_dict = get_inbox_dict(INBOX_DIR)
 outbox_dict = get_outbox_dict(OUTBOX_DIR)
 
+
 def main():
     logging.basicConfig(filename=LOGGING_FILE,
                         format='%(asctime)s %(message)s',
@@ -85,12 +84,15 @@ def main():
 
         for filename in sorted_files:
             filepath = root+'/'+filename
+
             name, ext = os.path.splitext(filename.lower())
             dir_mo_code = filepath[len(INBOX_DIR):len(INBOX_DIR)+6]
             dir_organization = MedicalOrganization.objects.get(
                 code=dir_mo_code, parent=None)
             dir_organization_name = dir_organization.name.replace('"', '')
-            vipnet_path = os.path.join(OTHER_FILES_DIR, dir_organization_name)
+
+            #vipnet_path = os.path.join(OTHER_FILES_DIR, dir_organization_name)
+            vipnet_path = OTHER_FILES_DIR + dir_organization_name + '/'
             mo_send_path = os.path.join(OUTBOX_DIR,
                                         '%s %s' % (dir_mo_code,
                                                    outbox_dict[dir_mo_code]))
@@ -155,6 +157,7 @@ def main():
                 os.remove(filepath)
                 logging.warning(u'%s неверный формат' % filename)
             else:
+                print vipnet_path
                 shutil.copy2(filepath, vipnet_path)
                 os.remove(filepath)
                 logging.warning(u'%s неизвестный файл' % filename)

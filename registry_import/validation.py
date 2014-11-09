@@ -2,10 +2,7 @@
 
 from validator.collection import Collection
 from validator.field import Field
-from validator.rules import IsRequired, IsLength, IsLengthBetween
-from validator.rules import Regex, IsInList
-
-import re
+from validator.rules import Regex, IsInList, IsLengthBetween, IsRequired
 
 ERROR_MESSAGES = {
     'length exceeded': (u'904;Количество символов в поле не соответствует '
@@ -125,3 +122,5 @@ def get_policy_patient_validation(item):
         ]),
 
     ])
+
+    return policy

@@ -3,8 +3,10 @@
 from django.core.management.base import BaseCommand
 from django.db import connection
 
+from medical_service_register.path import REGISTRY_IMPORT_DIR
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender
-
+from registry_import.validation import get_person_patient_validation
+from registry_import.validation import get_policy_patient_validation
 from registry_import.xml_parser import XmlLikeFileReader
 
 import os
@@ -13,10 +15,7 @@ from datetime import datetime
 from collections import defaultdict
 import shutil
 
-
 cursor = connection.cursor()
-
-
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
 
@@ -42,9 +41,6 @@ def is_files_completeness(files):
                 check += 1
 
     return True if check == 2 else False
-
-
-
 
 
 def get_registry_files_dict(files):
@@ -163,9 +159,14 @@ def get_next_provided_service_pk():
     return list(reversed([rec[0] for rec in pk]))
 
 
+def get_person_filename(file_list):
+    for _file in file_list:
+        if _file.lower().startswith('lm'):
+            return _file
+
 def main():
 
-    files = os.listdir(REGISTER_DIR)
+    files = os.listdir(REGISTRY_IMPORT_DIR)
     registry_types = get_registry_type_dict(SERVICE_XML_TYPES)
 
     registries, files_errors = get_registry_files_dict(files)
@@ -179,12 +180,14 @@ def main():
             #send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
 
+        registry_list = registries[organization]
         patient_dict = {}
         service_dict = {}
         event_dict = {}
         record_dict = {}
         new_registries_pk = []
         patients = {}
+        fatal_error = False
 
         current_year = current_period = None
 
@@ -192,11 +195,45 @@ def main():
         registry_pk_list = []
         record_pk_list = []
 
-        for registry in registries[organization]:
+        patients_errors = []
+
+        person_filename = get_person_filename(registry_list)
+        patient_path = os.path.join(REGISTRY_IMPORT_DIR, person_filename)
+        patient_file = XmlLikeFileReader(patient_path)
+
+        for item in patient_file.find(tags=('PERS', )):
+            if patient_pk_list:
+                patient_pk = patient_pk_list.pop()
+            else:
+                patient_pk_list = get_next_patient_pk()
+                patient_pk = patient_pk_list.pop()
+
+            item['pk'] = patient_pk
+
+            if item['ID_PAC'] in patients:
+                patients_errors.append(
+                    {'code': '904', 'field': 'ID_PAC', 'parent': 'PERS',
+                     'record_uid': '', 'event_uid': '', 'service_uid': '',
+                     'comment': u'Дубликат идентификатора пациента %s' % item['ID_PAC']})
+                fatal_error = True
+
+            else:
+                patients[item['ID_PAC']] = item
+
+        print len(patients)
+
+        registry_list.remove(person_filename)
+
+        if fatal_error:
+            registry_list = []
+
+        for registry in registry_list:
+
             if registry in files_errors:
                 #send_error_file(OUTBOX_DIR, registry, files_errors[registry])
                 continue
 
+            services_errors = []
             _type, organization_code, year, period = get_registry_info(registry)
 
             if current_year \
@@ -212,70 +249,65 @@ def main():
 
             registry_type = registry_types.get(_type.lower())
 
-            if registry_type == 0:
-                patient_path = os.path.join(REGISTER_DIR, registry)
-                patient_file = XmlLikeFileReader(patient_path)
-
-                for item in patient_file.find(tags=('PERS', )):
-                    if patient_pk_list:
-                        patient_pk = patient_pk_list.pop()
-                    else:
-                        patient_pk_list = get_next_patient_pk()
-                        patient_pk = patient_pk_list.pop()
-
-                    item['pk'] = patient_pk
-                    patients[item.get('ID_PAC')] = item
-
+            if registry_pk_list:
+                registry_pk = registry_pk_list.pop()
             else:
-                if registry_pk_list:
-                    registry_pk = registry_pk_list.pop()
-                else:
-                    registry_pk_list = get_next_medical_register_pk()
-                    registry_pk = registry_pk_list.pop()
+                registry_pk_list = get_next_medical_register_pk()
+                registry_pk = registry_pk_list.pop()
 
-                service_path = os.path.join(REGISTER_DIR, registry)
-                service_file = XmlLikeFileReader(service_path)
+            service_path = os.path.join(REGISTRY_IMPORT_DIR, registry)
+            service_file = XmlLikeFileReader(service_path)
 
-                invoiced = False
+            invoiced = False
 
-                for item in service_file.find(tags=('SCHET', 'ZAP', )):
-                    if 'NSCHET' in item:
-                        invoiced = True
-                        invoice = dict(id=item['NSCHET'], date=item['DSCHET'])
+            for item in service_file.find(tags=('SCHET', 'ZAP', )):
+                if 'NSCHET' in item:
+                    invoiced = True
+                    invoice = dict(id=item['NSCHET'], date=item['DSCHET'])
 
-                        new_registry = MedicalRegister(pk=registry_pk,
-                            timestamp=datetime.now(),
-                            type=registry_type,
-                            filename=registry,
-                            organization_code=organization_code,
-                            is_active=True,
-                            year=current_year,
-                            period=current_period,
-                            status_id=12,
-                            invoice_date=invoice['date'])
+                    new_registry = MedicalRegister(pk=registry_pk,
+                        timestamp=datetime.now(),
+                        type=registry_type,
+                        filename=registry,
+                        organization_code=organization_code,
+                        is_active=True,
+                        year=current_year,
+                        period=current_period,
+                        status_id=12,
+                        invoice_date=invoice['date'])
 
-                        new_registries_pk.append(registry_pk)
+                    new_registries_pk.append(registry_pk)
 
-                        old_registries = MedicalRegister.objects.filter(
-                            year=current_year,
-                            period=current_period,
-                            is_active=True,
-                            organization_code=organization_code)
+                    old_registries = MedicalRegister.objects.filter(
+                        year=current_year,
+                        period=current_period,
+                        is_active=True,
+                        organization_code=organization_code)
 
-                    if 'N_ZAP' in item:
-                        if record_pk_list:
-                            record_pk = record_pk_list.pop()
-                        else:
-                            record_pk_list = get_next_medical_register_record_pk()
-                            record_pk = record_pk_list.pop()
+                if 'N_ZAP' in item:
+                    if record_pk_list:
+                        record_pk = record_pk_list.pop()
+                    else:
+                        record_pk_list = get_next_medical_register_record_pk()
+                        record_pk = record_pk_list.pop()
 
-                        item['record_pk'] = record_pk
+                    item['record_pk'] = record_pk
 
-                        patient = patients.get(item['PACIENT']['ID_PAC'])
-                        policy = {'VPOLIS': item['PACIENT']['VPOLIS'],
+                    raw_patient = patients.get(item['PACIENT']['ID_PAC'])
+                    raw_policy = {'VPOLIS': item['PACIENT']['VPOLIS'],
                                   'SPOLIS': item['PACIENT']['SPOLIS'],
                                   'NPOLIS': item['PACIENT']['NPOLIS'],
                                   'NOVOR':  item['PACIENT']['NOVOR']}
+
+                    patient = get_person_patient_validation(raw_patient)
+                    policy = get_policy_patient_validation(raw_policy)
+
+                    if patient.errors():
+                        print patient.errors()
+                    if policy.errors():
+                        print policy.errors()
+                    else:
+                        print policy.get_dict()
 
         print organization, current_year, current_period
 
