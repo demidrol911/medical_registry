@@ -11,4 +11,4 @@ def safe_int(string):
 
 
 def queryset_to_dict(qs):
-    return {rec.code: rec for rec in qs}
+    return {str(rec.code): rec for rec in qs}

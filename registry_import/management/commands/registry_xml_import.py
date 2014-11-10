@@ -7,6 +7,7 @@ from medical_service_register.path import REGISTRY_IMPORT_DIR
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender
 from registry_import.validation import get_person_patient_validation
 from registry_import.validation import get_policy_patient_validation
+from registry_import.validation import get_record_validation
 from registry_import.xml_parser import XmlLikeFileReader
 
 import os
@@ -164,6 +165,28 @@ def get_person_filename(file_list):
         if _file.lower().startswith('lm'):
             return _file
 
+
+def set_error(code, field='', parent='', record_uid='',
+              event_uid='', service_uid='', comment=''):
+    return {'code': code, 'field': field, 'parent': parent,
+            'record_uid': record_uid, 'event_uid': event_uid,
+            'service_uid': service_uid, 'comment': comment}
+
+
+def handle_errors(errors=[], parent='', record_uid='',
+                  event_uid='', service_uid=''):
+    errors_list = []
+    for field in errors:
+        for e in errors[field]:
+            error_code, error_message = e.split(';')
+            errors_list.append(set_error(
+                code=error_code, field=field, parent=parent,
+                record_uid=record_uid, event_uid=event_uid,
+                service_uid=service_uid, comment=error_message)
+            )
+    return errors_list
+
+
 def main():
 
     files = os.listdir(REGISTRY_IMPORT_DIR)
@@ -212,16 +235,16 @@ def main():
 
             if item['ID_PAC'] in patients:
                 patients_errors.append(
-                    {'code': '904', 'field': 'ID_PAC', 'parent': 'PERS',
-                     'record_uid': '', 'event_uid': '', 'service_uid': '',
-                     'comment': u'Дубликат идентификатора пациента %s' % item['ID_PAC']})
+                    set_error(code='904', field='ID_PAC', parent='PERS',
+                              record_uid='', event_uid='', service_uid='',
+                              comment=u'Дубликат идентификатора '
+                                      u'пациента %s' % item['ID_PAC']))
                 fatal_error = True
 
             else:
                 patients[item['ID_PAC']] = item
 
         print len(patients)
-
         registry_list.remove(person_filename)
 
         if fatal_error:
@@ -291,25 +314,89 @@ def main():
                         record_pk_list = get_next_medical_register_record_pk()
                         record_pk = record_pk_list.pop()
 
-                    item['record_pk'] = record_pk
+                    item['pk'] = record_pk
+                    item['registry_pk'] = registry_pk
 
-                    raw_patient = patients.get(item['PACIENT']['ID_PAC'])
-                    raw_policy = {'VPOLIS': item['PACIENT']['VPOLIS'],
-                                  'SPOLIS': item['PACIENT']['SPOLIS'],
-                                  'NPOLIS': item['PACIENT']['NPOLIS'],
-                                  'NOVOR':  item['PACIENT']['NOVOR']}
+                    raw_record = get_record_validation(item)
+                    record = raw_record.get_dict()
 
-                    patient = get_person_patient_validation(raw_patient)
-                    policy = get_policy_patient_validation(raw_policy)
+                    _patient = item['PACIENT']
 
-                    if patient.errors():
-                        print patient.errors()
-                    if policy.errors():
-                        print policy.errors()
+                    if not _patient:
+                        services_errors.append(set_error(
+                            '902', field='', parent='PACIENT',
+                            record_uid=record['uid'],
+                            comment=u'Нет сведений о пациенте'))
+                        continue
+
+                    _patient = patients.get(item['PACIENT']['ID_PAC'])
+
+                    if _patient:
+                        raw_patient = get_person_patient_validation(_patient)
+                        patient = raw_patient.get_dict()
+
+                        patients_errors += \
+                            handle_errors(
+                                raw_patient.errors() or [], parent='PERS',
+                                record_uid=record['uid'])
                     else:
-                        print policy.get_dict()
+                        services_errors.append(set_error(
+                            '902', field='ID_PAC', parent='PACIENT',
+                            record_uid=record['uid'],
+                            comment=u'Нет сведений о пациенте в файле пациентов'
+                        ))
+                        patient = {}
+
+                    raw_policy = get_policy_patient_validation(
+                        {'VPOLIS': item['PACIENT']['VPOLIS'],
+                         'SPOLIS': item['PACIENT']['SPOLIS'],
+                         'NPOLIS': item['PACIENT']['NPOLIS'],
+                         'NOVOR':  item['PACIENT']['NOVOR']})
+
+                    policy = raw_policy.get_dict()
+                    patient.update(policy)
+                    record['patient_id'] = patient.get('pk', None)
+
+                    #print record
+
+                    services_errors += handle_errors(
+                        raw_record.errors() or [], parent='ZAP',
+                        record_uid=record['uid'])
+
+                    services_errors += handle_errors(
+                        raw_policy.errors() or [], parent='PACIENT',
+                        record_uid=record['uid'])
+
+                    if type(item['SLUCH']) == list:
+                        events = item['SLUCH']
+                    else:
+                        events = [item['SLUCH']]
+
+                    for event in events:
+
+                        if type(item['USL']) == list:
+                            services = item['USL']
+                        else:
+                            services = [item['USL']]
+
+                        for service in services:
+                            pass
+
+
 
         print organization, current_year, current_period
+
+    for rec in patients_errors:
+        for k in rec:
+            print k, rec[k]
+        print
+
+    print
+    for rec in services_errors:
+        for k in rec:
+            print k, rec[k]
+        print
+
 
 
 class Command(BaseCommand):
