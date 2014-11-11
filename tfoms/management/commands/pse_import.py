@@ -103,6 +103,7 @@ def main():
         smena = 0
         kosyak = 0
 
+        not_found_service = []
         for i, rec in enumerate(s_db):
             if rec.deleted:
                 continue
@@ -114,6 +115,7 @@ def main():
             provided_service_pk = service_cache.get(cache, None)
 
             if not provided_service_pk:
+                not_found_service.append(cache)
                 print cache
 
             pse_error_set = set(errors.get(rec['recid'], [])) - set([None])
@@ -150,6 +152,7 @@ def main():
                     Sanction.objects.create(
                         service=service, type_id=1, underpayment=underpayment,
                         error_id=ERRORS_CODES.get(err_rec, None))
+        print not_found_service
     print set(mo)
     MedicalRegister.objects.filter(is_active=True, year=year, period=period,
                                    organization_code__in=set(mo)) \
