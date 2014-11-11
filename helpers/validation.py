@@ -81,7 +81,7 @@ class ValidPatient(object):
         self.agent_gender = safe_int(item['agent_gender'])
         self.newborn_code = item['newborn_code']
         self.insurance_policy_type = safe_int(item['insurance_policy_type'])
-        self.insurance_policy_series = item['insurance_policy_series']
+        self.insurance_policy_series = (item['insurance_policy_series'] or '')[:10]
         self.insurance_policy_number = item['insurance_policy_number']
         self.weight=item['weight']
         #self.person_instance = None

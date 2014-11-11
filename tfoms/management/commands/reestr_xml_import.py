@@ -173,9 +173,9 @@ def main():
             service_file = XmlLikeFileReader(
                 '{0:s}/{1:s}'.format(REGISTRY_PROCESSING_DIR, service_xml['filename']))
 
-            copy_path = '%s%s %s/' % (OUTBOX_DIR,
-                                      service_xml['organization_code'],
-                                      outbox[service_xml['organization_code']])
+            copy_path = '%s%s %s' % (OUTBOX_DIR,
+                                     service_xml['organization_code'],
+                                     outbox[service_xml['organization_code']])
 
             service_errors = []
             patients_set = []
@@ -427,7 +427,6 @@ def main():
             #transaction.commit()
             if os.path.exists(copy_path):
                 shutil.copy2(OUTBOX_SUCCESS, copy_path)
-
 
     for code in register_set:
         files = [rec['filename'] for rec in register_set[code]['services']] + [register_set[code]['patients']]
