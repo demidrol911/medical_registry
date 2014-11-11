@@ -868,7 +868,7 @@ def print_errors_page(act_book, year, period, mo, capitation_events, treatment_e
                      'term': 'stomatology',
                      'column_condition': {
                          'treatment': {'condition': service['event_id'] in treatment_events
-                         and service['event_id'] not in unique_event, 'value': 1}
+                         and service['event_id'] not in unique_event and service['subgroup'] == 12, 'value': 1}
                      }},
 
                     # Скорая помощь

@@ -307,7 +307,8 @@ class MedicalOrganization(models.Model):
     class Meta:
         db_table = "medical_organization"
 
-    def get_ambulance_attachment_count_old(self, date):
+
+    def get_ambulance_attachment_count(self, date):
         query = """
             select
             medical_organization.id_pk, count(*) as ambulance_attachment_count,
@@ -349,7 +350,7 @@ class MedicalOrganization(models.Model):
 
         return result
 
-    def get_attachment_count_old(self, date):
+    def get_attachment_count(self, date):
         query = """
             select medical_organization.id_pk, count(*) as attachment_count,
             sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end) +
@@ -381,6 +382,7 @@ class MedicalOrganization(models.Model):
             result['adults_count'] += population_object.adults_count
             result['children_count'] += population_object.children_count
         return result
+
 
     def get_capitation_events(self, year, period, date):
         query = """
@@ -419,7 +421,8 @@ class MedicalOrganization(models.Model):
                           SELECT MAX(id_pk)
                           FROM attachment
                           WHERE person_fk = person.version_id_pk AND status_fk = 1
-                             AND attachment.date <= %(date)s AND attachment.is_active)
+                             AND date <= %(date)s AND attachment.is_active)
+
                  JOIN medical_organization med_org
                       ON (med_org.id_pk = attachment.medical_organization_fk
                           AND med_org.parent_fk IS NULL)
@@ -893,9 +896,9 @@ class Attachment(models.Model):
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='medical_organization_fk')
     status = models.IntegerField(db_column='status_fk')
-    date = models.DateField()
-    #confirmation_date = models.DateField()
+    confirmation_date = models.DateField()
     is_active = models.BooleanField()
+    date = models.DateField(db_column='date')
 
     class Meta:
         db_table = "attachment"
@@ -955,11 +958,7 @@ class Patient(models.Model):
         version_id_pk = insurance_policy.person_fk) and is_active)
         join attachment on attachment.id_pk = (select max(id_pk)
         from attachment where person_fk = person.version_id_pk and status_fk = 1
-<<<<<<< HEAD
         and date <= %s and attachment.is_active)
-=======
-        and attachment.date <= %s and attachment.is_active)
->>>>>>> develop
         join medical_organization medOrg on (
         medOrg.id_pk = attachment.medical_organization_fk and
         medOrg.parent_fk is null) or medOrg.id_pk =

@@ -9,23 +9,13 @@ from tfoms.models import (
     Gender, InsurancePolicyType, MedicalHospitalization, MedicalService,
     ProvidedEventConcomitantDisease, ProvidedEventComplicatedDisease,
     MedicalServiceHiTechKind, MedicalServiceHiTechMethod, ExaminationResult)
+
+from main.funcs import safe_int, queryset_to_dict
+
 from lxml import etree
 import re
 from datetime import datetime
 import re
-
-
-def safe_int(string):
-    try:
-        integer = int(string)
-    except:
-        integer = 0
-
-    return integer
-
-
-def queryset_to_dict(qs):
-    return {rec.code: rec for rec in qs}
 
 
 GENDERS = queryset_to_dict(Gender.objects.all())
@@ -64,6 +54,7 @@ KIND_TERM_DICT = {1: [2, 3, 21, 22, 31, 32, 4],
                   2: [1, 2, 3, 21, 22, 31, 32, 4],
                   3: [1, 11, 12, 13, 4]}
 
+
 class ValidPatient(object):
     def __init__(self, item, record_id=None):
         self.id_pk = item['id_pk']
@@ -90,7 +81,7 @@ class ValidPatient(object):
         self.agent_gender = safe_int(item['agent_gender'])
         self.newborn_code = item['newborn_code']
         self.insurance_policy_type = safe_int(item['insurance_policy_type'])
-        self.insurance_policy_series = item['insurance_policy_series']
+        self.insurance_policy_series = (item['insurance_policy_series'] or '')[:10]
         self.insurance_policy_number = item['insurance_policy_number']
         self.weight=item['weight']
         #self.person_instance = None
