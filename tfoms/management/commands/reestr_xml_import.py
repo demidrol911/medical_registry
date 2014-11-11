@@ -1,5 +1,4 @@
 #! -*- coding: utf-8 -*-
-
 import os
 import re
 from datetime import datetime
@@ -174,9 +173,9 @@ def main():
             service_file = XmlLikeFileReader(
                 '{0:s}/{1:s}'.format(REGISTRY_PROCESSING_DIR, service_xml['filename']))
 
-            copy_path = '%s%s %s/' % (OUTBOX_DIR,
-                                      service_xml['organization_code'],
-                                      outbox[service_xml['organization_code']])
+            copy_path = '%s%s %s' % (OUTBOX_DIR,
+                                     service_xml['organization_code'],
+                                     outbox[service_xml['organization_code']])
 
             service_errors = []
             patients_set = []

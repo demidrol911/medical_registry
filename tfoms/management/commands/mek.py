@@ -1224,7 +1224,7 @@ def sanctions_on_wrong_examination_age_group(register_element):
                     select "group"
                     from examination_age_bracket
                     where age = (date_part('year', ps.end_date) - date_part('year', p.birthdate))
-                )) or (group_fk != 11
+                )) or (group_fk = 7
                 and ms.examination_group != (
                     select "group"
                     from examination_age_bracket
