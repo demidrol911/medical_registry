@@ -552,7 +552,7 @@ def sanctions_on_repeated_service(register_element):
                 on i1.version_id_pk = p1.insurance_policy_fk
             JOIN (
                 select ps.id_pk as pk, i.id as policy, ps.code_fk as code, ps.end_date,
-                    ps.basic_disease_fk as disease, ps.worker_code
+                    ps.basic_disease_fk as disease, ps.worker_code, mr.year, mr.period
                 from provided_service ps
                     join provided_event pe
                         on ps.event_fk = pe.id_pk
@@ -571,6 +571,7 @@ def sanctions_on_repeated_service(register_element):
             ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
                 and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
                 and ps1.worker_code = T1.worker_code and T1.pk != ps1.id_pk
+                and T1.year != mr1.year and T1.period != mr1.period
         where mr1.is_active
             and mr1.year = %(year)s
             and mr1.period = %(period)s
@@ -1223,7 +1224,7 @@ def sanctions_on_wrong_examination_age_group(register_element):
                     select "group"
                     from examination_age_bracket
                     where age = (date_part('year', ps.end_date) - date_part('year', p.birthdate))
-                )) or (group_fk != 11
+                )) or (group_fk = 7
                 and ms.examination_group != (
                     select "group"
                     from examination_age_bracket
