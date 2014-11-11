@@ -15,6 +15,8 @@ from validator.collection import Collection
 from validator.field import Field
 from validator.rules import Regex, IsInList, IsLengthBetween, IsRequired
 from validator.rules import IsLength
+from validator import rule
+from datetime import datetime
 
 ERROR_MESSAGES = {
     'length exceeded': (u'904;Количество символов в поле не соответствует '
@@ -23,6 +25,7 @@ ERROR_MESSAGES = {
     'wrong value': u'904;Значение не соответствует справочному.',
     'wrong format': (u'904;Формат значения не соответствует '
                      u'регламентированному.'),
+    'is precision': u'Диагноз указан без подрубрики'
 }
 
 GENDERS = queryset_to_dict(Gender.objects.all())
@@ -70,6 +73,25 @@ class MyCollection(Collection):
 
         return results
 
+
+class IsValidDate(rule.Rule):
+    def run(self, field_value):
+        try:
+            date = datetime.strptime(field_value, '%Y-%m-%d')
+        except:
+            return False
+
+        return True
+
+
+class DiseaseHasPrecision(rule.Rule):
+    def run(self, field_value):
+        disease = DISEASES.get(field_value, None)
+
+        if disease and disease.is_precision:
+            return False
+
+        return True
 
 def get_person_patient_validation(item, registry_type=1):
     patient = MyCollection().append([
@@ -165,6 +187,9 @@ def get_policy_patient_validation(item, registry_type=1):
             IsLengthBetween(1, 20,
                             error=ERROR_MESSAGES['length exceeded'], )
         ]),
+        Field('weight', item['VNOV_D'] or '').append([
+            IsLengthBetween(1, 4, error=ERROR_MESSAGES['length exceeded'])
+        ])
     ])
     if registry_type == 1:
         policy.append(
@@ -221,7 +246,24 @@ def get_event_validation(item, registry_type=1):
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsLengthBetween(1, 50, error=ERROR_MESSAGES['wrong format']),
         ]),
-
+        Field('start_date', item['DATE_1']).append([
+            IsRequired(error=ERROR_MESSAGES['missing value']),
+            IsValidDate(error=ERROR_MESSAGES['wrong format'])
+        ]),
+        Field('end_date', item['DATE_2']).append([
+            IsRequired(error=ERROR_MESSAGES['missing value']),
+            IsValidDate(error=ERROR_MESSAGES['wrong format'])
+        ]),
+        Field('basic_disease', item['DS1']).append(
+            IsRequired(error=ERROR_MESSAGES['missing value']),
+            IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
+            DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+                                pass_on_blank=True),
+        ),
+        Field('payment_method', item['IDSP']).append([
+            IsRequired(error=ERROR_MESSAGES['missing value']),
+            IsInList(METHODS, error=ERROR_MESSAGES['wrong value']),
+        ])
     ])
 
     if registry_type in (1, 2):
@@ -256,7 +298,41 @@ def get_event_validation(item, registry_type=1):
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(['0', '1']), error=ERROR_MESSAGES['wrong value']),
             ]),
+            Field('initial_disease', item['DS0']).append([
+                IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
+                DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+                                    pass_on_blank=True),
+            ]),
+            Field('result', item['RSLT']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsInList(RESULTS, error=ERROR_MESSAGES['wrong value']),
+            ]),
+            Field('outcome', item['ISHOD']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsInList(OUTCOMES, error=ERROR_MESSAGES['wrong value']),
+            ]),
+            Field('worker_speciality', item['PRVS']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsInList(SPECIALITIES_NEW, error=ERROR_MESSAGES['wrong value'])
+            ]),
+            Field('worker_code', item['IDDOKT']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsLengthBetween(1, 25, error=ERROR_MESSAGES['wrong format']),
+            ]),
 
+        ])
+
+    if registry_type == 2:
+        event.append([
+            Field('hitech_kind', item['VID_HMP']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsInList(HITECH_KINDS, error=ERROR_MESSAGES['wrong value']),
+            ]),
+            Field('hitech_method', item['METHOD_HMP']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsInList(HITECH_METHODS, error=ERROR_MESSAGES['wrong value']),
+            ]),
+            Field('')
         ])
 
     if registry_type in range(3, 4, 6, 7):
@@ -266,85 +342,81 @@ def get_event_validation(item, registry_type=1):
             ]),
         ])
 
+    if registry_type in list(range(3, 11)):
+        event.append([
+            Field('examination_result', item['RSLT_D']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsInList(EXAMINATION_RESULTS,
+                         error=ERROR_MESSAGES['wrong value']),
+            ])
+        ])
+
+    if registry_type in (3, 4):
+        event.append([
+            Field('comment', item['COMENTSL']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                Regex(r'^F(0|1)(0|1)[0-3]{1}(0|1)$',
+                      error=ERROR_MESSAGES['wrong format']),
+            ])
+        ])
+
+    if registry_type == 5:
+        event.append([
+            Field('comment', item['COMENTSL']).append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                Regex(r'^F(0|1)[0-3]{1}(0|1)$',
+                      error=ERROR_MESSAGES['wrong format']),
+            ])
+        ])
+
+    return event
+
+
+def get_complicated_disease_validation(item, registry_type=1):
+    disease = MyCollection()
+
+    if registry_type in (1, 2):
+        disease.append([
+            Field('disease', item['DS3']).append([
+                IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
+                DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+                                    pass_on_blank=True)
+            ])
+        ])
+
+    return disease
+
+
+def get_concomitant_disease_validation(item, registry_type=1):
+    disease = MyCollection()
+
+    disease.append([
+        Field('disease', item['DS2']).append([
+            IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
+            DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+                                pass_on_blank=True)
+        ])
+    ])
+
+    return disease
+
+
+def get_event_special_validation(item, registry_type=1):
+    special = MyCollection()
+
+    special.append([
+        IsInList(SPECIALS, error=ERROR_MESSAGES('wrong value'),
+                 pass_on_blank=True)
+    ])
+
+    return special
+
     """
         if self.term in KIND_TERM_DICT and self.kind not in KIND_TERM_DICT[self.term]:
             errors.append((True, '904', 'SLUCH', 'VIDPOM', record_id, self.id, 0,
                            u'Вид медицинской помощи не соответствует условиям оказания'))
 
-        if not self.start_date:
-            errors.append((True, '904', 'SLUCH', 'DATE_1', record_id, self.id, 0,
-                           u'Отсутствует дата начала лечения'))
-
-        if not self.end_date:
-            errors.append((True, '904', 'SLUCH', 'DATE_2', record_id, self.id, 0,
-                           u'Отсутствует дата конца лечения'))
-
-        initial_disease = DISEASES.get(self.initial_disease, None)
-        if not initial_disease and self.record.register.type not in list(range(3, 11)):
-            errors.append((True, '902', 'SLUCH', 'DS0', record_id, self.id, 0,
-                           u'Недопустимый код первичного диагноза'))
-
-        if initial_disease and initial_disease.is_precision and self.record.register.type not in list(range(3, 11)):
-            errors.append((True, '904', 'SLUCH', 'DS0', record_id, self.id, 0,
-                           u'Первичный диагноз указан без подрубрики!'))
-
-        basic_disease = DISEASES.get(self.basic_disease, None)
-        if not basic_disease:
-            errors.append((True, '902', 'SLUCH', 'DS1', record_id, self.id, 0,
-                           u'Недопустимый код основного диагноза'))
-
-        if basic_disease and basic_disease.is_precision:
-            errors.append((True, '904', 'SLUCH', 'DS1', record_id, self.id, 0,
-                           u'Основной диагноз указан без подрубрики!'))
-
-        if safe_int(self.treatment_result) not in RESULTS and self.record.register.type not in list(range(3, 11)):
-            errors.append((True, '902', 'SLUCH', 'RSLT', record_id, self.id, 0,
-                           u'Недопустимый код результата обращения'))
-
-        if safe_int(self.treatment_outcome) not in OUTCOMES and self.record.register.type not in list(range(3, 11)):
-            errors.append((True, '904', 'SLUCH', 'ISHOD', record_id, self.id, 0,
-                           u'Недопустимый код исхода заболевания'))
-
-        if self.speciality_dict_version == 'V015' and \
-              self.worker_speciality not in SPECIALITIES_NEW and self.record.register.type not in list(range(3, 11)):
-            errors.append((True, '904', 'SLUCH', 'PRVS', record_id, self.id, 0,
-                           u'Недопустимый код специальности врача'))
-
-        if (not self.speciality_dict_version or self.speciality_dict_version == 'V004')\
-                and self.worker_speciality not in SPECIALITIES_OLD and self.record.register.type not in list(range(3, 11)):
-            errors.append((True, '904', 'SLUCH', 'PRVS', record_id, self.id, 0,
-                           u'Недопустимый код специальности врача'))
-
-        if not self.worker_code and self.record.register.type not in list(range(3, 11)):
-            errors.append((True, '904', 'SLUCH', 'IDDOKT', record_id, self.id, 0,
-                           u'Отсутствует код врача'))
-
-        for special in self.special or []:
-            if safe_int(special) not in SPECIALS:
-                errors.append((True, '902', 'SLUCH', 'OS_SLUCH', record_id, self.id, 0,
-                               u'Недопустимый код особого случая'))
-
-        if safe_int(self.payment_method) not in METHODS:
-            errors.append((True, '902', 'SLUCH', 'IDSP', record_id, self.id, 0,
-                           u'Недопустимый код способа оплаты'))
-
-        if self.record.register.type == 2 and \
-                self.hitech_kind not in HITECH_KINDS:
-            errors.append((True, '904', 'SLUCH', 'VID_HMP', record_id, self.id, 0,
-                           u'Недопустимый код вида ВМП'))
-
-        if self.record.register.type == 2:
-            if self.hitech_method not in HITECH_METHODS:
-                errors.append((True, '904', 'SLUCH', 'METHOD_HMP',
-                               record_id, self.id, 0,
-                               u'Недопустимый код метода ВМП'))
-
-        if self.record.register.type in list(range(3, 11)):
-            if self.examination_result not in EXAMINATION_RESULTS:
-                errors.append((True, '904', 'SLUCH', 'RSLT_D', record_id,
-                               self.id, 0,
-                               u'Недопустимый код результата диспансеризации'))
-        a = re.compile(ADULT_EXAMINATION_COMMENT_PATTERN)
+        a = re.compile(r'^F(0|1)(0|1)[0-3]{1}(0|1)$')
         if self.record.register.type in [3, 4] and a.match(self.comment or ''):
 
             if self.examination_result in [1, 2, 3, 4, 5] and \
@@ -358,17 +430,6 @@ def get_event_validation(item, registry_type=1):
                 errors.append((True, '904', 'SLUCH', 'RSLT_D', record_id,
                                self.id, 0,
                                u'Неверный код результата диспансеризации'))
-                #print repr(self.comment), repr(self.examination_result)
 
-        elif self.record.register.type in [3, 4] and not a.match(self.comment or ''):
-            errors.append((True, '902', 'SLUCH', 'COMENTSL', record_id,
-                           self.id, 0,
-                           u'Отсутствует или неверный формат обязательного комментария'))
-
-        b = re.compile(ADULT_PREVENTIVE_COMMENT_PATTERN)
-        if self.record.register.type in [5, ] and not b.match(self.comment or ''):
-            errors.append((True, '902', 'SLUCH', 'COMENTSL', record_id,
-                           self.id, 0,
-                           u'Отсутствует или неверный формат обязательного комментария'))
 
     """

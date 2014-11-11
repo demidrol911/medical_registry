@@ -429,7 +429,6 @@ def main():
             if os.path.exists(copy_path):
                 shutil.copy2(OUTBOX_SUCCESS, copy_path)
 
-
     for code in register_set:
         files = [rec['filename'] for rec in register_set[code]['services']] + [register_set[code]['patients']]
         move_files_to_archive(files)
