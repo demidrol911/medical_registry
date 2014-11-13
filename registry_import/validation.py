@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from tfoms.models import (
+from main.models import (
     ProvidedEvent, ProvidedService, MedicalRegister, IDC, MedicalOrganization,
     Patient, Person, InsurancePolicy, MedicalRegisterRecord, PersonIDType,
     MedicalServiceTerm, MedicalServiceKind, MedicalServiceForm, MedicalDivision,
@@ -565,8 +565,10 @@ def get_event_special_validation(item, registry_type=1):
     special = MyCollection()
 
     special.append([
-        IsInList(SPECIALS, error=ERROR_MESSAGES('wrong value'),
-                 pass_on_blank=True)
+        Field('OS_SLUCH', item['OS_SLUCH']).append([
+            IsInList(SPECIALS, error=ERROR_MESSAGES('wrong value'),
+                     pass_on_blank=True)
+        ])
     ])
     special.run()
 

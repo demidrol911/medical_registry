@@ -13,11 +13,13 @@ def safe_int(string):
 
 
 def safe_date(string):
-    try:
-        date = datetime.strptime(string, '%Y-%m-%d').date()
-    except:
-        date = datetime.strptime('1900-01-01', '%Y-%m-%d').date()
-
+    if string:
+        try:
+            date = datetime.strptime(string, '%Y-%m-%d').date()
+        except:
+            date = None
+    else:
+        date = None
     return date
 
 

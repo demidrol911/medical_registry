@@ -6,7 +6,9 @@ from django.db import connection
 from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR, \
     FLC_DIR, OUTBOX_DIR, OUTBOX_SUCCESS, REGISTRY_PROCESSING_DIR
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender, Patient, \
-    MedicalRegisterRecord
+    MedicalRegisterRecord, ProvidedEventConcomitantDisease, \
+    ProvidedEventComplicatedDisease, ProvidedEventSpecial, \
+    ProvidedService, ProvidedEvent, MedicalRegisterStatus
 from registry_import.validation import get_person_patient_validation, \
     get_policy_patient_validation, get_record_validation, \
     get_event_validation, get_event_special_validation, \
@@ -202,34 +204,37 @@ def handle_errors(errors=[], parent='', record_uid='',
 
 def get_patients_objects(patients_list):
     objects = []
+    pk = []
     for rec in patients_list:
+        pk.append(rec['pk'])
         patient = Patient(
-            pk=rec['pk'],
+            id_pk=rec['pk'],
             id=rec.get('ID_PAC', ''),
             last_name=rec.get('FAM', '').upper(),
             first_name=rec.get('IM', '').upper(),
             middle_name=rec.get('OT', '').upper(),
-            birthdate=rec.get('DR', ''),
+            birthdate=safe_date(rec.get('DR', None)),
             snils=rec.get('SNILS', ''),
             birthplace=rec.get('MR', ''),
             gender=GENDERS.get(rec.get('W'), None),
             person_id_type=PERSON_ID_TYPES.get(rec.get('DOCTYPE'), None),
             person_id_series=rec.get('DOCSER', ''),
             person_id_number=rec.get('DOCNUM', ''),
-            weight=rec.get('VNOV_D', ''),
-            residence=rec.get('OKATOP', ''),
-            registration=rec.get('OKATOG', ''),
+            weight=safe_float(rec.get('VNOV_D', 0)),
+            okato_residence=rec.get('OKATOP', ''),
+            okato_registration=rec.get('OKATOG', ''),
             comment=rec.get('COMENTP', ''),
             agent_last_name=rec.get('FAM_P', '').upper(),
             agent_first_name=rec.get('IM_P', '').upper(),
             agent_middle_name=rec.get('OT_P', '').upper(),
-            agent_birthdate=rec.get('DR_P'),
+            agent_birthdate=safe_date(rec.get('DR_P', None)),
             agent_gender=GENDERS.get(rec.get('W_P'), None),
             newborn_code=rec.get('NOVOR', ''),
             insurance_policy_type=POLICY_TYPES.get(rec.get('VPOLIS'), None),
             insurance_policy_series=rec.get('SPOLIS', ''),
             insurance_policy_number=rec.get('NPOLIS', ''), )
         objects.append(patient)
+
     return objects
 
 
@@ -238,7 +243,7 @@ def get_records_objects(records_list):
 
     for rec in records_list:
         record = MedicalRegisterRecord(
-            pk=rec['pk'],
+            id_pk=rec['pk'],
             id=rec.get('N_ZAP'),
             is_corrected=bool(rec.get('PR_NOV', '').replace('0', '')),
             patient_id=rec.get('patient_id', None),
@@ -252,7 +257,7 @@ def get_records_objects(records_list):
 def get_events_objects(events_list):
     objects = []
     for rec in events_list:
-        event = MedicalRegisterRecord(
+        event = ProvidedEvent(
             id=rec.get('IDCASE', ''),
             id_pk=rec['pk'],
             term=TERMS.get(rec.get('USL_OK'), None),
@@ -288,7 +293,90 @@ def get_events_objects(events_list):
 
 
 def get_concomitant_diseases_objects(disease_list):
-    pass
+    objects = []
+    for rec in disease_list:
+        disease = ProvidedEventConcomitantDisease(
+            event_id=rec['event_id'],
+            disease=DISEASES.get(rec.get('DS2'), None)
+        )
+
+        objects.append(disease)
+
+    return objects
+
+
+def get_concomitant_diseases_objects(disease_list):
+    objects = []
+    for rec in disease_list:
+        disease = ProvidedEventConcomitantDisease(
+            event_id=rec['event_id'],
+            disease=DISEASES.get(rec.get('DS2'), None)
+        )
+
+        objects.append(disease)
+
+    return objects
+
+
+def get_complicated_diseases_objects(disease_list):
+    objects = []
+    for rec in disease_list:
+        disease = ProvidedEventComplicatedDisease(
+            event_id=rec['event_id'],
+            disease=DISEASES.get(rec.get('DS3'), None)
+        )
+
+        objects.append(disease)
+
+    return objects
+
+
+def get_specials_objects(specials_list):
+    objects = []
+    for rec in specials_list:
+        special = ProvidedEventSpecial(
+            event_id=rec['event_id'],
+            special=SPECIALS.get(rec.get('OS_SLUCH'), None)
+        )
+
+        objects.append(special)
+
+    return objects
+
+
+def get_services_objects(services_list):
+    objects = []
+    for rec in services_list:
+        code = rec['CODE_USL']
+
+        if code:
+            code = '0'*(6-len(code))+code
+
+        service = ProvidedService(
+            id_pk=rec['pk'],
+            id=rec.get('IDSERV', ''),
+            organization=ORGANIZATIONS.get(rec.get('LPU'), None),
+            department=DEPARTMENTS.get(rec.get('LPU_1'), None),
+            division=DIVISIONS.get((rec.get('PODR') or '')[:3], None),
+            profile=PROFILES.get(rec.get('PROFIL'), None),
+            is_children_profile=True if rec.get('DET', '') == '1' else False,
+            start_date=safe_date(rec.get('DATE_IN', '')),
+            end_date=safe_date(rec.get('DATE_OUT', '')),
+            basic_disease=DISEASES.get(rec.get('DS', ''), None),
+            code=CODES.get(code, None),
+            quantity=safe_float(rec.get('KOL_USL', 0)),
+            tariff=safe_float(rec.get('TARIF', 0)),
+            invoiced_payment=safe_float(rec.get('SUMV_USL', 0)),
+            worker_speciality=SPECIALITIES_NEW.get(rec.get('PRVS', None)),
+            worker_code=rec.get('CODE_MD', ''),
+            comment=rec.get('COMENTU', ''),
+            event_id=rec['event_id'],
+            #intervention=rec.get('VID_VME', ''),
+        )
+
+        objects.append(service)
+
+    return objects
 
 
 def main():
@@ -311,6 +399,7 @@ def main():
         new_registries_pk = []
         patients = {}
         fatal_error = False
+        registry_has_errors = False
 
         current_year = current_period = None
 
@@ -332,10 +421,13 @@ def main():
         patients_errors = []
         errors_files = []
 
-        person_filename = get_person_filename(registry_list)
-        patient_path = os.path.join(REGISTRY_IMPORT_DIR, person_filename)
-        patient_file = XmlLikeFileReader(patient_path)
+        copy_path = '%s%s %s' % (OUTBOX_DIR, organization,
+                                 outbox[organization])
 
+        person_filename = get_person_filename(registry_list)
+        patient_path = os.path.join(REGISTRY_PROCESSING_DIR, person_filename)
+        patient_file = XmlLikeFileReader(patient_path)
+        temp_pk = []
         for item in patient_file.find(tags=('PERS', )):
             if patient_pk_list:
                 patient_pk = patient_pk_list.pop()
@@ -373,13 +465,13 @@ def main():
 
             if current_year \
                     and current_period \
-                    and current_year != year \
+                    and current_year != '20'+year \
                     and current_period != period:
 
                 raise ValueError('Different periods in one regsitry')
 
             else:
-                current_year = year
+                current_year = '20'+year
                 current_period = period
 
             registry_type = registry_types.get(_type.lower())
@@ -390,7 +482,7 @@ def main():
                 registry_pk_list = get_next_medical_register_pk()
                 registry_pk = registry_pk_list.pop()
 
-            service_path = os.path.join(REGISTRY_IMPORT_DIR, registry)
+            service_path = os.path.join(REGISTRY_PROCESSING_DIR, registry)
             service_file = XmlLikeFileReader(service_path)
 
             invoiced = False
@@ -413,12 +505,6 @@ def main():
 
                     new_registries_pk.append(registry_pk)
                     registries_objects.append(new_registry)
-
-                    old_registries = MedicalRegister.objects.filter(
-                        year=current_year,
-                        period=current_period,
-                        is_active=True,
-                        organization_code=organization_code)
 
                 if 'N_ZAP' in item:
                     if record_pk_list:
@@ -470,7 +556,10 @@ def main():
                     new_patient.update(policy)
                     new_record['patient_id'] = new_patient.get('pk', None)
 
+                    #if new_patient not in new_patient_list:
                     new_patient_list.append(new_patient)
+
+                    #if new_record not in new_record_list:
                     new_record_list.append(new_record)
 
                     #print record
@@ -498,6 +587,7 @@ def main():
                         raw_event = get_event_validation(event, registry_type)
                         new_event = raw_event.get_dict()
                         new_event['pk'] = event_pk
+                        new_event['record_id'] = new_record['pk']
                         new_event_list.append(new_event)
 
                         for concomitant in item['DS2'] or []:
@@ -558,6 +648,7 @@ def main():
                                                                  event=event)
                             new_service = raw_service.get_dict()
                             new_service['pk'] = service_pk
+                            new_service['event_id'] = new_event['pk']
                             new_service_list.append(new_service)
 
                             services_errors += handle_errors(
@@ -578,13 +669,13 @@ def main():
 
                 for rec in services_errors:
                     hflk.start('PR')
-                    hflk.put('OSHIB', rec[1])
-                    hflk.put('IM_POL', rec[3])
-                    hflk.put('BASE_EL', rec[2])
-                    hflk.put('N_ZAP', rec[4])
-                    hflk.put('IDCASE', rec[5].encode('cp1251') if rec[5] else 0)
-                    hflk.put('IDSERV', rec[6].encode('cp1251') if rec[6] else 0)
-                    hflk.put('COMMENT', rec[7].encode('cp1251'))
+                    hflk.put('OSHIB', rec['code'])
+                    hflk.put('IM_POL', rec['field'])
+                    hflk.put('BASE_EL', rec['parent'])
+                    hflk.put('N_ZAP', rec['record_uid'])
+                    hflk.put('IDCASE', rec.get('event_uid', '').encode('cp1251'))
+                    hflk.put('IDSERV', rec.get('service_uid', '').encode('cp1251'))
+                    hflk.put('COMMENT', rec['comment'].encode('cp1251'))
                     hflk.end('PR')
 
                 hflk.end('FLK_P')
@@ -601,13 +692,13 @@ def main():
 
                 for rec in patients_errors:
                     lflk.start('PR')
-                    lflk.put('OSHIB', rec[1])
-                    lflk.put('IM_POL', rec[3])
-                    lflk.put('BASE_EL', rec[2])
-                    lflk.put('N_ZAP', rec[4])
-                    lflk.put('IDCASE', rec[5].encode('cp1251') if rec[5] else 0)
-                    lflk.put('IDSERV', rec[6].encode('cp1251') if rec[6] else 0)
-                    lflk.put('COMMENT', rec[7].encode('cp1251'))
+                    lflk.put('OSHIB', rec['code'])
+                    lflk.put('IM_POL', rec['field'])
+                    lflk.put('BASE_EL', rec['parent'])
+                    lflk.put('N_ZAP', rec['record_uid'])
+                    lflk.put('IDCASE', rec.get('event_uid', '').encode('cp1251'))
+                    lflk.put('IDSERV', rec.get('service_uid', '').encode('cp1251'))
+                    lflk.put('COMMENT', rec['comment'].encode('cp1251'))
                     lflk.end('PR')
 
                 lflk.end('FLK_P')
@@ -615,7 +706,7 @@ def main():
 
         if registry_has_errors:
             print u'Ошибки ФЛК'
-
+            """
             zipname = TEMP_DIR+'VM%sS28002_%s.zip' % (
                 organization_code, person_filename[person_filename.index('_')+1:-4]
             )
@@ -627,31 +718,61 @@ def main():
 
             shutil.copy2(zipname, FLC_DIR)
 
-            copy_path = '%s%s %s' % (OUTBOX_DIR, organization_code,
-                                     outbox[organization_code])
-
             if os.path.exists(copy_path):
                 shutil.copy2(zipname, copy_path)
 
             os.remove(zipname)
+            """
         else:
-            print u'ФЛК пройден'
+            print u'ФЛК пройден. Вставка данных...'
+            MedicalRegister.objects.filter(
+                is_active=True, year=current_year, period=current_period,
+                organization_code=organization_code).update(is_active=False)
+            MedicalRegister.objects.bulk_create(registries_objects)
+            Patient.objects.bulk_create(
+                set(get_patients_objects(new_patient_list)))
+            MedicalRegisterRecord.objects.bulk_create(
+                get_records_objects(new_record_list))
+            ProvidedEvent.objects.bulk_create(
+                get_events_objects(new_event_list))
+            ProvidedEventConcomitantDisease.objects.bulk_create(
+                get_concomitant_diseases_objects(new_concomitant_list))
+            ProvidedEventComplicatedDisease.objects.bulk_create(
+                get_complicated_diseases_objects(new_complicated_list))
+            ProvidedEventSpecial.objects.bulk_create(
+                get_specials_objects(new_special_list))
+            ProvidedService.objects.bulk_create(
+                get_services_objects(new_service_list))
+            MedicalRegister.objects.filter(
+                pk__in=[rec.pk for rec in registries_objects]
+            ).update(status=MedicalRegisterStatus.objects.get(pk=1))
 
+            print u'...ок'
 
-
+            #if os.path.exists(copy_path):
+            #    shutil.copy2(OUTBOX_SUCCESS, copy_path)
 
         print organization, current_year, current_period
 
-    for rec in patients_errors:
-        for k in rec:
-            print k, rec[k],
-        print
+        move_files_to_archive(registry_list + [patient_path])
+
+    try:
+        for rec in patients_errors:
+            for k in rec:
+                print k, rec[k],
+            print
+    except:
+        pass
 
     print
-    for rec in services_errors:
-        for k in rec:
-            print k, rec[k],
-        print
+
+    try:
+        for rec in services_errors:
+            for k in rec:
+                print k, rec[k],
+            print
+    except:
+        pass
 
 
 class Command(BaseCommand):
