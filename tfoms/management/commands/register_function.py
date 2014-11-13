@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 from datetime import datetime
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from shutil import copy2
 from dbfpy import dbf
@@ -543,6 +544,12 @@ def calculate_capitation_tariff(term, year, period, mo_code):
         capitation_data['female']['population']['adult'] = population['adults_female_count']
         capitation_data['female']['population']['children'] = population['children_female_count']
 
+        """
+        if term == 4:
+            capitation_data['male']['population']['adult'] = 18533
+            capitation_data['female']['population']['adult'] = 26517
+        """
+
         # Подушевой тариф
         capitation_data['male']['tariff']['adult'] = tariff.filter(is_children_profile=False).\
             order_by('-start_date')[0].value\
@@ -593,16 +600,16 @@ def calculate_capitation_tariff(term, year, period, mo_code):
 
         # Принятая к оплате
         capitation_data['male']['accepted_payment']['adult'] = \
-            capitation_data['male']['population_tariff']['adult'] + capitation_data['male']['coefficient']['adult']
+            capitation_data['male']['population_tariff']['adult'] + Decimal(round(capitation_data['male']['coefficient']['adult'], 2))
         capitation_data['female']['accepted_payment']['adult'] = \
-            capitation_data['female']['population_tariff']['adult'] + capitation_data['female']['coefficient']['adult']
+            capitation_data['female']['population_tariff']['adult'] + Decimal(round(capitation_data['female']['coefficient']['adult'], 2))
 
         capitation_data['male']['accepted_payment']['children'] = \
             capitation_data['male']['population_tariff']['children'] + \
-            capitation_data['male']['coefficient']['children']
+            Decimal(round(capitation_data['male']['coefficient']['children'], 2))
         capitation_data['female']['accepted_payment']['children'] = \
             capitation_data['female']['population_tariff']['children'] + \
-            capitation_data['female']['coefficient']['children']
+            Decimal(round(capitation_data['female']['coefficient']['children'], 2))
 
     return capitation_data
 
