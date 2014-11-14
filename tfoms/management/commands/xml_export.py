@@ -375,7 +375,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '09'
+    period = '01'
     year = '2014'
     print datetime.datetime.now()
     registers = MedicalRegister.objects.filter(

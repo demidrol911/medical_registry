@@ -418,7 +418,8 @@ def get_event_validation(item, registry_type=1):
         Field('IDSP', item['IDSP']).append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(METHODS, error=ERROR_MESSAGES['wrong value']),
-        ])
+        ]),
+        Field('ED_COL', item['ED_COL']),
     ])
 
     if registry_type in (1, 2):
@@ -621,6 +622,9 @@ def get_service_validation(item, registry_type=1, event={}):
                 event.get('METOD_HMP', ''), registry_type,
                 error=ERROR_MESSAGES['hitech method mismatch']),
         ]),
+        Field('KOL_USL', item['KOL_USL']),
+        Field('TARIF', item['TARIF']),
+        Field('SUMV_USL', item['SUMV_USL']),
     ])
 
     if registry_type in (1, 2):

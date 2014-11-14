@@ -25,11 +25,11 @@ def safe_date(string):
 
 def safe_float(string):
     try:
-        float = float(string)
+        _float = float(string)
     except:
-        float = 0.0
+        _float = 0.0
 
-    return float
+    return _float
 
 def queryset_to_dict(qs):
     return {str(rec.code): rec for rec in qs}

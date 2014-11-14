@@ -2285,8 +2285,11 @@ def main():
                     accepted_payment = tariff * float(quantity)
                     tariff *= float(quantity)
 
-                    if (is_single_visit or service.reason_code == 3) and not (service.reason_code in (1, 4, 5) or service.service_group in single_visit_exception_group):
-                        #print is_single_visit, service.reason_code, service.service_group, service.service_group in single_visit_exception_group, service.service_code
+                    if (is_single_visit or service.reason_code == 3) and not \
+                            (service.reason_code in (1, 4, 5) or \
+                                         service.service_group in \
+                                             single_visit_exception_group):
+
                         accepted_payment -= round(accepted_payment * 0.6, 2)
                         provided_tariff -= round(provided_tariff * 0.6, 2)
                         ProvidedServiceCoefficient.objects.create(

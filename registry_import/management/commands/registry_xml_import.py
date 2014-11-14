@@ -754,7 +754,7 @@ def main():
 
         print organization, current_year, current_period
 
-        move_files_to_archive(registry_list + [patient_path])
+        #move_files_to_archive(registry_list + [patient_path])
 
     try:
         for rec in patients_errors:
