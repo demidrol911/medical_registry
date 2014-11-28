@@ -318,17 +318,19 @@ def print_accepted_service(act_book, year, period, mo,
             'services': 1,
             'days': service['quantity'],
             'basic_tariff': service['tariff'],
-            'accepted_payment': service['accepted_payment']
+            'accepted_payment': service['provided_tariff'] if service['payment_type'] in [3] else
+            (service['provided_tariff'] + service['accepted_payment'] if service['payment_type'] in [4] else service['accepted_payment'])
         }
 
         sum_tariff_coefficient = float(service['tariff'])
+
         for code in sorted(coef_to_field):
             field = coef_to_field[code]
             prec = 3 if code == 2 or \
                 (code == 6 and handbooks['mo_info']['is_agma_cathedra'])else 2
             if code in coefficient_service:
                 if code == 6:
-                    value = round(float((handbooks['coefficient_type'][code]['value']-1))*sum_tariff_coefficient, prec)
+                    value = 0
                 else:
                     value = round((handbooks['coefficient_type'][code]['value']-1)*service['tariff'], prec)
                     sum_tariff_coefficient += value
