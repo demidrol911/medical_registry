@@ -1671,8 +1671,7 @@ class Command(BaseCommand):
                                                                     is_include_operation=True),
                 'accepted_services': register_function.get_services(year, period, mo, payment_type=[2, 4]),
                 'discontinued_services': register_function.get_services(year, period, mo,
-                                                                        payment_type=[3, 4],
-                                                                        is_include_operation=True)
+                                                                        payment_type=[3, 4])
             }
 
             print u'Поиск случаев с обращениями...'
@@ -1727,7 +1726,6 @@ class Command(BaseCommand):
                                                                                department_code=department)
                     data['discontinued_services'] = register_function.get_services(year, period, mo,
                                                                                    payment_type=[3, 4],
-                                                                                   is_include_operation=True,
                                                                                    department_code=department)
                     target = target_dir % (year, period) + r'\%s' % handbooks['mo_info']['name'].\
                         replace('"', '').strip()
