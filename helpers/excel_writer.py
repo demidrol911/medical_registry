@@ -44,7 +44,7 @@ class ExcelWriter(Workbook):
             vert_align = {0: 'vleft', 1: 'vcenter', 2: 'vcenter', 4: 'vcenter'}
             hort_align = {0: 'left', 1: 'left', 2: 'center', 3: 'right'}
             for idx, temp_sheet in enumerate(template_book.sheets()):
-                self.sheet = self.add_worksheet(sheet_names[idx]
+                self.sheet = self.add_worksheet(sheet_names[idx]+temp_sheet.name
                                                 if len(sheet_names) > idx
                                                 else temp_sheet.name)
                 rowinfo_map = temp_sheet.rowinfo_map
@@ -105,12 +105,17 @@ class ExcelWriter(Workbook):
         else:
             self.set_style_property('num_format', '0')
             value_cell = value
-        if size:
-            self.sheet.merge_range(self.cursor['row'], self.cursor['column'],
-                                   self.cursor['row'], self.cursor['column']+size,
-                                   value_cell, self.style_obj)
+
+        if isinstance(value_cell, unicode) and '#' in value_cell:
+            self.set_style_property('num_format', '0.00')
+            self.sheet.write_formula(self.cursor['row'], self.cursor['column'], value_cell[1:], self.style_obj)
         else:
-            self.sheet.write(self.cursor['row'], self.cursor['column'], value_cell, self.style_obj)
+            if size:
+                self.sheet.merge_range(self.cursor['row'], self.cursor['column'],
+                                       self.cursor['row'], self.cursor['column']+size,
+                                       value_cell, self.style_obj)
+            else:
+                self.sheet.write(self.cursor['row'], self.cursor['column'], value_cell, self.style_obj)
         if increment == 'r':
             self.cursor['row'] += 1
             self.cursor['column'] = 0
