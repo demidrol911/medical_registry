@@ -562,7 +562,6 @@ def update_patient_attacment_code(register_element):
                      SELECT parent_fk FROM medical_organization
                      WHERE id_pk = attachment.medical_organization_fk
                   )
-
         WHERE mr.is_active
          AND mr.year = %(year)s
          AND mr.period = %(period)s

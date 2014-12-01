@@ -484,7 +484,7 @@ def get_event_validation(item, registry_type=1):
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(HITECH_KINDS, error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('METHOD_HMP', item['METHOD_HMP']).append([
+            Field('METOD_HMP', item['METOD_HMP']).append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(HITECH_METHODS, error=ERROR_MESSAGES['wrong value']),
             ]),
