@@ -1,6 +1,7 @@
 #! -*- coding: utf-8 -*-
 
 from copy import deepcopy
+from decimal import Decimal
 from django.core.management.base import BaseCommand
 from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
@@ -214,7 +215,7 @@ def print_accepted_service(act_book, year, period, mo,
 
             # Поликлиника (подушевое)
             {'condition': service['term'] == 3
-             and service['event_id'] in capitation_events,
+             and service['event_id'] in capitation_events and service['payment_kind'] in [2, 3],
              'term': 'policlinic_capitation',
              'unique_patient': (service['patient_id'], service['reason'],
                                 service['division_id'], age),
@@ -476,10 +477,10 @@ def print_accepted_service(act_book, year, period, mo,
             sum_capitation_ambulance[gender]['accepted_payment']['children']
 
     capitation_total = deepcopy(init_sum)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['male'], column_keys)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['female'], column_keys)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['male'], column_keys)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['female'], column_keys)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['male'], column_keys, round_point=2)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['female'], column_keys, round_point=2)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['male'], column_keys, round_point=2)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['female'], column_keys, round_point=2)
 
     # Распечатка сводного акта
     act_book.set_sheet(0)
@@ -553,10 +554,15 @@ def print_accepted_service(act_book, year, period, mo,
                     for division in sorted(sum_division_group[term][section]['subgroup']):
                         sum_value = sum_division_group[term][section]['subgroup'][division]['female']
                         total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
-                        print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', девочки', sum_value, column_keys)
+                        if sum_value != init_sum:
+                            print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', девочки',
+                                      sum_value, column_keys)
+
                         sum_value = sum_division_group[term][section]['subgroup'][division]['male']
                         total_sum_section = calculate_total_sum_adv(total_sum_section, sum_value, column_keys)
-                        print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', мальчики', sum_value, column_keys)
+                        if sum_value != init_sum:
+                            print_sum(act_book, handbooks['medical_subgroups'][division]['name']+u', мальчики',
+                                      sum_value, column_keys)
 
                 else:
                     for division in sorted(sum_division_group[term][section]['subgroup']):
@@ -593,6 +599,7 @@ def print_accepted_service(act_book, year, period, mo,
                   capitation_ambulance['female'], column_keys, style=VALUE_STYLE)
         print_sum(act_book, u'Итого по подушевому нормативу',
                   capitation_total, column_keys, style=TOTAL_STYLE)
+
         total_sum_mo = calculate_total_sum_adv(total_sum_mo, capitation_total, column_keys)
         act_book.row_inc()
         print_sum(act_book, u'ИТОГО по МО с подушевым нормативом',
@@ -962,10 +969,13 @@ def print_sum(act_book, title, total_sum, sum_keys, prec=2, style=VALUE_STYLE):
     act_book.row_inc()
 
 
-def calculate_total_sum_adv(total_sum, intermediate_sum, sum_keys):
+def calculate_total_sum_adv(total_sum, intermediate_sum, sum_keys, round_point=None):
     for title_key, column_keys in sum_keys:
         for column_key in column_keys:
-            total_sum[title_key][column_key] += intermediate_sum[title_key][column_key]
+            if round_point:
+                total_sum[title_key][column_key] += Decimal(round(intermediate_sum[title_key][column_key], round_point))
+            else:
+                total_sum[title_key][column_key] += Decimal(intermediate_sum[title_key][column_key])
     return total_sum
 
 
@@ -1302,9 +1312,9 @@ def print_order_146(act_book, year, period, mo, capitation_events,
     for service_kind, _ in service_kind_keys[:-1]:
         for sum_kind in sum_kind_keys:
             sum_service_kind['total'][sum_kind[0]]['adult'] += \
-                float(sum_service_kind[service_kind][sum_kind[0]]['adult'])
+                round(sum_service_kind[service_kind][sum_kind[0]]['adult'], 2)
             sum_service_kind['total'][sum_kind[0]]['children'] += \
-                float(sum_service_kind[service_kind][sum_kind[0]]['children'])
+                round(sum_service_kind[service_kind][sum_kind[0]]['children'], 2)
 
     # Рассчёт сумм по детям и взрослым вместе
     for service_kind, _ in service_kind_keys:
@@ -1627,6 +1637,56 @@ def print_error_fund(act_book, year, period, mo, data, handbooks):
     act_book.write_cell('', 'c', 1)
 
 
+### Распечатка услуг оплаченных по подушевому в предыдущих периодах
+def print_paid_by_capitation(act_book, year, period, mo, data):
+    paid_services = register_function.get_services(year, period, mo,
+                                                   payment_type=[2, 4],
+                                                   payment_kind=[4, ])
+    patients = data['patients']
+    act_book.set_sheet(7)
+    act_book.set_cursor(5, 0)
+    act_book.set_style(VALUE_STYLE)
+    for service in paid_services:
+        patient = patients[service['patient_id']]
+        act_book.write_cell(patient['policy_series'].replace('\n', '') + ' ' +
+                            patient['policy_number']
+                            if patient['policy_series']
+                            else patient['policy_number'], 'c')               # Печать номера полиса
+
+        act_book.write_cell(('%s %s %s' %
+                             (patient['last_name'] or '',
+                              patient['first_name'] or '',
+                              patient['middle_name'] or '')).upper(), 'c')    # Печать ФИО
+
+        act_book.write_cell(date_correct(patient['birthdate']).
+                            strftime('%d.%m.%Y'), 'c')                        # Печать даты рождения
+
+        act_book.write_cell(service['anamnesis_number'], 'c')                 # Номер карты
+
+        act_book.write_cell(date_correct(service['end_date']).
+                            strftime('%d.%m.%Y'), 'c')                        # Дата окончания услуги
+
+        act_book.write_cell(0 if service['group'] == 27 else 1, 'c')          # Посещения (госпитализация)
+
+        act_book.write_cell(service['quantity'], 'c')                         # Количество дней
+
+        act_book.write_cell(service['uet'], 'c')                              # Количество УЕТ
+
+        act_book.write_cell(service['code'], 'c')                             # Код услуги
+
+        act_book.write_cell(service['basic_disease'], 'c')                    # Код основного диагноза
+
+        act_book.write_cell(service['name'], 'c')                             # Название услуги
+
+        act_book.write_cell(service['xml_id'], 'c')                           # Ид услуги в xml
+
+        act_book.write_cell(patient['xml_id'], 'c')                           # Ид патиента в xml
+
+        act_book.write_cell(service['tariff'], 'c')                           # Основной тариф
+
+        act_book.write_cell(service['calculated_payment'], 'r')               # Рассчётная сумма
+
+
 ### Печатает сводный реестр для экономистов
 ### Формат вызова print_act_econom год период статус_реестра признак_печати_для_прикреплённых_больниц(1 если надо)
 class Command(BaseCommand):
@@ -1664,10 +1724,10 @@ class Command(BaseCommand):
                 'coefficients': register_function.get_coefficients(year, period, mo),
                 'invoiced_services': register_function.get_services(year, period, mo,
                                                                     is_include_operation=True),
-                'accepted_services': register_function.get_services(year, period, mo, payment_type=[2, 4]),
+                'accepted_services': register_function.get_services(year, period, mo, payment_type=[2, 4],
+                                                                    payment_kind=[1, 2, 3]),
                 'discontinued_services': register_function.get_services(year, period, mo,
-                                                                        payment_type=[3, 4],
-                                                                        is_include_operation=True)
+                                                                        payment_type=[3, 4])
             }
 
             print u'Поиск случаев с обращениями...'
@@ -1699,6 +1759,7 @@ class Command(BaseCommand):
                                 sum_capitation_policlinic,
                                 sum_capitation_ambulance, data, handbooks)
                 print_error_fund(act_book, year, period, mo, data, handbooks)
+                print_paid_by_capitation(act_book, year, period, mo, data)
                 if status == 8:
                     register_function.pse_export(year, period, mo, 6, data, handbooks)
                 if status == 3:
@@ -1719,10 +1780,10 @@ class Command(BaseCommand):
                                                                                is_include_operation=True)
                     data['accepted_services'] = register_function.get_services(year, period, mo,
                                                                                payment_type=[2, 4],
+                                                                               payment_kind=[1, 2, 3],
                                                                                department_code=department)
                     data['discontinued_services'] = register_function.get_services(year, period, mo,
                                                                                    payment_type=[3, 4],
-                                                                                   is_include_operation=True,
                                                                                    department_code=department)
                     target = target_dir % (year, period) + r'\%s' % handbooks['mo_info']['name'].\
                         replace('"', '').strip()
@@ -1745,6 +1806,7 @@ class Command(BaseCommand):
                                         sum_capitation_policlinic, sum_capitation_ambulance,
                                         data, handbooks)
                         print_error_fund(act_book, year, period, mo, data, handbooks)
+                        print_paid_by_capitation(act_book, year, period, mo, data)
                     print u'Выгружен', department
             elapsed = time.clock() - start
             print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))

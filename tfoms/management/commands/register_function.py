@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 from datetime import datetime
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 from shutil import copy2
 from dbfpy import dbf
@@ -65,7 +66,8 @@ def get_patients(year, period, mo_code):
 
 
 ### Информация об услугах в указанной больнице
-def get_services(year, period, mo_code, is_include_operation=False, department_code=None, payment_type=None):
+def get_services(year, period, mo_code, is_include_operation=False, department_code=None, payment_type=None,
+                 payment_kind=None):
     services = ProvidedService.objects.filter(
         event__record__register__year=year,
         event__record__register__period=period,
@@ -78,6 +80,13 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
 
     if payment_type:
         services = services.filter(payment_type_id__in=payment_type)
+
+    if payment_kind:
+        if payment_kind == [4, ]:
+            services = services.filter(payment_kind_id__in=payment_kind)
+        else:
+            services = services.filter(Q(payment_kind_id__isnull=True) |
+                                       Q(payment_kind_id__in=payment_kind))
 
     if not is_include_operation:
         services = services.exclude(code__group_id=27)
@@ -108,6 +117,7 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
         'is_children_profile',                              # Возрастной профиль
         'worker_speciality__pk',                            # Специалист
         'payment_type__pk',                                 # Тип оплаты
+        'payment_kind__pk',                                 # Вид оплаты
         'tariff',                                           # Основной тариф
         'invoiced_payment',                                 # Поданная сумма
         'accepted_payment',                                 # Принятая сумма
@@ -146,6 +156,7 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
          'profile': service['profile__pk'],
          'worker_speciality': service['worker_speciality__pk'],
          'payment_type': service['payment_type__pk'],
+         'payment_kind': service['payment_kind__pk'],
          'tariff': service['tariff'],
          'invoiced_payment': service['invoiced_payment'],
          'accepted_payment': service['accepted_payment'],
@@ -543,6 +554,12 @@ def calculate_capitation_tariff(term, year, period, mo_code):
         capitation_data['female']['population']['adult'] = population['adults_female_count']
         capitation_data['female']['population']['children'] = population['children_female_count']
 
+        """
+        if term == 4:
+            capitation_data['male']['population']['adult'] = 18533
+            capitation_data['female']['population']['adult'] = 26517
+        """
+
         # Подушевой тариф
         capitation_data['male']['tariff']['adult'] = tariff.filter(is_children_profile=False).\
             order_by('-start_date')[0].value\
@@ -593,16 +610,16 @@ def calculate_capitation_tariff(term, year, period, mo_code):
 
         # Принятая к оплате
         capitation_data['male']['accepted_payment']['adult'] = \
-            capitation_data['male']['population_tariff']['adult'] + capitation_data['male']['coefficient']['adult']
+            capitation_data['male']['population_tariff']['adult'] + Decimal(round(capitation_data['male']['coefficient']['adult'], 2))
         capitation_data['female']['accepted_payment']['adult'] = \
-            capitation_data['female']['population_tariff']['adult'] + capitation_data['female']['coefficient']['adult']
+            capitation_data['female']['population_tariff']['adult'] + Decimal(round(capitation_data['female']['coefficient']['adult'], 2))
 
         capitation_data['male']['accepted_payment']['children'] = \
             capitation_data['male']['population_tariff']['children'] + \
-            capitation_data['male']['coefficient']['children']
+            Decimal(round(capitation_data['male']['coefficient']['children'], 2))
         capitation_data['female']['accepted_payment']['children'] = \
             capitation_data['female']['population_tariff']['children'] + \
-            capitation_data['female']['coefficient']['children']
+            Decimal(round(capitation_data['female']['coefficient']['children'], 2))
 
     return capitation_data
 

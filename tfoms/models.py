@@ -383,6 +383,14 @@ class MedicalOrganization(models.Model):
         return result
 
     def get_capitation_events(self, year, period, date):
+        return ProvidedService.objects.filter(
+            event__record__register__year=year,
+            event__record__register__period=period,
+            event__record__register__is_active=True,
+            event__record__register__organization_code=self.code,
+            payment_kind__in=[2, 3, 4]).\
+            values_list('event__id_pk', flat=True).distinct()
+
         query = """
         SELECT DISTINCT medical_organization.id_pk, provided_event.id_pk AS event_id
         FROM provided_service
@@ -428,13 +436,13 @@ class MedicalOrganization(models.Model):
                              WHERE id_pk = attachment.medical_organization_fk)
                 WHERE pt.id_pk = patient.id_pk)))
         """
-
-        return [event.event_id for event in MedicalOrganization.objects.raw(
+        """return [event.event_id for event in MedicalOrganization.objects.raw(
             query,
             dict(organization=self.code,
                  date=date,
                  year=year,
                  period=period))]
+        """
 
     def get_attachment_count(self, date):
         population = AttachmentStatistics.objects.filter(organization=self.code, at=date)
@@ -1355,6 +1363,7 @@ class ProvidedService(models.Model):
     calculated_payment = models.DecimalField(max_digits=16, decimal_places=4)
     provided_tariff = models.DecimalField(max_digits=16, decimal_places=4)
     migration = models.IntegerField(db_column='migration_id')
+    payment_kind = models.ForeignKey("PaymentKind", db_column='payment_kind_fk')
 
     def get_sanctions_mee(self):
         return Sanction.objects.filter(service=self,
@@ -1590,3 +1599,11 @@ class AttachmentStatistics(models.Model):
 
     class Meta:
         db_table = 'attachment_statistics'
+
+
+class PaymentKind(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    name = models.CharField(max_length=40, db_column='name')
+
+    class Meta:
+        db_table = 'payment_kind'

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from medical_service_register.path import INBOX_DIR, OUTBOX_DIR, ARCHIVE_DIR
+from medical_service_register.path import INBOX_DIR, OUTBOX_DIR, ARCHIVE_DIR, LOGGING_DIR
 from medical_service_register.path import REGISTRY_IMPORT_DIR, OTHER_FILES_DIR
 from medical_service_register.path import IDENT_TABLE
 from file_handler.funcs import get_outbox_dict, get_inbox_dict, send_error_file
@@ -24,7 +24,7 @@ ARCHIVE_FILES_NOT_EXISTS = (u'В архиве отсутствуют файлы 
 ARCHIVE_NAME_ERROR = u'Недопустимое имя пакета.'
 ARCHIVE_AND_FILE_NAME_MISMATCH = (u'Имя архива не соответствует упакованному '
                                   u'файлу.')
-LOGGING_FILE = u'D:/work/medical_register_log/get_files_log.txt'
+LOGGING_FILE = os.path.join(LOGGING_DIR, 'get_files_log.txt')
 
 ZIP_PATTERN = r'^(hm|hl_m)(2800\d{2})s28002_\d+.zip$'
 REGISTER_FILES_PATTERN = r'^(h|l|t|dp|do|dv|dd|dr|ds|du|dv|df)m(2800\d{2})s28002_\d+.xml$'

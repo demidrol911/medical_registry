@@ -500,7 +500,7 @@ def day_hospital_patients():
             [['division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         total_group = OrderedDict(
             [('patient_id', lambda x: len(service_df.ix[x.index]
-            [[#'group',
+            [['group',
               'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         general_con = service_df.group.isnull() & service_df.division_term.isin([10, 11])
         rules = [
@@ -770,7 +770,7 @@ def day_hospital():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [[#'group',
+             [['group',
                'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         serv_group = OrderedDict([
@@ -1125,7 +1125,7 @@ def day_hospital_all():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [[#'group',
+             [['group',
                'division_term', 'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         serv_group = OrderedDict([
@@ -1472,7 +1472,7 @@ def hospital_patients():
     def get_rules(service_df):
         rec_group = OrderedDict(
             [('patient_id', lambda x: len(service_df.ix[x.index]
-            [[#'group',
+            [['group',
               'tariff_profile', 'patient_id', 'is_children']].drop_duplicates()))])
         serv_group = OrderedDict(
             [('patient_id', lambda x: len(service_df.ix[x.index]
@@ -1555,7 +1555,7 @@ def hospital():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [[# group,
+             [['group',
              'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         rules = [
@@ -1588,7 +1588,7 @@ def hospital_all():
     def get_rules(service_df):
         rec_group = OrderedDict([
             ('patient_id', lambda x: len(service_df.ix[x.index]
-             [[# group,
+             [['group',
              'tariff_profile', 'patient_id', 'is_children']].drop_duplicates())),
             ('id', 'nunique'), ('quantity_days', 'sum'), ('accepted_payment', 'sum')])
         rules = [
@@ -1617,40 +1617,42 @@ class Command(BaseCommand):
         range_len = len(mo_list) + (0 if len(mo_list) % slice_size == 0 else slice_size)
 
         acts = [
-            # 1 Диспансеризация детей - сирот в трудной жизненной ситуации
-            #exam_children_difficult_situation(),
+            #1 Диспансеризация детей - сирот в трудной жизненной ситуации
+            exam_children_difficult_situation(),
             # 2 Диспансеризация детей - сирот без попечения родителей
-            #exam_children_without_care(),
+            exam_children_without_care(),
             # 3 Профосмотры несовешенолетних
-            #prev_exam_children(),
+            prev_exam_children(),
             # 4 СМП финансирование по подушевому нормативу
-            #acute_care(),
+            acute_care(),
             # 5 Периодический медосмотр несовершеннолетних
-            #period_exam_children(),
+            period_exam_children(),
             # 6 Предварительные медосмотры несовершеннолетних
-            #prelim_exam_children(),
+            prelim_exam_children(),
+
             # 7 Дневной стационар (численность лиц)
-            #day_hospital_patients(),
+            day_hospital_patients(),
             # 8 Дневной стационар (выбывшие больные)
-            #day_hospital_services(),
+            day_hospital_services(),
             # 9 Дневной стационар (пациенто-дни)
-            #day_hospital_days(),
+            day_hospital_days(),
             # 10 Дневной стационар (стоимость)
-            #day_hospital_cost(),
+            day_hospital_cost(),
             # 11 Дневной стационар (свод)
-            #day_hospital(),
+            day_hospital(),
             # 12 Дневной стационар на дому (численность лиц)
-            #day_hospital_home_patients(),
+            day_hospital_home_patients(),
             # 13 Дневной стационар на дому (стоимость)
-            #day_hospital_home_cost(),
+            day_hospital_home_cost(),
             # 14 Дневной стационар на дому (выбывшие больные)
-            #day_hospital_home_services(),
+            day_hospital_home_services(),
             # 15 Дневной стационар на дому (пациенто-дни)
-            #day_hospital_home_days(),
+            day_hospital_home_days(),
             # 16 Дневной стационар на дому свод
-            #day_hospital_home(),
+            day_hospital_home(),
             # 17 Дневной стационар свод + на дому свод
-            #day_hospital_all(),
+            day_hospital_all(),
+
             # 18 Круглосуточный стационар ВМП
             hospital_hmc(),
             # 19 Круглосуточный стационар (число госпитализаций)
