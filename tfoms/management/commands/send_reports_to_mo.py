@@ -6,10 +6,10 @@ import shutil
 
 #OUTBOX_DIR = 'd:/work/test/outbox/'
 OUTBOX_DIR = u'//alpha/vipnet/medical_registry/outbox/'
-ACTS_DIR = 'x:/reestr/g2014/period09/'
+ACTS_DIR = 'x:/reestr/g2014/period10/'
 
-AGMA_DIR = u'x:/reestr/g2014/period09/АГМА'
-custom_file = u'X:/REESTR/G2014/Period09/Больницам акты МЭК.jpg'
+AGMA_DIR = u'x:/reestr/g2014/period10/АГМА'
+custom_file = u'X:/REESTR/G2014/Period10/Больницам октябрь.jpg'
 
 act_name_pattern = re.compile(r'_+\d*$')
 

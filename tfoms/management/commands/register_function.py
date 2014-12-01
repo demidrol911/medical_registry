@@ -66,7 +66,8 @@ def get_patients(year, period, mo_code):
 
 
 ### Информация об услугах в указанной больнице
-def get_services(year, period, mo_code, is_include_operation=False, department_code=None, payment_type=None):
+def get_services(year, period, mo_code, is_include_operation=False, department_code=None, payment_type=None,
+                 payment_kind=None):
     services = ProvidedService.objects.filter(
         event__record__register__year=year,
         event__record__register__period=period,
@@ -79,6 +80,13 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
 
     if payment_type:
         services = services.filter(payment_type_id__in=payment_type)
+
+    if payment_kind:
+        if payment_kind == [4, ]:
+            services = services.filter(payment_kind_id__in=payment_kind)
+        else:
+            services = services.filter(Q(payment_kind_id__isnull=True) |
+                                       Q(payment_kind_id__in=payment_kind))
 
     if not is_include_operation:
         services = services.exclude(code__group_id=27)
@@ -109,6 +117,7 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
         'is_children_profile',                              # Возрастной профиль
         'worker_speciality__pk',                            # Специалист
         'payment_type__pk',                                 # Тип оплаты
+        'payment_kind__pk',                                 # Вид оплаты
         'tariff',                                           # Основной тариф
         'invoiced_payment',                                 # Поданная сумма
         'accepted_payment',                                 # Принятая сумма
@@ -147,6 +156,7 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
          'profile': service['profile__pk'],
          'worker_speciality': service['worker_speciality__pk'],
          'payment_type': service['payment_type__pk'],
+         'payment_kind': service['payment_kind__pk'],
          'tariff': service['tariff'],
          'invoiced_payment': service['invoiced_payment'],
          'accepted_payment': service['accepted_payment'],

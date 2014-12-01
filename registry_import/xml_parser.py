@@ -11,8 +11,19 @@ class Node(dict):
     def __getitem__(self, key):
         try:
             value = dict.__getitem__(self, key)
-        except KeyError:
+        except:
             value = None
+
+        if not value and isinstance(value, dict):
+            value = value.element.text
+
+        return value
+
+    def get(self, key, d=''):
+        try:
+            value = dict.__getitem__(self, key)
+        except:
+            value = d
 
         if not value and isinstance(value, dict):
             value = value.element.text
