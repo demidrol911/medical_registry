@@ -1,6 +1,7 @@
 #! -*- coding: utf-8 -*-
 
 from copy import deepcopy
+from decimal import Decimal
 from django.core.management.base import BaseCommand
 from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
@@ -476,10 +477,10 @@ def print_accepted_service(act_book, year, period, mo,
             sum_capitation_ambulance[gender]['accepted_payment']['children']
 
     capitation_total = deepcopy(init_sum)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['male'], column_keys)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['female'], column_keys)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['male'], column_keys)
-    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['female'], column_keys)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['male'], column_keys, round_point=2)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_policlinic['female'], column_keys, round_point=2)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['male'], column_keys, round_point=2)
+    capitation_total = calculate_total_sum_adv(capitation_total, capitation_ambulance['female'], column_keys, round_point=2)
 
     # Распечатка сводного акта
     act_book.set_sheet(0)
@@ -593,6 +594,7 @@ def print_accepted_service(act_book, year, period, mo,
                   capitation_ambulance['female'], column_keys, style=VALUE_STYLE)
         print_sum(act_book, u'Итого по подушевому нормативу',
                   capitation_total, column_keys, style=TOTAL_STYLE)
+
         total_sum_mo = calculate_total_sum_adv(total_sum_mo, capitation_total, column_keys)
         act_book.row_inc()
         print_sum(act_book, u'ИТОГО по МО с подушевым нормативом',
@@ -962,10 +964,13 @@ def print_sum(act_book, title, total_sum, sum_keys, prec=2, style=VALUE_STYLE):
     act_book.row_inc()
 
 
-def calculate_total_sum_adv(total_sum, intermediate_sum, sum_keys):
+def calculate_total_sum_adv(total_sum, intermediate_sum, sum_keys, round_point=None):
     for title_key, column_keys in sum_keys:
         for column_key in column_keys:
-            total_sum[title_key][column_key] += intermediate_sum[title_key][column_key]
+            if round_point:
+                total_sum[title_key][column_key] += Decimal(round(intermediate_sum[title_key][column_key], round_point))
+            else:
+                total_sum[title_key][column_key] += Decimal(intermediate_sum[title_key][column_key])
     return total_sum
 
 
@@ -1302,9 +1307,9 @@ def print_order_146(act_book, year, period, mo, capitation_events,
     for service_kind, _ in service_kind_keys[:-1]:
         for sum_kind in sum_kind_keys:
             sum_service_kind['total'][sum_kind[0]]['adult'] += \
-                float(sum_service_kind[service_kind][sum_kind[0]]['adult'])
+                round(sum_service_kind[service_kind][sum_kind[0]]['adult'], 2)
             sum_service_kind['total'][sum_kind[0]]['children'] += \
-                float(sum_service_kind[service_kind][sum_kind[0]]['children'])
+                round(sum_service_kind[service_kind][sum_kind[0]]['children'], 2)
 
     # Рассчёт сумм по детям и взрослым вместе
     for service_kind, _ in service_kind_keys:
@@ -1666,8 +1671,7 @@ class Command(BaseCommand):
                                                                     is_include_operation=True),
                 'accepted_services': register_function.get_services(year, period, mo, payment_type=[2, 4]),
                 'discontinued_services': register_function.get_services(year, period, mo,
-                                                                        payment_type=[3, 4],
-                                                                        is_include_operation=True)
+                                                                        payment_type=[3, 4])
             }
 
             print u'Поиск случаев с обращениями...'
@@ -1722,7 +1726,6 @@ class Command(BaseCommand):
                                                                                department_code=department)
                     data['discontinued_services'] = register_function.get_services(year, period, mo,
                                                                                    payment_type=[3, 4],
-                                                                                   is_include_operation=True,
                                                                                    department_code=department)
                     target = target_dir % (year, period) + r'\%s' % handbooks['mo_info']['name'].\
                         replace('"', '').strip()

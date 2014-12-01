@@ -112,7 +112,7 @@ def get_stomatology_structure(calc):
     stomatology_disease_query = """
          SELECT medical_register.organization_code,
 
-         COUNT(DISTINCT patient.id_pk) AS all_population,
+         COUNT(DISTINCT (patient.id_pk, medical_service.code like '0%')) AS all_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
                THEN patient.id_pk END) AS adult_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
@@ -179,7 +179,7 @@ def get_stomatology_structure(calc):
     stomatology_proph_or_ambulance_query = """
          SELECT medical_register.organization_code,
 
-         COUNT(DISTINCT patient.id_pk) AS all_population,
+         COUNT(DISTINCT (patient.id_pk, medical_service.code like '0%')) AS all_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
                THEN patient.id_pk END) AS adult_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
@@ -241,7 +241,7 @@ def get_stomatology_structure(calc):
     stomatology_emergency_query = """
          SELECT medical_register.organization_code,
 
-         COUNT(DISTINCT patient.id_pk) AS all_population,
+         COUNT(DISTINCT (patient.id_pk, medical_service.code like '0%')) AS all_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
                THEN patient.id_pk END) AS adult_population,
          COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
@@ -319,7 +319,7 @@ def get_stomatology_structure(calc):
          SELECT medical_register.organization_code,
 
          COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL
-               THEN (patient.id_pk, medical_service.subgroup_fk) END) AS all_population,
+               THEN (patient.id_pk, medical_service.subgroup_fk, medical_service.code like '0%') END) AS all_population,
          COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '0%'
                THEN (patient.id_pk, medical_service.subgroup_fk) END) AS adult_population,
          COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '1%'
@@ -404,15 +404,15 @@ def get_stomatology_structure(calc):
              'pattern': 'stomatology',
              'sum': [
                  {'query': calc((stomatology_disease_query, '12')),
-                  'separator_length': 15},
+                  'separator_length': 0, 'len': 15},
                  {'query': calc((stomatology_proph_or_ambulance_query, '13')),
-                  'separator_length': 12},
+                  'separator_length': 0, 'len': 12},
                  {'query': calc((stomatology_proph_or_ambulance_query, '14')),
-                  'separator_length': 12},
+                  'separator_length': 0, 'len': 12},
                  {'query': calc((stomatology_emergency_query, '17')),
-                  'separator_length': 18},
+                  'separator_length': 0, 'len': 18},
                  {'query': calc((stomatology_total_query, '12, 13, 14, 17')),
-                  'separator_length': 21}]},
+                  'separator_length': 0, 'len': 21}]},
             ]
 
 

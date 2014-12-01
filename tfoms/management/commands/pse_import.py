@@ -18,7 +18,9 @@ def get_errors_dict():
     return errors_dict
 
 service_query = """
-        select ps.id_pk, coalesce(replace(p.insurance_policy_series, ' ', ''), '99') || coalesce(p.insurance_policy_number, '') ||
+        select ps.id_pk,
+        case when p.insurance_policy_series is null or replace(p.insurance_policy_series, ' ', '') = '' then '99'
+        else p.insurance_policy_series end || coalesce(p.insurance_policy_number, '') ||
         coalesce(ms.code, '') || coalesce(idc.idc_code, '') ||
         coalesce(ps.worker_code, '') || coalesce(ps.end_date, '1900-01-01') ||
         coalesce(pe.anamnesis_number, '') as scache
@@ -70,7 +72,9 @@ def main():
     departments = set([filename[1:-4] for filename in files if '.dbf' in filename])
     registers = []
     mo = []
+    file_not_found = file('not_found.csv', 'w')
     for department in departments:
+        file_not_found.write(' '+department+'\n')
         print department
 
         mo_res = MedicalRegister.objects.raw(mo_query,
@@ -152,8 +156,11 @@ def main():
                     Sanction.objects.create(
                         service=service, type_id=1, underpayment=underpayment,
                         error_id=ERRORS_CODES.get(err_rec, None))
-        print not_found_service
+        #print not_found_service
+        for s in not_found_service:
+            file_not_found.write(s.encode('cp866')+'\n')
     print set(mo)
+    file_not_found.close()
     MedicalRegister.objects.filter(is_active=True, year=year, period=period,
                                    organization_code__in=set(mo)) \
                            .update(status=5)
