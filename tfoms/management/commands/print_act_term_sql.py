@@ -2722,8 +2722,8 @@ def policlinic_preventive_primary():
                  ON medical_register_record.register_fk = medical_register.id_pk
 
              WHERE medical_register.is_active
-                 AND medical_register.year = '2014'
-                 AND medical_register.period = '10'
+                 AND medical_register.year = '{year}'
+                 AND medical_register.period = '{period}'
                  and provided_service.payment_type_fk = 2
                  and ((provided_event.term_fk = 3
                  and medical_service.reason_fk in (2, 3)
@@ -2733,13 +2733,13 @@ def policlinic_preventive_primary():
             group by medical_register.organization_code, division
             """
 
-    column_position = [399, 401, 403, 443, 444]
+    column_position = [399, 100002, 401, 403, 100000, 100001,  443, 444]
 
-    column_division = {(399, 401, 403, 443, 444): DIVISION_ALL_1_2}
+    column_division = {(399, 100002, 401, 403, 100000, 100001,  443, 444): DIVISION_ALL_1_2}
 
-    column_length = {(399, 401, 403, 443, 444): 3}
+    column_length = {(399, 100002, 401, 403, 100000, 100001,  443, 444): 3}
 
-    column_separator = {444: 5}
+    column_separator = {444: 11}
 
     query1 = """
              SELECT
@@ -4246,6 +4246,34 @@ def print_act(year, period, data):
                     act_book.cursor['column'] += data_query.get('separator', {}).get(division, 0)
 
 
+### Распечатка нестандаотных актов
+def print_act_1(year, period, data):
+    target_dir = REESTR_EXP % (year, period)
+    act_path = ACT_PATH.format(
+        dir=target_dir,
+        title=data['title'],
+        month=MONTH_NAME[period],
+        year=year
+    )
+    temp_path = TEMP_PATH.format(
+        base=BASE_DIR,
+        template=data['pattern'])
+    print data['title']
+
+    with ExcelWriter(act_path,
+                     template=temp_path,
+                     sheet_names=[MONTH_NAME[period], MONTH_NAME[period]]) as act_book:
+
+        act_book.set_overall_style({'font_size': 11, 'border': 1})
+        act_book.set_cursor(4, 2)
+        act_book.set_style(PERIOD_VALUE_STYLE)
+        act_book.write_cell(u'за %s %s года' % (MONTH_NAME[period], year))
+        act_book.set_style(VALUE_STYLE)
+        act_book.set_sheet(0)
+        data_sum = run_sql(data[0]['structure'][0].format(year=year, period=period))
+        print data
+
+
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
@@ -4290,7 +4318,6 @@ class Command(BaseCommand):
             #policlinic_ambulance_spec_patients(),
             #policlinic_ambulance_all(),
 
-            #policlinic_preventive_primary(),
             #policlinic_preventive_spec_visit(),
             #policlinic_preventive_spec_cost(),
             #policlinic_preventive_spec_patients(),
@@ -4311,4 +4338,6 @@ class Command(BaseCommand):
         ]
         for act in acts:
             print_act(year, period, act)
+
+        print_act_1(year, period, policlinic_preventive_primary())
 
