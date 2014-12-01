@@ -531,6 +531,55 @@ def identify_patient(register_element):
     cursor.close()
 
 
+def update_patient_attacment_code(register_element):
+    query = """
+        update patient set attachment_code = T.code
+        from (
+        SELECT DISTINCT p.id_pk, att_org.code
+        FROM medical_register_record mrr
+            JOIN patient p
+                on p.id_pk = mrr.patient_fk
+            JOIN medical_register mr
+                ON mrr.register_fk = mr.id_pk
+            JOIN insurance_policy i
+                ON p.insurance_policy_fk = i.version_id_pk
+            JOIN person
+                ON person.version_id_pk = (
+                    SELECT version_id_pk
+                    FROM person WHERE id = (
+                        SELECT id FROM person
+                        WHERE version_id_pk = i.person_fk) AND is_active)
+            LEFT JOIN attachment
+              ON attachment.id_pk = (
+                  SELECT MAX(id_pk)
+                  FROM attachment
+                  WHERE person_fk = person.version_id_pk AND status_fk = 1
+                     AND attachment.date <= (format('%s-%s-%s', mr.year, mr.period, '01')::DATE) + INTERVAL '1 months' AND attachment.is_active)
+            LEFT JOIN medical_organization att_org
+              ON (att_org.id_pk = attachment.medical_organization_fk
+                  AND att_org.parent_fk IS NULL)
+                  OR att_org.id_pk = (
+                     SELECT parent_fk FROM medical_organization
+                     WHERE id_pk = attachment.medical_organization_fk
+                  )
+
+        WHERE mr.is_active
+         AND mr.year = %(year)s
+         AND mr.period = %(period)s
+         and mr.organization_code = %(organization)s
+         ) as T
+        Where T.id_pk = patient.id_pk
+    """
+
+    cursor = connection.cursor()
+    cursor.execute(query, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+
+    transaction.commit()
+    cursor.close()
+
+
 def update_payment_kind(register_element):
     query = """
         update provided_service set payment_kind_fk = T.payment_kind_code
