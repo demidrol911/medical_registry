@@ -17,7 +17,7 @@ from registry_import.validation import get_person_patient_validation, \
 from registry_import.xml_parser import XmlLikeFileReader
 from helpers import xml_writer
 from file_handler.funcs import get_outbox_dict, move_files_to_process, \
-    move_files_to_archive
+    move_files_to_archive, send_error_file
 from registry_import.validation import GENDERS, PERSON_ID_TYPES, \
     POLICY_TYPES, DEPARTMENTS, ORGANIZATIONS, TERMS, KINDS, FORMS, \
     HOSPITALIZATIONS, PROFILES, OUTCOMES, RESULTS, SPECIALITIES_OLD, \
@@ -392,7 +392,7 @@ def main():
 
     for organization in registries:
         if not is_files_completeness(registries[organization]):
-            #send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
+            send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
 
         registry_list = registries[organization]
@@ -457,7 +457,7 @@ def main():
         for registry in registry_list:
 
             if registry in files_errors:
-                #send_error_file(OUTBOX_DIR, registry, files_errors[registry])
+                send_error_file(OUTBOX_DIR, registry, files_errors[registry])
                 continue
 
             services_errors = []
@@ -706,7 +706,7 @@ def main():
 
         if registry_has_errors:
             print u'Ошибки ФЛК'
-            """
+
             zipname = TEMP_DIR+'VM%sS28002_%s.zip' % (
                 organization_code, person_filename[person_filename.index('_')+1:-4]
             )
@@ -722,7 +722,7 @@ def main():
                 shutil.copy2(zipname, copy_path)
 
             os.remove(zipname)
-            """
+
         else:
             print u'ФЛК пройден. Вставка данных...'
             MedicalRegister.objects.filter(
@@ -749,12 +749,12 @@ def main():
 
             print u'...ок'
 
-            #if os.path.exists(copy_path):
-            #    shutil.copy2(OUTBOX_SUCCESS, copy_path)
+            if os.path.exists(copy_path):
+                shutil.copy2(OUTBOX_SUCCESS, copy_path)
 
         print organization, current_year, current_period
 
-        #move_files_to_archive(registry_list + [patient_path])
+        move_files_to_archive(registry_list + [patient_path])
 
     try:
         for rec in patients_errors:
