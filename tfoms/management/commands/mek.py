@@ -653,7 +653,7 @@ def sanctions_on_repeated_service(register_element):
                         on i.version_id_pk = p.insurance_policy_fk
                 where mr.is_active
                     and mr.organization_code = %(organization)s
-                    and format('%s-%s-%s', mr.year, mr.period, '01')::DATE < format('%s-%s-%s', %(year)s, %(period)s, '01')::DATE
+                    and format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE < format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
                     and ps.payment_type_fk in (2, 4)
             ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
                 and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
@@ -2193,9 +2193,9 @@ def sanctions_on_service_term_kind_mismatch(register_element):
             LEFT JOIN provided_service_sanction pss
                 on pss.service_fk = ps.id_pk and pss.error_fk = 79
         where mr.is_active
-            and mr.year = %s
-            and mr.period = %s
-            and mr.organization_code = %s
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            and mr.organization_code = %(organization)s
             and pss.id_pk is null
             and NOT (
                 (pe.term_fk = 1 and pe.kind_fk in (3, 4, 10, 11 ))
@@ -2230,9 +2230,9 @@ def sanctions_on_service_term_mismatch(register_element):
             LEFT JOIN provided_service_sanction pss
                 on pss.service_fk = ps.id_pk and pss.error_fk = 76
         where mr.is_active
-            and mr.year = %s
-            and mr.period = %s
-            and mr.organization_code = %s
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            and mr.organization_code = %(organization)s
             and pss.id_pk is null
             and pe.term_fk in (1, 2)
             and tp.term_fk != pe.term_fk
@@ -2242,6 +2242,8 @@ def sanctions_on_service_term_mismatch(register_element):
         query, dict(year=register_element['year'],
                     period=register_element['period'],
                     organization=register_element['organization_code']))
+
+    #print len(services) #, type(services)
 
     return get_sanction_tuple(services, 76)
 
@@ -2483,7 +2485,7 @@ def main():
 
                 service.save()
 
-        if register_element['status'] == 3:
+        if register_element['status'] == 1:
             update_payment_kind(register_element)
 
         print u'stomat, outpatient, examin'
