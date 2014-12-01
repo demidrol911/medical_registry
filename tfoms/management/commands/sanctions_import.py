@@ -17,13 +17,14 @@ S_POL, K_U, DS, TN1, SUM_USL, FFOMS, TFOMS, S_PPP, S_SNK, SNILS, SANK_TYPE,\
 DOC_NUMBER, STATUS, S_SNT, S_SNF, SANCTION_DATE,\
 ANAMNESIS_NUMBER, LPU_NUMBER = range(0, 28)
 
-sanction_start_date = '2014-01-01'
-sanction_end_date = '2014-01-31'
+sanction_start_date = '2014-07-01'
+sanction_end_date = '2014-07-31'
 z = csv.writer(open('d:/work/duplicates_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
+
 
 def find(rec):
     old_service_query = """
-        select ps.id_pk
+        select DISTINCT ps.id_pk, ps.end_date, mr.year, mr.period
         from provided_service ps
             join medical_service ms
                 On ps.code_fk = ms.id_pk
@@ -64,7 +65,7 @@ def find(rec):
     """
 
     new_service_query = """
-        select ps.id_pk
+        select DISTINCT ps.id_pk, ps.end_date, mr.year, mr.period
         from provided_service ps
             join medical_service ms
                 On ps.code_fk = ms.id_pk
@@ -89,75 +90,18 @@ def find(rec):
             or (upper(p.last_name || ' ' || p.first_name || ' ' || p.middle_name ) = upper(%(person)s)))
             and ms.code = %(service)s
             and (((ms.group_fk not in (7, 9, 11, 12, 13, 15, 16, 25, 26) or ms.group_fk is null)
-            and idc.idc_code like %(disease)s)
+            and (idc.idc_code like %(disease)s or idc1.idc_code like %(disease)s or idc2.idc_code like %(disease)s))
             or (ms.group_fk in (7, 9, 11, 12, 13, 15, 16, 25, 26)
             and (ps.basic_disease_fk is null or
-            idc.idc_code like %(disease)s)))
-            and ps.end_date = %(end_date)s
+            (idc.idc_code like %(disease)s or idc1.idc_code like %(disease)s or idc2.idc_code like %(disease)s))))
+            and (ps.end_date = %(end_date)s or ps.start_date = %(start_date)s)
             -- %(start_date)s
-            and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or upper(%(anamnesis)s) = '')
+            --and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or upper(%(anamnesis)s) = '')
             --and department.old_code = %(department)s
             and ps.payment_type_fk in (2, 4)
         order by ps.end_date, mr.year, mr.period DESC
         --limit 1
     """
-
-    soft_query = """
-        select ps.id_pk
-        from provided_service ps
-            join medical_service ms
-                On ps.code_fk = ms.id_pk
-            join provided_event pe
-                on ps.event_fk = pe.id_pk
-            join medical_register_record
-                on pe.record_fk = medical_register_record.id_pk
-            join medical_register mr
-                on medical_register_record.register_fk = mr.id_pk
-            JOIN patient p
-                on p.id_pk = medical_register_record.patient_fk
-            JOIN medical_organization department
-                on department.id_pk = ps.department_fk
-            LEFT JOIN idc
-                on idc.id_pk = ps.basic_disease_fk or idc.id_pk = pe.basic_disease_fk
-            LEFT JOIN idc idc1
-                on idc1.id_pk = pe.initial_disease_fk
-            LEFT JOIN idc idc2
-                on idc2.id_pk = pe.basic_disease_fk
-        where mr.is_active
-            and ((REPLACE(coalesce(p.insurance_policy_series, ''), '99', '') || coalesce(p.insurance_policy_number, '') ) = %(policy)s or (upper(p.last_name || ' ' || p.first_name || ' ' || p.middle_name ) = upper(%(person)s)))
-            and ms.code = %(service)s
-            and (
-                (ps.start_date = %(start_date)s or ps.end_date = %(start_date)s)
-                or (ps.start_date = %(end_date)s or ps.end_date = %(end_date)s)
-            )
-            and (idc.idc_code like %(disease)s or idc1.idc_code like %(disease)s or idc2.idc_code like %(disease)s)
-            and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or %(anamnesis)s is null)
-            --and department.old_code = %(department)s
-            and ps.payment_type_fk in (2, 4)
-        order by ps.end_date, mr.year, mr.period DESC
-        --limit 1
-    """
-
-    name = rec[FIO]
-    if name:
-        name = name.split()
-    else:
-        name = [None, None, None]
-
-    if len(name) > 3:
-        last_name = name[0].upper()
-        first_name = name[1].upper()
-        middle_name = '%s %s' % (name[2].strip().upper(), name[3].strip().upper())
-
-    elif len(name) == 0:
-        last_name = None
-        first_name = None
-        middle_name = None
-
-    elif len(name) == 3:
-        last_name = name[0].upper()
-        first_name = name[1].upper()
-        middle_name = name[2].upper()
 
     policy = rec[S_POL].split() if rec[S_POL] else None
     if policy:
@@ -206,27 +150,14 @@ def find(rec):
     else:
         print 'not found', rec[LPU_NUMBER], series, number, service_code, rec[DS], rec[STARTDATE], rec[ANAMNESIS_NUMBER]
         service = None
-        """
-        service = list(ProvidedService.objects.raw(
-            soft_query, dict(
-                policy=(series+number).replace(' ', ''),
-                person=rec[FIO], service=service_code,
-                start_date=rec[STARTDATE], end_date=rec[ENDDATE],
-                disease=rec[DS][:3]+'%',
-                anamnesis=rec[ANAMNESIS_NUMBER],
-                department=rec[LPU_NUMBER])))
 
-        if service:
-            service = service[0]
-        else:
-            service = None
-        """
+    if service and service.payment_type_id == 3:
+        raise ValueError('Fuck!!!!!!!!!!!!!!!!!!!')
+
     return service
 
 
 def main():
-
-
     connect_fb = kinterbasdb.connect(
         dsn='gamma:d:/fb/expert_20.gdb', user='sysdba', password='masterkey',
         charset='win1251')
@@ -261,11 +192,13 @@ def main():
 
         if not service:
             w = []
+
             for r in rec:
                 if isinstance(r, unicode):
                     w.append(r.encode('utf-8'))
                 else:
                     w.append(r)
+
             none += 1
 
             n.writerow(w)

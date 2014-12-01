@@ -239,7 +239,7 @@ class ValidEvent(object):
         self.id_pk = pk
         self.term = safe_int(item['USL_OK'])
         self.kind = safe_int(item['VIDPOM'])
-        self.hospitalization = item['EXTR']
+        self.hospitalization = safe_int(item['EXTR'])
         self.form = safe_int(item['FOR_POM'])
         self.refer_organization = item['NPR_MO']
         self.organization = item['LPU']
@@ -483,40 +483,6 @@ class ValidEvent(object):
 
 
 class ValidService(object):
-
-    NEW_EXAMINATION_CHILDREN_HARD_LIFE = (
-        '119020', '119021', '119022', '119023', '119024',
-        '119025', '119026', '119027', '119028', '119029',
-        '119030', '119031'
-    )
-
-    OLD_EXAMINATION_CHILDREN_HARD_LIFE = ('119001', )
-
-    NEW_EXAMINATION_CHILDREN_ADOPTED = (
-        '119220', '119221', '119222', '119223', '119224',
-        '119225', '119226', '119227', '119228', '119229',
-        '119230', '119231'
-    )
-
-    OLD_EXAMINATION_CHILDREN_ADOPTED = ('119001', )
-
-    NEW_EXAMINATION_CHILDREN_PREVENTIVE = (
-        '119080', '119081', '119082', '119083', '119084',
-        '119085', '119086', '119087', '119088', '119089',
-        '119090', '119091'
-    )
-
-    OLD_EXAMINATION_CHILDREN_PREVENTIVE = (
-        '119051', '119052', '119053', '119054',
-        '119055', '119056'
-    )
-
-    NEW_EXAMINATION_ADULT_PREVENTIVE = (
-        '019214', '019215', '019216', '019217'
-    )
-
-    OLD_EXAMINATION_ADULT_PREVENTIVE = ('019201', )
-
     def __init__(self, item, service_pk, event):
         self.id = item['IDSERV']
         self.id_pk = service_pk

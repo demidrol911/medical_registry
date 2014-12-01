@@ -110,7 +110,7 @@ def main():
             new["DR"] = department_service['event__record__patient__birthdate'] or '1900-01-01'
             if department_service['code__group_id'] in (7, 25, 26, 9, 10, 11,
                                                         12, 13, 14, 15, 16):
-                department_service['event__basic_disease__idc_code']
+                new["DS"] = department_service['event__basic_disease__idc_code']
             else:
                 new["DS"] = unicode_to_cp866(department_service['basic_disease__idc_code'])
 

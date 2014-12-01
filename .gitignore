@@ -5,6 +5,7 @@ log.csv
 /static/img/
 /static/fonts/
 /static/icons/
+/static/extjs/
 /.idea/
 path.py
 service.csv
