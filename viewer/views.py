@@ -10,7 +10,7 @@ from django.core import serializers
 
 
 def index(request):
-    return render(request, 'base.html', {})
+    return render(request, 'viewer/index.html', {})
 
 
 def periods_list(request):

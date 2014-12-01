@@ -12,22 +12,150 @@ def unicode_to_cp866(string):
     return string.encode('cp866') if string else ''
 
 
+def get_department_services(year, period, department_code):
+    query = """
+        select DISTINCT ps.id_pk,
+            md.code as division_code,
+            ms.code as service_code,
+            case
+                when p.insurance_policy_series = '' or p.insurance_policy_series is NULL THEN p.insurance_policy_number
+                ELSE p.insurance_policy_series || ' ' || coalesce(p.insurance_policy_number, '')
+            END as policy,
+            p.last_name,
+            p.first_name,
+            p.middle_name,
+            p.birthdate,
+            p.gender_fk as gender_code,
+            case
+                when mr.type between 3 and 11 then pe_idc_b.idc_code
+                else idc.idc_code
+            END as disease,
+            pecd_idc.idc_code as concomitant_disease,
+            ps.start_date,
+            ps.end_date,
+            pe.anamnesis_number,
+            ps.quantity,
+            ps.accepted_payment,
+            ps.comment,
+            pe.hospitalization_fk as hospitalization_code,
+            pe.worker_code,
+            tro.code as outcome_code,
+            COALESCE((
+                WITH RECURSIVE adm_temp(id_pk, name, parent_fk) AS (
+                 SELECT aa.id_pk, aa.name, aa.parent_fk FROM administrative_area aa WHERE aa.id_pk = adr.administrative_area_fk
+                union all
+                 select aa1.id_pk, aa1.name, aa1.parent_fk from adm_temp adt, administrative_area aa1 where aa1.id_pk = adt.parent_fk
+                )
+                SELECT name FROM adm_temp where parent_fk != 1 or parent_fk is not null
+                order by id_pk limit 1
+            ), '') || ', ' ||
+            Coalesce((
+                WITH RECURSIVE adm_temp(id_pk, name, parent_fk) AS (
+                 SELECT aa.id_pk, aa.name, aa.parent_fk FROM administrative_area aa WHERE aa.id_pk = adr.administrative_area_fk
+                union all
+                 select aa1.id_pk, aa1.name, aa1.parent_fk from adm_temp adt, administrative_area aa1 where aa1.id_pk = adt.parent_fk
+                )
+                SELECT name FROM adm_temp where parent_fk != 1 or parent_fk is not null
+                order by id_pk limit 1 offset 1
+            ), '') || ', ' ||
+            COALESCE(aa.name, '') || ', ' ||
+            coalesce(adr.street, '') || ', ' || coalesce(adr.house_number, '') || ', ' ||
+            COALESCE(adr.extra_number, '') || ', ' || coalesce(adr.room_number) as address,
+            case
+                when pe.term_fk = 4 or ((ms.group_fk = 24 and ms.reason_fk = 1 AND ps.department_fk NOT IN (15, 88, 89))
+                    and medOrg.code = mr.organization_code) THEN 'P'
+                ELSE 'T'
+            END as funding_type,
+            dep.old_code
+        from provided_service ps
+            JOIN medical_service ms
+                on ms.id_pk = ps.code_fk
+            join provided_event pe
+                on ps.event_fk = pe.id_pk
+            JOIN medical_register_record mrr
+                on mrr.id_pk = pe.record_fk
+            JOIN medical_register mr
+                on mr.id_pk = mrr.register_fk
+            JOIN patient p
+                on p.id_pk = mrr.patient_fk
+            LEFT JOIN insurance_policy i
+                on i.version_id_pk = p.insurance_policy_fk
+            LEFT JOIN person per
+                on per.version_id_pk = (
+                    select version_id_pk
+                    from person
+                    where id = (
+                        select id
+                        from person
+                        where version_id_pk = i.person_fk
+                    ) and is_active
+                )
+            left join attachment
+                on attachment.id_pk = (
+                    select max(id_pk)
+                    from attachment
+                    where
+                        person_fk = per.version_id_pk
+                        and status_fk = 1
+                        and date <= (mr.year || '-' || mr.period || '-' || '01')::DATE
+                        and attachment.is_active)
+            LEFT join medical_organization medOrg
+                on (
+                    medOrg.id_pk = attachment.medical_organization_fk
+                    and medOrg.parent_fk is null
+                ) or medOrg.id_pk = (
+                    select parent_fk
+                    from medical_organization
+                    where id_pk = attachment.medical_organization_fk
+                )
+            LEFT JOIN medical_division md
+                on ps.division_fk = md.id_pk
+            LEFT JOIN idc
+                on idc.id_pk = ps.basic_disease_fk
+            LEFT JOIN idc pe_idc_i
+                on pe_idc_i.id_pk = pe.initial_disease_fk
+            LEFT JOIN idc pe_idc_b
+                on pe_idc_b.id_pk = pe.basic_disease_fk
+            LEFT JOIN provided_event_concomitant_disease pecd
+                on pecd.event_fk = pe.id_pk
+            LEFT JOIN idc pecd_idc
+                on pecd.disease_fk = pecd_idc.id_pk
+            LEFT JOIN treatment_outcome tro
+                on tro.id_pk = pe.treatment_outcome_fk
+            LEFT JOIN address adr
+                on adr.person_fk = per.version_id_pk and adr.type_fk = 1
+            LEFT JOIN medical_organization dep
+                on dep.id_pk = ps.department_fk
+            LEFT JOIN administrative_area aa
+                on aa.id_pk = adr.administrative_area_fk
+        WHERE mr.is_active
+            and ps.payment_type_fk in (2, 4)
+            and mr.year = %s
+            and mr.period = %s
+            and dep.old_code = %s
+            and ms.code not like 'A%%'
+        ORDER BY dep.old_code, p.last_name, p.first_name, p.middle_name, p.birthdate, ps.end_date
+    """
+
+    return list(ProvidedService.objects.raw(query, [year, period,
+                                                    department_code]))
+
 def main():
     year = '2014'
-    period = '09'
+    period = '10'
     path = 'd:/work/expertiza_export/%s/%s' % (year, period)
 
-    services = ProvidedService.objects.filter(
+    departments = ProvidedService.objects.filter(
         #event__record__register__organization_code='280015',
         event__record__register__year=year,
         event__record__register__period=period,
         event__record__register__is_active=True,
         payment_type_id__in=(2, 4),
-    ).exclude(code__code__startswith='A')
+    ).exclude(code__code__startswith='A').values_list(
+        'department__old_code', flat=True).distinct('department__old_code')
 
-    departments = services.values_list('department__old_code', flat=True).distinct('department__old_code')
     pass_departments = []
-    #departments = ['0301061', ]
+
     print departments
     for department in departments:
         print department
@@ -63,98 +191,35 @@ def main():
             ("OUTCOME", "C", 3),
         )
 
-        department_services = services.filter(department__old_code=department)
-        department_services = department_services.values(
-            'code__code', 'division__code', 'comment_error',
-            'event__record__patient__insurance_policy_series',
-            'event__record__patient__insurance_policy_number',
-            'event__record__patient__first_name',
-            'event__record__patient__last_name',
-            'event__record__patient__middle_name',
-            'event__record__patient__birthdate',
-            'event__record__patient__gender_id',
-            'basic_disease__idc_code',
-            'event__concomitant_disease__idc_code',
-            'event__basic_disease__idc_code',
-            'event__anamnesis_number',
-            'start_date', 'end_date',
-            'quantity',
-            'accepted_payment',
-            'event__record__patient',
-            'comment',
-            'code__group_id',
-            'event__treatment_outcome__code',
-            'event__hospitalization_id',
-            'event__worker_code',
-        )
+        services = get_department_services(year, period, department)
+
         exclude_departments = []
-        for department_service in department_services:
-            patient = Patient.objects.get(pk=department_service['event__record__patient'])
-
-            address_string = u'Амурская область, %(area)s, , , %(street)s, %(house)s, %(extra)s, %(room)s'
-            address = patient.get_address()
-
+        for service in services:
             new = db.newRecord()
-            new["COD"] = unicode_to_cp866(department_service['code__code'])
-            new["OTD"] = department_service['division__code'] or '000'
-            new["ERR_ALL"] = unicode_to_cp866(department_service['comment_error'])
-
-            new["SN_POL"] = '%s %s' % (
-                unicode_to_cp866(department_service['event__record__patient__insurance_policy_series']),
-                unicode_to_cp866(department_service['event__record__patient__insurance_policy_number'])
-            )
-
-            new["FAM"] = unicode_to_cp866(department_service['event__record__patient__last_name']) or ''
-            new["IM"] = unicode_to_cp866(department_service['event__record__patient__first_name']) or ''
-            new["OT"] = unicode_to_cp866(department_service['event__record__patient__middle_name']) or ''
-            new["DR"] = department_service['event__record__patient__birthdate'] or '1900-01-01'
-            if department_service['code__group_id'] in (7, 25, 26, 9, 10, 11,
-                                                        12, 13, 14, 15, 16):
-                department_service['event__basic_disease__idc_code']
-            else:
-                new["DS"] = unicode_to_cp866(department_service['basic_disease__idc_code'])
-
-            if department_service['event__concomitant_disease__idc_code']:
-                new["DS2"] = ''
-            else:
-                new["DS2"] = ''
-            new["C_I"] = unicode_to_cp866(
-                department_service['event__anamnesis_number']) or ''
-            new["D_BEG"] = department_service['start_date'] or '1900-01-01'
-            new["D_U"] = department_service['end_date'] or '1900-01-01'
-            new["K_U"] = department_service['quantity'] or 0
-            if 'SC2' in (department_service['comment'] or ''):
-                new["S_OPL"] = round(float(department_service['accepted_payment']) / 0.3, 2)
-            else:
-                new["S_OPL"] = department_service['accepted_payment'] or 0
-            if address:
-                try:
-                    address_string = address_string % dict(
-                        area=address.administrative_area.name or '',
-                        street=address.street or '', house=address.house_number or '',
-                        extra=address.extra_number or '', room=address.room_number or '')
-                    new["ADRES"] = unicode_to_cp866(address_string)
-                except:
-                    new["ADRES"] = ''
-            else:
-                new["ADRES"] = ''
-
+            new["COD"] = unicode_to_cp866(service.service_code)
+            new["OTD"] = service.division_code or '000'
+            new["ERR_ALL"] = ''
+            new["SN_POL"] = unicode_to_cp866(service.policy)
+            new["FAM"] = unicode_to_cp866(service.last_name or '')
+            new["IM"] = unicode_to_cp866(service.first_name or '')
+            new["OT"] = unicode_to_cp866(service.middle_name or '')
+            new["DR"] = service.birthdate or '1900-01-01'
+            new["DS"] = unicode_to_cp866(service.disease)
+            new["DS2"] = unicode_to_cp866(service.concomitant_disease)
+            new["C_I"] = unicode_to_cp866(service.anamnesis_number or '')
+            new["D_BEG"] = service.start_date or '1900-01-01'
+            new["D_U"] = service.end_date or '1900-01-01'
+            new["K_U"] = service.quantity or 0
+            new["S_OPL"] = round(float(service.accepted_payment), 2)
             try:
-                code = int(department_service['code__code'])
+                new["ADRES"] = unicode_to_cp866(service.address)
             except:
-                code = None
-
-            if code and department not in exclude_departments and (
-                    (17001 <= code <= 17061) or (117001 <= code <= 117061)):
-                SPOS = 'P'
-            else:
-                SPOS = 'T'
-
-            new["SPOS"] = SPOS
-            new["GENDER"] = department_service['event__record__patient__gender_id'] or 0
-            new["OUTCOME"] = department_service['event__treatment_outcome__code'] or ''
-            new["HOSP_TYPE"] = department_service['event__hospitalization_id'] or 0
-            new["EMPL_NUM"] = unicode_to_cp866(department_service['event__worker_code']) or ''
+                new["ADRES"] = ''
+            new["SPOS"] = service.funding_type
+            new["GENDER"] = service.gender_code or 0
+            new["OUTCOME"] = service.outcome_code or ''
+            new["HOSP_TYPE"] = service.hospitalization_code or 0
+            new["EMPL_NUM"] = unicode_to_cp866(service.worker_code or '')
             new.store()
         db.close()
 

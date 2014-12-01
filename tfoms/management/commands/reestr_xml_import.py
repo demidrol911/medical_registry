@@ -257,6 +257,7 @@ def main():
                     else:
                         patient_errors += [False, 904, 'PACIENT', 'ID_PAC', record_obj.id,
                                    None, None, u'Отстутствуют сведения о пациенте']
+
                     service_errors += record_obj.validate()
 
                     events = [item['SLUCH']] if type(item['SLUCH']) != list else \

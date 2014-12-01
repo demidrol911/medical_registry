@@ -102,7 +102,7 @@ def get_records(register_pk):
             patient.weight as weight,
             provided_event.id as event_uid,
             provided_event.term_fk as event_term_code,
-            provided_event.kind_fk as event_kind_code,
+            medical_service_kind.code as event_kind_code,
             provided_event.form_fk as event_form_code,
             medical_service_hitech_kind.code as hitech_kind_code,
             provided_event.hitech_method_fk as hitech_method_code,
@@ -364,6 +364,8 @@ def get_records(register_pk):
                     and provided_service.payment_type_fk in (3, 4)
             LEFT JOIN medical_error
                 on provided_service_sanction.error_fk = medical_error.id_pk
+            LEFT JOIN medical_service_kind
+                on medical_service_kind.id_pk = provided_event.kind_fk
         where
             medical_register.id_pk = %s
         order by medical_register_record.id,
@@ -375,7 +377,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '01'
+    period = '10'
     year = '2014'
     print datetime.datetime.now()
     registers = MedicalRegister.objects.filter(

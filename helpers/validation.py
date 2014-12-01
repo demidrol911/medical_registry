@@ -239,7 +239,7 @@ class ValidEvent(object):
         self.id_pk = pk
         self.term = safe_int(item['USL_OK'])
         self.kind = safe_int(item['VIDPOM'])
-        self.hospitalization = item['EXTR']
+        self.hospitalization = safe_int(item['EXTR'])
         self.form = safe_int(item['FOR_POM'])
         self.refer_organization = item['NPR_MO']
         self.organization = item['LPU']

@@ -99,7 +99,7 @@ def get_patients(period, start_date, end_date):
 
 def get_records(register_element, start_date, end_date):
     query = """
-        select
+        select DISTINCT
             provided_service.id_pk,
             medical_register_record.id as record_uid,
             patient.id as patient_uid,
@@ -256,29 +256,6 @@ def get_records(register_element, start_date, end_date):
                 where ps2.event_fk = provided_event.id_pk
                     and provided_service_sanction.type_fk = 1
             ) as event_sanctions_mek_sum,
-
-            ARRAY(SELECT ROW(ps2.id
-                    , provided_service_sanction.underpayment
-                    , 1
-                    , medical_error.failure_cause_fk
-                    , ''
-                    , 1)
-                from provided_service ps2
-                    join provided_service_sanction
-                        on provided_service_sanction.service_fk = ps2.id_pk
-                            and provided_service_sanction.id_pk = (
-                                select max(id_pk)
-                                from provided_service_sanction
-                                where service_fk = ps2.id_pk
-                            )
-                            and ps2.payment_type_fk in (3, 4)
-                    JOIN medical_error
-                        on medical_error.id_pk = provided_service_sanction.error_fk
-                where ps2.event_fk = provided_event.id_pk
-                    and provided_service_sanction.type_fk = 1
-                order by provided_service_sanction.underpayment desc
-            ) as event_sanctions_mek,
-
             (
                 select sum(case provided_service_sanction.underpayment - ps2.accepted_payment between -0.02 and 0.02
                         when true then ps2.accepted_payment
@@ -290,6 +267,7 @@ def get_records(register_element, start_date, end_date):
                             and ps2.payment_type_fk in (2, 4)
                 where ps2.event_fk = provided_event.id_pk
                     and provided_service_sanction.type_fk in (2, 3)
+                    and provided_service_sanction.date between %(start_date)s and %(end_date)s
             ) as event_sanctions_mee_ekmp_sum,
 
             ARRAY(SELECT ROW(ps2.id
@@ -302,14 +280,16 @@ def get_records(register_element, start_date, end_date):
                     , provided_service_sanction.failure_cause_fk
                     , ''
                     , 1
-                    , ps2.accepted_payment)
+                    , ps2.accepted_payment
+                    , provided_service_sanction.id_pk
+                    , provided_service_sanction.date)
                 from provided_service ps2
                     join provided_service_sanction
                         on provided_service_sanction.service_fk = ps2.id_pk
                             and ps2.payment_type_fk in (2, 4)
                 where ps2.event_fk = provided_event.id_pk
                     and provided_service_sanction.type_fk in (2, 3, 4)
-                order by provided_service_sanction.underpayment desc
+                    and provided_service_sanction.date between %(start_date)s and %(end_date)s
             ) as event_sanctions_mee_ekmp,
 
             provided_event.examination_result_fk as examination_result_code,
@@ -334,7 +314,12 @@ def get_records(register_element, start_date, end_date):
             --pss.underpayment as service_sanction_mek,
             service_worker_speciality.code as service_worker_speciality_code,
             provided_service.worker_code as service_worker_code,
-            provided_service.comment as service_comment
+            provided_service.comment as service_comment,
+            medical_register.year, medical_register.period,
+            medical_register.organization_code,
+            medical_register_record.id,
+            provided_event.id,
+            provided_service.id
         from
             medical_register
             join medical_register_record
@@ -418,49 +403,36 @@ def get_records(register_element, start_date, end_date):
                 on provided_service.code_fk = medical_service.id_pk
             JOIN payment_type
                 on provided_service.payment_type_fk = payment_type.id_pk
-            /*
-            left join provided_service_sanction pss
-                on pss.id_pk = (
-                    select pssi.id_pk
-                    from provided_service_sanction pssi
-                        join medical_error
-                            on pssi.error_fk = medical_error.id_pk
-                    order by medical_error.weight, pssi.id_pk DESC
-                    LIMIT 1
-                ) and pss.type_fk = 1
-            */
             JOIN provided_service_sanction pss2
                 on pss2.id_pk = (
-                    select id_pk
+                    select max(id_pk)
                     from provided_service_sanction
                     where service_fk = provided_service.id_pk
                         and type_fk in (2, 3, 4)
-                    limit 1
+                        and date between %(start_date)s and %(end_date)s
                 )
             --LEFT JOIN medical_error
             --    on pss.error_fk = medical_error.id_pk
         where medical_register.is_active
-            and medical_register.year = %s
-            and medical_register.period = %s
-            and medical_register.organization_code = %s
-            and pss2.date between %s and %s
-            and pss2.type_fk in (2, 3, 4)
+            and medical_register.year = %(year)s
+            and medical_register.period = %(period)s
+            and medical_register.organization_code = %(organization)s
         order by medical_register.year, medical_register.period,
             medical_register.organization_code,
             medical_register_record.id,
             provided_event.id,
             provided_service.id
     """
-    return ProvidedService.objects.raw(query, [register_element[0],
-                                               register_element[1],
-                                               register_element[2],
-                                               start_date, end_date, ])
+    return ProvidedService.objects.raw(query, dict(
+        start_date=start_date, end_date=end_date,
+        year=register_element[0], period=register_element[1],
+        organization=register_element[2]))
 
 
 def main():
-    sanction_start_date = '2014-07-01'
-    sanction_end_date = '2014-07-31'
-    period = '09'
+    sanction_start_date = '2014-08-01'
+    sanction_end_date = '2014-08-31'
+    period = '10'
 
     print datetime.datetime.now()
     registers = Sanction.objects.filter(
@@ -505,7 +477,14 @@ def main():
     hm_xml.end('ZGLV')
     print registers
     for index, register_element in enumerate(registers):
+        records = list(get_records(register_element, sanction_start_date, sanction_end_date))
+        payments_types = [rec.service_payment_type_code for rec in records]
 
+        if set(payments_types) == set((2, )):
+            continue
+
+        if not records:
+            continue
         register = list(MedicalRegister.objects.raw(
             """
                 select id_pk,
@@ -617,7 +596,6 @@ def main():
         if sanctions_mek < 0:
             sanctions_mek = 0
 
-        records = list(get_records(register_element, sanction_start_date, sanction_end_date))
         new_register = True
         current_record = None
         current_event = None
@@ -760,13 +738,7 @@ def main():
                 hm_xml.put('ED_COL', record.event_payment_units_number or 0)
                 hm_xml.put('TARIF', round(float(record.event_tariff or 0), 2))
                 hm_xml.put('SUMV', set_precision(float(record.event_invoiced_payment or 0), 2))
-                if record.event_sanctions_mek > 0:
-                    hm_xml.put('OPLATA', record.event_payment_type_code or '')
-                else:
-                    if record.event_payment_type_code == 3:
-                        hm_xml.put('OPLATA', 1)
-                    else:
-                        hm_xml.put('OPLATA', record.event_payment_type_code or '')
+                hm_xml.put('OPLATA', record.event_payment_type_code or '')
 
                 hm_xml.put('SUMP', set_precision(float(record.event_accepted_payment or 0), 2))
                 hm_xml.put('SANK_IT', set_precision(float(record.event_sanctions_mee_ekmp_sum or 0), 2))
@@ -800,6 +772,8 @@ def main():
                         hm_xml.put('S_OSN', sanc_rec[4])
                         hm_xml.put('S_COM', '')
                         hm_xml.put('S_IST', sanc_rec[6])
+                        #hm_xml.put('PKEY', sanc_rec[8])
+                        #hm_xml.put('SDATE', sanc_rec[9])
                         hm_xml.end('SANK')
                 event_counter += 1
 
@@ -845,6 +819,7 @@ def main():
     lm_xml.end('PERS_LIST')
 
     print datetime.datetime.now()
+
 
 class Command(BaseCommand):
     help = 'export big XML'

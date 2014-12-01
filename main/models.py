@@ -43,6 +43,9 @@ EXAMINATION_TYPES = (
     (8, u'ОН3'),
 )
 
+SERVICE_TERM_KINDS = {}
+
+
 
 class ExtendedQuerySet(QuerySet):
     def get_or_none(self, **kwargs):
