@@ -554,7 +554,7 @@ def update_patient_attacment_code(register_element):
                   SELECT MAX(id_pk)
                   FROM attachment
                   WHERE person_fk = person.version_id_pk AND status_fk = 1
-                     AND attachment.date <= (format('%s-%s-%s', mr.year, mr.period, '01')::DATE) + INTERVAL '1 months' AND attachment.is_active)
+                     AND attachment.date <= (format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE) + INTERVAL '1 months' AND attachment.is_active)
             LEFT JOIN medical_organization att_org
               ON (att_org.id_pk = attachment.medical_organization_fk
                   AND att_org.parent_fk IS NULL)
@@ -584,7 +584,7 @@ def update_payment_kind(register_element):
     query = """
         update provided_service set payment_kind_fk = T.payment_kind_code
         from (
-        select distinct ps1.id_pk, T1.pk, ps1.payment_type_fk,
+        select distinct ps1.id_pk service_pk, T1.pk, ps1.payment_type_fk,
             medical_service.code, ps1.end_date, T1.end_date, T1.period,
             case provided_event.term_fk
             when 3 then
@@ -644,7 +644,7 @@ def update_payment_kind(register_element):
                         on i.version_id_pk = p.insurance_policy_fk
                 where mr.is_active
                     and mr.organization_code = %(organization)s
-                    and format('%s-%s-%s', mr.year, mr.period, '01')::DATE < format('%s-%s-%s', %(year)s, %(period)s, '01')::DATE
+                    and format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE < format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
                     and ps.payment_type_fk = 3
             ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
                 and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
@@ -654,7 +654,7 @@ def update_payment_kind(register_element):
             and mr1.period = %(period)s
             and mr1.organization_code = %(organization)s
         ORDER BY payment_kind_code, T1.pk) as T
-        where id_pk = T.service_pk
+        where provided_service.id_pk = T.service_pk
     """
 
     cursor = connection.cursor()
@@ -2333,6 +2333,8 @@ def main():
             ).update(payment_type=None)
 
             identify_patient(register_element)
+            update_patient_attacment_code(register_element)
+            update_payment_kind(register_element)
             print u'repeated service'
             sanctions_on_repeated_service(register_element)
             print u'wrong date'
@@ -2533,9 +2535,6 @@ def main():
                         service.payment_type_id = 2
 
                 service.save()
-
-        if register_element['status'] == 1:
-            update_payment_kind(register_element)
 
         print u'stomat, outpatient, examin'
         if register_element['status'] == 500:
