@@ -591,19 +591,23 @@ def update_payment_kind(register_element):
                     and medical_service.group_fk = 24
                     AND ps1.department_fk NOT IN (15, 88, 89)
                 when TRUE THEN
-                    CASE p1.attachment_code = mr1.organization_code -- если пациент прикреплён к МО
+                    CASE p1.attachment_code = mr1.organization_code -- если пациент прикреплён щас к МО
                     when true THEN -- прикреплён
                         CASE
                         when T1.pk is not NULL
-                            and T1.attachment_code = mr1.organization_code
+                            and T1.attachment_code = mr1.organization_code -- и был прикреплён тогда
                         THEN 4
+                        when T1.pk is not NULL
+                            and T1.attachment_code != mr1.organization_code -- и не был прикреплён тогда
+                        THEN 3
+
                         ELSE 2
                         END
                     else -- не приреплён
                         CASE
                         when T1.pk is not NULL
                             and T1.attachment_code = mr1.organization_code
-                        THEN 3
+                        THEN 2
                         else 1
                         END
                     END
