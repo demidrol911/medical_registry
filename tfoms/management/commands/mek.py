@@ -647,7 +647,7 @@ def update_payment_kind(register_element):
                         on i.version_id_pk = p.insurance_policy_fk
                 where mr.is_active
                     and mr.organization_code = %(organization)s
-                    and format('%s-%s-%s', mr.year, mr.period, '01')::DATE < format('%s-%s-%s', %(year)s, %(period)s, '01')::DATE
+                    and format('%s-%s-%s', mr.year, mr.period, '01')::DATE = format('%s-%s-%s', %(year)s, %(period)s, '01')::DATE - interval '1 month'
                     and ps.payment_type_fk = 3
             ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
                 and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
