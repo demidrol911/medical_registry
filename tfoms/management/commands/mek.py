@@ -596,7 +596,7 @@ def update_payment_kind(register_element):
                         CASE
                         when T1.pk is not NULL
                             and T1.attachment_code = mr1.organization_code -- и был прикреплён тогда
-                        THEN 4
+                        THEN 2
                         when T1.pk is not NULL
                             and T1.attachment_code != mr1.organization_code -- и не был прикреплён тогда
                         THEN 3

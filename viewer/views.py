@@ -20,16 +20,19 @@ def periods(request):
     registers_years = MedicalRegister.objects.filter(is_active=True)\
                                              .values_list('year', flat=True)\
                                              .order_by('-year').distinct()
-    periods_dict = {}
+    periods_list = []
 
     for year in registers_years:
-
+        parent = {'text': year, 'children': []}
         periods = MedicalRegister.objects.filter(is_active=True, year=year)\
                                          .values_list('period', flat=True)\
                                          .distinct().order_by('period')
-        periods_dict[str(year)] = [str(period) for period in periods]
 
-    periods = json.dumps(periods_dict)
+        parent['children'] = [{'text': period, 'leaf': True} for period in periods]
+
+        periods_list.append(parent)
+
+    periods = json.dumps(periods_list)
 
     return HttpResponse(periods,
                         mimetype='application/json')

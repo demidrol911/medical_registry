@@ -93,9 +93,8 @@ def main():
 
             #vipnet_path = os.path.join(OTHER_FILES_DIR, dir_organization_name)
             vipnet_path = OTHER_FILES_DIR + dir_organization_name + '/'
-            mo_send_path = os.path.join(OUTBOX_DIR,
-                                        '%s %s' % (dir_mo_code,
-                                                   outbox_dict[dir_mo_code]))
+            mo_send_path = '%s/%s %s' % (OUTBOX_DIR, dir_mo_code,
+                                         outbox_dict[dir_mo_code])
 
             if not os.path.exists(vipnet_path):
                 os.makedirs(vipnet_path)
