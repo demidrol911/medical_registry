@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from django.shortcuts import render
+from django.core import serializers
 from tfoms.models import MedicalRegister, ProvidedService, MedicalOrganization
 from forms import PeriodFastSearchForm, RegisterSearchForm, RegisterStatusForm
 from django.db.models import Q
@@ -8,22 +9,27 @@ from django.http import HttpResponse
 from django.utils import simplejson
 from django.core import serializers
 
+import json
+
 
 def index(request):
     return render(request, 'viewer/index.html', {})
 
 
-def periods_list(request):
+def periods(request):
     registers_years = MedicalRegister.objects.filter(is_active=True)\
                                              .values_list('year', flat=True)\
-                                             .distinct()
+                                             .order_by('-year').distinct()
     periods_dict = {}
-    print sorted(map(lambda x: int(x), registers_years), key=int)
-    for year in sorted(map(lambda x: int(x), registers_years), key=int):
+
+    for year in registers_years:
+
         periods = MedicalRegister.objects.filter(is_active=True, year=year)\
                                          .values_list('period', flat=True)\
                                          .distinct().order_by('period')
-        periods_dict[year] = periods
+        periods_dict[str(year)] = [str(period) for period in periods]
 
-    return render(request, 'periods_list.html', {'periods_dict': periods_dict},
-                  content_type='application/xml')
+    periods = json.dumps(periods_dict)
+
+    return HttpResponse(periods,
+                        mimetype='application/json')

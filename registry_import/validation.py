@@ -484,7 +484,7 @@ def get_event_validation(item, registry_type=1):
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(HITECH_KINDS, error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('METHOD_HMP', item['METHOD_HMP']).append([
+            Field('METOD_HMP', item['METOD_HMP']).append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(HITECH_METHODS, error=ERROR_MESSAGES['wrong value']),
             ]),
@@ -625,6 +625,7 @@ def get_service_validation(item, registry_type=1, event={}):
         Field('KOL_USL', item['KOL_USL']),
         Field('TARIF', item['TARIF']),
         Field('SUMV_USL', item['SUMV_USL']),
+        Field('COMENTU', item['COMENTU']),
     ])
 
     if registry_type in (1, 2):
