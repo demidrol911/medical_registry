@@ -625,6 +625,7 @@ def get_service_validation(item, registry_type=1, event={}):
         Field('KOL_USL', item['KOL_USL']),
         Field('TARIF', item['TARIF']),
         Field('SUMV_USL', item['SUMV_USL']),
+        Field('COMENTU', item['COMENTU']),
     ])
 
     if registry_type in (1, 2):

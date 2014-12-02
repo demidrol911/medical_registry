@@ -3,4 +3,5 @@ import views
 
 urlpatterns = patterns('',
     url(r'^index/$', views.index),
+    url(r'^json/periods/$', views.periods)
 )
