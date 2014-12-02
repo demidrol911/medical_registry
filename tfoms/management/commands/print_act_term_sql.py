@@ -2687,20 +2687,19 @@ def policlinic_preventive_primary():
     title = u'Поликлиника перв.мед.помощь (с профилактической целью)'
     pattern = 'policlinic_preventive_primary'
     query = """
-             SELECT
+              SELECT
 
              medical_register.organization_code,
 
              case when medical_service.code in ('001038', '101038') THEN 100000
                   when medical_service.code in ('001039', '101039') THEN 100001
-                  when medical_service.group_fk = 9 then 100002
                   else medical_service.division_fk end as division,
 
-            count(distinct(medical_register_record.patient_fk, medical_service.code like '0%')),
+            count(distinct(medical_service.reason_fk, medical_register_record.patient_fk, medical_service.code like '0%')),
             count(distinct CASE WHEN medical_service.code like '0%'
-                  THEN (medical_register_record.patient_fk) END),
+                  THEN (medical_service.reason_fk, medical_register_record.patient_fk) END),
             count(distinct CASE WHEN medical_service.code like '1%'
-                  THEN (medical_register_record.patient_fk) END),
+                  THEN (medical_service.reason_fk, medical_register_record.patient_fk) END),
 
 
             count(distinct provided_service.id_pk),
@@ -2728,9 +2727,50 @@ def policlinic_preventive_primary():
                  and ((provided_event.term_fk = 3
                  and medical_service.reason_fk in (2, 3)
                  and medical_service.division_fk in (399, 401, 403, 443, 444)
-                 and medical_service.group_fk is null) or medical_service.group_fk = 4 or
-                 medical_service.code in ('019214', '019215', '019216', '019217'))
+                 and medical_service.group_fk is null) or medical_service.group_fk = 4)
+
             group by medical_register.organization_code, division
+            union
+SELECT
+
+             medical_register.organization_code,
+
+             100002 as division,
+
+
+            count(distinct(medical_register_record.patient_fk, patient.gender_fk)),
+            count(distinct CASE WHEN patient.gender_fk = 1
+                  THEN (medical_register_record.patient_fk) END),
+            count(distinct CASE WHEN patient.gender_fk = 2
+                  THEN (medical_register_record.patient_fk) END),
+
+
+            count(distinct provided_service.id_pk),
+            count(distinct CASE WHEN patient.gender_fk = 1 THEN provided_service.id_pk END),
+            count(distinct CASE WHEN patient.gender_fk = 2 THEN provided_service.id_pk END),
+
+            sum(provided_service.accepted_payment),
+            COALESCE(sum(CASE WHEN patient.gender_fk = 1 THEN provided_service.accepted_payment END), 0),
+            COALESCE(sum(CASE WHEN patient.gender_fk = 2 THEN provided_service.accepted_payment END), 0)
+
+             FROM provided_service
+             JOIN medical_service
+                 ON provided_service.code_fk = medical_service.id_pk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             join patient
+                 on patient.id_pk = medical_register_record.patient_fk
+
+             WHERE medical_register.is_active
+                 AND medical_register.year = '{year}'
+                 AND medical_register.period = '{period}'
+                 and provided_service.payment_type_fk = 2
+                 and medical_service.code in ('019214', '019215', '019216', '019217')
+             group by medical_register.organization_code, division
             """
 
     column_position = [399, 100002, 401, 403, 100000, 100001,  443, 444]
@@ -2755,7 +2795,13 @@ def policlinic_preventive_primary():
              0,
              -SUM(CASE WHEN provided_service_coefficient.id_pk IS NOT NULL
              THEN round(provided_service.tariff*0.6, 2) ELSE 0 END),
-             0
+             0,
+
+             count(distinct case when medical_service.code in ('019214', '019215') then provided_service.id_pk end),
+             count(distinct case when medical_service.code in ('019214', '019215') and patient.gender_fk = 1
+                   then provided_service.id_pk end),
+             count(distinct case when medical_service.code in ('019214', '019215') and patient.gender_fk = 2
+                   then provided_service.id_pk end)
 
 
              FROM provided_service
@@ -2767,6 +2813,9 @@ def policlinic_preventive_primary():
                  ON provided_event.record_fk = medical_register_record.id_pk
              JOIN medical_register
                  ON medical_register_record.register_fk = medical_register.id_pk
+
+             join patient
+                 on medical_register_record.patient_fk = patient.id_pk
 
              LEFT JOIN provided_service_coefficient
                   ON provided_service_coefficient.service_fk = provided_service.id_pk
@@ -4168,6 +4217,178 @@ def policlinic_all():
     }
 
 
+### Поликлиника перв.мед.помощь (свод)
+def policlinic_primary():
+    """
+    Поликлиника перв.мед.помощь (свод)
+    """
+    title = u'Поликлиника перв.мед.помощь (свод)'
+    pattern = 'policlinic_primary'
+    query = """
+              SELECT
+
+             medical_register.organization_code,
+
+             case when medical_service.code in ('001038', '101038') THEN 100000
+                  when medical_service.code in ('001039', '101039') THEN 100001
+                  else medical_service.division_fk end as division,
+
+            count(distinct(medical_service.reason_fk, medical_register_record.patient_fk, medical_service.code like '0%')),
+            count(distinct CASE WHEN medical_service.code like '0%'
+                  THEN (medical_service.reason_fk, medical_register_record.patient_fk) END),
+            count(distinct CASE WHEN medical_service.code like '1%'
+                  THEN (medical_service.reason_fk, medical_register_record.patient_fk) END),
+
+
+            count(distinct provided_service.id_pk),
+            count(distinct CASE WHEN medical_service.code like '0%' THEN provided_service.id_pk END),
+            count(distinct CASE WHEN medical_service.code like '1%' THEN provided_service.id_pk END),
+
+            sum(provided_service.accepted_payment),
+            COALESCE(sum(CASE WHEN medical_service.code like '0%' THEN provided_service.accepted_payment END), 0),
+            COALESCE(sum(CASE WHEN medical_service.code like '1%' THEN provided_service.accepted_payment END), 0)
+
+             FROM provided_service
+             JOIN medical_service
+                 ON provided_service.code_fk = medical_service.id_pk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+
+             WHERE medical_register.is_active
+                 AND medical_register.year = '{year}'
+                 AND medical_register.period = '{period}'
+                 and provided_service.payment_type_fk = 2
+                 and ((provided_event.term_fk = 3
+                 and medical_service.reason_fk in (2, 3)
+                 and medical_service.division_fk in (399, 401, 403, 443, 444)
+                 and medical_service.group_fk is null) or medical_service.group_fk = 4)
+
+            group by medical_register.organization_code, division
+            union
+SELECT
+
+             medical_register.organization_code,
+
+             100002 as division,
+
+
+            count(distinct(medical_register_record.patient_fk, patient.gender_fk)),
+            count(distinct CASE WHEN patient.gender_fk = 1
+                  THEN (medical_register_record.patient_fk) END),
+            count(distinct CASE WHEN patient.gender_fk = 2
+                  THEN (medical_register_record.patient_fk) END),
+
+
+            count(distinct provided_service.id_pk),
+            count(distinct CASE WHEN patient.gender_fk = 1 THEN provided_service.id_pk END),
+            count(distinct CASE WHEN patient.gender_fk = 2 THEN provided_service.id_pk END),
+
+            sum(provided_service.accepted_payment),
+            COALESCE(sum(CASE WHEN patient.gender_fk = 1 THEN provided_service.accepted_payment END), 0),
+            COALESCE(sum(CASE WHEN patient.gender_fk = 2 THEN provided_service.accepted_payment END), 0)
+
+             FROM provided_service
+             JOIN medical_service
+                 ON provided_service.code_fk = medical_service.id_pk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+             join patient
+                 on patient.id_pk = medical_register_record.patient_fk
+
+             WHERE medical_register.is_active
+                 AND medical_register.year = '{year}'
+                 AND medical_register.period = '{period}'
+                 and provided_service.payment_type_fk = 2
+                 and medical_service.code in ('019214', '019215', '019216', '019217')
+             group by medical_register.organization_code, division
+            """
+
+    column_position = [399, 100002, 401, 403, 100000, 100001,  443, 444]
+
+    column_division = {(399, 100002, 401, 403, 100000, 100001,  443, 444): DIVISION_ALL_1_2}
+
+    column_length = {(399, 100002, 401, 403, 100000, 100001,  443, 444): 3}
+
+    column_separator = {444: 11}
+
+    query1 = """
+             SELECT
+
+             medical_register.organization_code,
+
+             100000 as division,
+
+             0,
+             sum(provided_service.tariff),
+             0,
+
+             0,
+             -SUM(CASE WHEN provided_service_coefficient.id_pk IS NOT NULL
+             THEN round(provided_service.tariff*0.6, 2) ELSE 0 END),
+             0,
+
+             count(distinct case when medical_service.code in ('019214', '019215') then provided_service.id_pk end),
+             count(distinct case when medical_service.code in ('019214', '019215') and patient.gender_fk = 1
+                   then provided_service.id_pk end),
+             count(distinct case when medical_service.code in ('019214', '019215') and patient.gender_fk = 2
+                   then provided_service.id_pk end)
+
+
+             FROM provided_service
+             JOIN medical_service
+                 ON provided_service.code_fk = medical_service.id_pk
+             JOIN provided_event
+                 ON provided_service.event_fk = provided_event.id_pk
+             JOIN medical_register_record
+                 ON provided_event.record_fk = medical_register_record.id_pk
+             JOIN medical_register
+                 ON medical_register_record.register_fk = medical_register.id_pk
+
+             join patient
+                 on medical_register_record.patient_fk = patient.id_pk
+
+             LEFT JOIN provided_service_coefficient
+                  ON provided_service_coefficient.service_fk = provided_service.id_pk
+                      AND provided_service_coefficient.coefficient_fk=3
+
+             WHERE medical_register.is_active
+                 AND medical_register.year = '{year}'
+                 AND medical_register.period = '{period}'
+                 and provided_service.payment_type_fk = 2
+                 and ((provided_event.term_fk = 3
+                 and medical_service.reason_fk in (2, 3)
+                 and medical_service.division_fk in (399, 401, 403, 443, 444)
+                 and medical_service.group_fk is null) or medical_service.group_fk = 4 or
+                 medical_service.code in ('019214', '019215', '019216', '019217'))
+            group by medical_register.organization_code, division
+            """
+
+    column_position1 = [100000]
+
+    column_division1 = {(100000, ): DIVISION_1}
+
+    column_length1 = {(100000, ): 2}
+
+    return {
+        'title': title,
+        'pattern': pattern,
+        'data': [{'structure': (query, column_position, column_division),
+                  'separator': column_separator,
+                  'column_length': column_length},
+                 {'structure': (query1, column_position1, column_division1),
+                  'column_length': column_length1,
+                  'next': False}]
+    }
+
+
 def get_division_by(column_division, index):
     for column in column_division:
         if index in column:
@@ -4270,8 +4491,74 @@ def print_act_1(year, period, data):
         act_book.write_cell(u'за %s %s года' % (MONTH_NAME[period], year))
         act_book.set_style(VALUE_STYLE)
         act_book.set_sheet(0)
-        data_sum = run_sql(data[0]['structure'][0].format(year=year, period=period))
-        print data
+        data_sum = run_sql(data['data'][0]['structure'][0].format(year=year, period=period))
+
+        def print_division(act_book, data_division):
+            act_book.write_cell(data_division[0][0], 'c')
+            act_book.write_cell(data_division[0][1], 'c')
+            act_book.write_cell(data_division[0][2], 'c')
+            act_book.write_cell(data_division[1][0], 'c')
+            act_book.write_cell(data_division[1][1], 'c')
+            act_book.write_cell(data_division[1][2], 'c')
+            act_book.write_cell(data_division[2][0], 'c')
+            act_book.write_cell(data_division[2][1], 'c')
+            act_book.write_cell(data_division[2][2], 'c')
+
+        [399, 100002, 401, 403, 100000, 100001,  443, 444]
+        block_index = 2
+        for mo_code, values in data_sum.iteritems():
+            row_index = ACT_CELL_POSITION[mo_code]
+            act_book.set_cursor(row_index, block_index)
+            print_division(act_book, data_sum[mo_code].get(399, [(0, 0, 0), ]*3))
+            print_division(act_book, data_sum[mo_code].get(100002, [(0, 0, 0), ]*3))
+            print_division(act_book, data_sum[mo_code].get(401, [(0, 0, 0), ]*3))
+            print_division(act_book, data_sum[mo_code].get(403, [(0, 0, 0), ]*3))
+
+            complex_exam = data_sum[mo_code].get(100000, [(0, 0, 0), ]*3)
+            dynamic_exam = data_sum[mo_code].get(100001, [(0, 0, 0), ]*3)
+
+            # Численность
+            act_book.write_cell(complex_exam[0][0], 'c')
+            act_book.write_cell(dynamic_exam[0][0], 'c')
+            act_book.write_cell(complex_exam[0][1], 'c')
+            act_book.write_cell(dynamic_exam[0][1], 'c')
+            act_book.write_cell(complex_exam[0][2], 'c')
+            act_book.write_cell(dynamic_exam[0][2], 'c')
+
+            # Число посещений
+            act_book.write_cell(complex_exam[1][0], 'c')
+            act_book.write_cell(dynamic_exam[1][0], 'c')
+            act_book.write_cell(complex_exam[1][1], 'c')
+            act_book.write_cell(dynamic_exam[1][1], 'c')
+            act_book.write_cell(complex_exam[1][2], 'c')
+            act_book.write_cell(dynamic_exam[1][2], 'c')
+
+            # Стоимость
+            act_book.write_cell(complex_exam[2][0], 'c')
+            act_book.write_cell(dynamic_exam[2][0], 'c')
+            act_book.write_cell(complex_exam[2][1], 'c')
+            act_book.write_cell(dynamic_exam[2][1], 'c')
+            act_book.write_cell(complex_exam[2][2], 'c')
+            act_book.write_cell(dynamic_exam[2][2], 'c')
+
+            print_division(act_book, data_sum[mo_code].get(443, [(0, 0, 0), ]*3))
+            print_division(act_book, data_sum[mo_code].get(444, [(0, 0, 0), ]*3))
+
+
+        block_index = act_book.cursor['column']+11
+        data_sum = run_sql(data['data'][1]['structure'][0].format(year=year, period=period))
+        for mo_code, values in data_sum.iteritems():
+            row_index = ACT_CELL_POSITION[mo_code]
+            act_book.set_cursor(row_index, block_index)
+            data_division = data_sum[mo_code].get(100000, [(0, 0, 0), ]*2)
+            act_book.write_cell(data_division[0][1], 'c')
+            act_book.write_cell(data_division[1][1], 'c')
+            act_book.write_cell(data_division[2][0], 'c')
+            act_book.write_cell(data_division[2][1], 'c')
+            act_book.write_cell(data_division[2][2], 'c')
+            #print values[399][0][0]
+
+        #print data_sum
 
 
 class Command(BaseCommand):
@@ -4327,17 +4614,18 @@ class Command(BaseCommand):
             #policlinic_disease_spec_treatment(),
             #policlinic_disease_spec_patients(),
             #policlinic_disease_spec_cost(),
-            #policlinic_disease_primary(),
+            policlinic_disease_primary(),
             #policlinic_disease_all(),
 
             #policlinic_spec_visit(),
             #policlinic_spec_patients(),
             #policlinic_spec_cost(),
-            #policlinic_all(),
+            policlinic_all(),
 
         ]
         for act in acts:
             print_act(year, period, act)
 
-        print_act_1(year, period, policlinic_preventive_primary())
+        #print_act_1(year, period, policlinic_preventive_primary())
+        print_act_1(year, period, policlinic_primary())
 
