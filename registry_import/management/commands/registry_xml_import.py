@@ -400,6 +400,8 @@ def main():
         patients = {}
         fatal_error = False
         registry_has_errors = False
+        has_surgery = False
+        has_hospitalization = False
 
         current_year = current_period = None
 
@@ -474,7 +476,19 @@ def main():
                 current_year = '20'+year
                 current_period = period
 
+            old_register_status = MedicalRegister.objects.filter(
+                is_active=True, year=current_year,
+                period=current_period,
+                organization_code=organization_code
+            ).values_list('status_id', flat=True).distinct()
+
+            print old_register_status
+
+            if old_register_status and old_register_status[0] in (4, 6, 8):
+                continue
+
             registry_type = registry_types.get(_type.lower())
+            print type(registry_type), registry_type
 
             if registry_pk_list:
                 registry_pk = registry_pk_list.pop()
@@ -590,6 +604,9 @@ def main():
                         new_event['record_id'] = new_record['pk']
                         new_event_list.append(new_event)
 
+                        if new_event.get('USL_OK', '') == '1' and _type == '1':
+                            has_hospitalization = True
+
                         for concomitant in item['DS2'] or []:
                             raw_concomitant = get_concomitant_disease_validation(concomitant)
                             new_concomitant = raw_concomitant.get_dict()
@@ -650,6 +667,17 @@ def main():
                             new_service['pk'] = service_pk
                             new_service['event_id'] = new_event['pk']
                             new_service_list.append(new_service)
+
+                            if new_service.get('CODE_USL', '').startswith('A') and _type == '1':
+                                has_surgery = True
+
+                            if has_hospitalization and not has_surgery:
+                                services_errors.append(set_error(
+                                    '902', field='', parent='',
+                                    record_uid='',
+                                    comment=u'Нет сведений об операцаиях (услуги класса А)'
+                                ))
+                                print u'Нет операции'
 
                             services_errors += handle_errors(
                                 raw_service.errors() or [], parent='USL',
