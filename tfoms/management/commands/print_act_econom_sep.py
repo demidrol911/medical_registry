@@ -203,7 +203,8 @@ def print_accepted_service(act_book, year, period, mo,
             # Круглосуточный стационар
             {'condition': service['term'] == 1,
              'term': 'hospital',
-             'unique_patient': (service['patient_id'], service['tariff_profile_id'], service['group'], age),
+             'unique_patient': (service['patient_id'], service['tariff_profile_id'], service['group'], service['code'], age)
+             if service['group'] else (service['patient_id'], service['tariff_profile_id'], service['group'], age),
              'column_condition': {}},
 
             # Дневной стационар
@@ -1638,6 +1639,7 @@ def print_error_fund(act_book, year, period, mo, data, handbooks):
 
 
 ### Распечатка услуг оплаченных по подушевому в предыдущих периодах
+""""
 def print_paid_by_capitation(act_book, year, period, mo, data):
     paid_services = register_function.get_services(year, period, mo,
                                                    payment_type=[2, 4],
@@ -1685,6 +1687,7 @@ def print_paid_by_capitation(act_book, year, period, mo, data):
         act_book.write_cell(service['tariff'], 'c')                           # Основной тариф
 
         act_book.write_cell(service['calculated_payment'], 'r')               # Рассчётная сумма
+"""
 
 
 ### Печатает сводный реестр для экономистов
@@ -1759,7 +1762,6 @@ class Command(BaseCommand):
                                 sum_capitation_policlinic,
                                 sum_capitation_ambulance, data, handbooks)
                 print_error_fund(act_book, year, period, mo, data, handbooks)
-                print_paid_by_capitation(act_book, year, period, mo, data)
                 if status == 8:
                     register_function.pse_export(year, period, mo, 6, data, handbooks)
                 if status == 3:
@@ -1806,7 +1808,6 @@ class Command(BaseCommand):
                                         sum_capitation_policlinic, sum_capitation_ambulance,
                                         data, handbooks)
                         print_error_fund(act_book, year, period, mo, data, handbooks)
-                        print_paid_by_capitation(act_book, year, period, mo, data)
                     print u'Выгружен', department
             elapsed = time.clock() - start
             print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
