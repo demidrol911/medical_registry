@@ -392,7 +392,7 @@ def main():
 
     for organization in registries:
         if not is_files_completeness(registries[organization]):
-            send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
+            #send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
 
         registry_list = registries[organization]
@@ -457,7 +457,7 @@ def main():
         for registry in registry_list:
 
             if registry in files_errors:
-                send_error_file(OUTBOX_DIR, registry, files_errors[registry])
+                #send_error_file(OUTBOX_DIR, registry, files_errors[registry])
                 continue
 
             services_errors = []
@@ -507,6 +507,7 @@ def main():
                     registries_objects.append(new_registry)
 
                 if 'N_ZAP' in item:
+
                     if record_pk_list:
                         record_pk = record_pk_list.pop()
                     else:
@@ -749,12 +750,12 @@ def main():
 
             print u'...ок'
 
-            if os.path.exists(copy_path):
-                shutil.copy2(OUTBOX_SUCCESS, copy_path)
+            #if os.path.exists(copy_path):
+            #    shutil.copy2(OUTBOX_SUCCESS, copy_path)
 
         print organization, current_year, current_period
 
-        move_files_to_archive(registry_list + [patient_path])
+        #move_files_to_archive(registry_list + [patient_path])
 
     try:
         for rec in patients_errors:

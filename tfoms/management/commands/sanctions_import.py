@@ -17,8 +17,8 @@ S_POL, K_U, DS, TN1, SUM_USL, FFOMS, TFOMS, S_PPP, S_SNK, SNILS, SANK_TYPE,\
 DOC_NUMBER, STATUS, S_SNT, S_SNF, SANCTION_DATE,\
 ANAMNESIS_NUMBER, LPU_NUMBER = range(0, 28)
 
-sanction_start_date = '2014-07-01'
-sanction_end_date = '2014-07-31'
+sanction_start_date = '2014-04-01'
+sanction_end_date = '2014-04-30'
 z = csv.writer(open('d:/work/duplicates_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
 
 
@@ -58,7 +58,8 @@ def find(rec):
                 or (ps.start_date = %(end_date)s or ps.end_date = %(end_date)s)
             )
             and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or upper(%(anamnesis)s) = '')
-            --and department.old_code = %(department)s
+            and (department.old_code = %(department)s or mr.organization_code = %(organization_code)s)
+            --%(organization_code)s
             and ps.payment_type_fk in (2, 4)
         order by ps.end_date, mr.year, mr.period DESC
         --limit 1
@@ -97,8 +98,9 @@ def find(rec):
             and (ps.end_date = %(end_date)s or ps.start_date = %(start_date)s)
             -- %(start_date)s
             --and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or upper(%(anamnesis)s) = '')
-            --and department.old_code = %(department)s
+            and (department.old_code = %(department)s or mr.organization_code = %(organization_code)s)
             and ps.payment_type_fk in (2, 4)
+            --and
         order by ps.end_date, mr.year, mr.period DESC
         --limit 1
     """
@@ -132,7 +134,8 @@ def find(rec):
                     service=service_code, disease=rec[DS][:3]+'%',
                     start_date=rec[STARTDATE], end_date=rec[ENDDATE],
                     anamnesis=rec[ANAMNESIS_NUMBER] or '',
-                    department=rec[LPU_NUMBER])))
+                    department=rec[LPU_NUMBER],
+                    organization_code=rec[CODE_MO])))
     if service:
         if len(service) > 1:
             w = []
@@ -143,12 +146,11 @@ def find(rec):
                     w.append(r)
             z.writerow(w)
             for r in service:
-                print r.pk
                 z.writerow([r.pk])
 
         service = service[0]
     else:
-        print 'not found', rec[LPU_NUMBER], series, number, service_code, rec[DS], rec[STARTDATE], rec[ANAMNESIS_NUMBER]
+        #print 'not found', rec[LPU_NUMBER], series, number, service_code, rec[DS], rec[STARTDATE], rec[ANAMNESIS_NUMBER]
         service = None
 
     if service and service.payment_type_id == 3:
@@ -185,6 +187,8 @@ def main():
     print len(data)
 
     for i, rec in enumerate(data):
+        if i % 1000 == 0:
+            print i
         if float(rec[S_SN]) == 0 and float(rec[S_SNK]) == 0:
             continue
 
@@ -238,7 +242,6 @@ def main():
                             failure_cause=failure)
                 #print 'inserted'
 
-        #print i, none
     connect_fb.close()
 
 

@@ -430,9 +430,9 @@ def get_records(register_element, start_date, end_date):
 
 
 def main():
-    sanction_start_date = '2014-08-01'
-    sanction_end_date = '2014-08-31'
-    period = '10'
+    sanction_start_date = '2014-05-01'
+    sanction_end_date = '2014-05-31'
+    period = '06'
 
     print datetime.datetime.now()
     registers = Sanction.objects.filter(
