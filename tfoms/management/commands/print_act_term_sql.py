@@ -4225,49 +4225,75 @@ def policlinic_primary():
     title = u'Поликлиника перв.мед.помощь (свод)'
     pattern = 'policlinic_primary'
     query = """
-              SELECT
+              select
+mr.organization_code,
 
-             medical_register.organization_code,
+             case when ms.code in ('001038', '101038') THEN 100000
+                  when ms.code in ('001039', '101039') THEN 100001
+                  else ms.division_fk end as division,
 
-             case when medical_service.code in ('001038', '101038') THEN 100000
-                  when medical_service.code in ('001039', '101039') THEN 100001
-                  else medical_service.division_fk end as division,
-
-            count(distinct(medical_service.reason_fk, medical_register_record.patient_fk, medical_service.code like '0%')),
-            count(distinct CASE WHEN medical_service.code like '0%'
-                  THEN (medical_service.reason_fk, medical_register_record.patient_fk) END),
-            count(distinct CASE WHEN medical_service.code like '1%'
-                  THEN (medical_service.reason_fk, medical_register_record.patient_fk) END),
+            count(distinct(ms.reason_fk, mrr.patient_fk, ms.code like '0%')),
+            count(distinct CASE WHEN ms.code like '0%'
+                  THEN (ms.reason_fk, mrr.patient_fk) END),
+            count(distinct CASE WHEN ms.code like '1%'
+                  THEN (ms.reason_fk, mrr.patient_fk) END),
 
 
-            count(distinct provided_service.id_pk),
-            count(distinct CASE WHEN medical_service.code like '0%' THEN provided_service.id_pk END),
-            count(distinct CASE WHEN medical_service.code like '1%' THEN provided_service.id_pk END),
+            count(distinct ps.id_pk),
+            count(distinct CASE WHEN ms.code like '0%' THEN ps.id_pk END),
+            count(distinct CASE WHEN ms.code like '1%' THEN ps.id_pk END),
 
-            sum(provided_service.accepted_payment),
-            COALESCE(sum(CASE WHEN medical_service.code like '0%' THEN provided_service.accepted_payment END), 0),
-            COALESCE(sum(CASE WHEN medical_service.code like '1%' THEN provided_service.accepted_payment END), 0)
+            sum(ps.accepted_payment),
+            COALESCE(sum(CASE WHEN ms.code like '0%' THEN ps.accepted_payment END), 0),
+            COALESCE(sum(CASE WHEN ms.code like '1%' THEN ps.accepted_payment END), 0)
 
-             FROM provided_service
-             JOIN medical_service
-                 ON provided_service.code_fk = medical_service.id_pk
-             JOIN provided_event
-                 ON provided_service.event_fk = provided_event.id_pk
-             JOIN medical_register_record
-                 ON provided_event.record_fk = medical_register_record.id_pk
-             JOIN medical_register
-                 ON medical_register_record.register_fk = medical_register.id_pk
+FROM provided_service ps
+                JOIN medical_service ms
+                    ON ps.code_fk = ms.id_pk
+                JOIN provided_event pe
+                    ON ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                    ON pe.record_fk = mrr.id_pk
+                JOIN patient p
+                    on p.id_pk = mrr.patient_fk
+                JOIN medical_register mr
+                    ON mrr.register_fk = mr.id_pk
+                JOIN insurance_policy i
+                    ON p.insurance_policy_fk = i.version_id_pk
+                JOIN person
+                    ON person.version_id_pk = (
+                        SELECT version_id_pk
+                        FROM person WHERE id = (
+                            SELECT id FROM person
+                            WHERE version_id_pk = i.person_fk) AND is_active)
+                left JOIN attachment
+                  ON attachment.id_pk = (
+                      SELECT MAX(id_pk)
+                      FROM attachment
+                      WHERE person_fk = person.version_id_pk AND status_fk = 1
+                         AND attachment.date <= '2014-11-01' AND attachment.is_active)
+                left JOIN medical_organization att_org
+                  ON (att_org.id_pk = attachment.medical_organization_fk
+                      AND att_org.parent_fk IS NULL)
+                      OR att_org.id_pk = (
+                         SELECT parent_fk FROM medical_organization
+                         WHERE id_pk = attachment.medical_organization_fk
+                      )
 
-             WHERE medical_register.is_active
-                 AND medical_register.year = '{year}'
-                 AND medical_register.period = '{period}'
-                 and provided_service.payment_type_fk = 2
-                 and ((provided_event.term_fk = 3
-                 and medical_service.reason_fk in (2, 3)
-                 and medical_service.division_fk in (399, 401, 403, 443, 444)
-                 and medical_service.group_fk is null) or medical_service.group_fk = 4)
+            WHERE mr.is_active
+             AND mr.year = '{year}'
+             AND mr.period = '{period}'
+             and ps.payment_type_fk = 2
+             and((pe.term_fk = 3 and ms.reason_fk = 1
+             and ((ms.group_fk = 24 and (att_org.code != mr.organization_code or att_org.code is null or ps.department_fk IN (15, 88, 89)))
+                  or (ms.group_fk is null and ms.division_fk in (399, 401, 403, 443, 444))))
 
-            group by medical_register.organization_code, division
+             or ((pe.term_fk = 3 and ms.reason_fk in (2, 3) and ms.group_fk is null and ms.division_fk in (399, 401, 403, 443, 444))
+                  or ms.group_fk = 4)
+
+             or (pe.term_fk = 3 and ms.reason_fk = 5 and ms.division_fk in (399, 401, 403, 443, 444)))
+
+            GROUP BY mr.organization_code, division
             union
 SELECT
 
@@ -4320,55 +4346,76 @@ SELECT
     column_separator = {444: 11}
 
     query1 = """
-             SELECT
-
-             medical_register.organization_code,
+             select
+mr.organization_code,
 
              100000 as division,
 
              0,
-             sum(provided_service.tariff),
+             sum(ps.tariff),
              0,
 
              0,
              -SUM(CASE WHEN provided_service_coefficient.id_pk IS NOT NULL
-             THEN round(provided_service.tariff*0.6, 2) ELSE 0 END),
+             THEN round(ps.tariff*0.6, 2) ELSE 0 END),
              0,
 
-             count(distinct case when medical_service.code in ('019214', '019215') then provided_service.id_pk end),
-             count(distinct case when medical_service.code in ('019214', '019215') and patient.gender_fk = 1
-                   then provided_service.id_pk end),
-             count(distinct case when medical_service.code in ('019214', '019215') and patient.gender_fk = 2
-                   then provided_service.id_pk end)
+             count(distinct case when ms.code in ('019214', '019215') then ps.id_pk end),
+             count(distinct case when ms.code in ('019214', '019215') and p.gender_fk = 1
+                   then ps.id_pk end),
+             count(distinct case when ms.code in ('019214', '019215') and p.gender_fk = 2
+                   then ps.id_pk end)
 
-
-             FROM provided_service
-             JOIN medical_service
-                 ON provided_service.code_fk = medical_service.id_pk
-             JOIN provided_event
-                 ON provided_service.event_fk = provided_event.id_pk
-             JOIN medical_register_record
-                 ON provided_event.record_fk = medical_register_record.id_pk
-             JOIN medical_register
-                 ON medical_register_record.register_fk = medical_register.id_pk
-
-             join patient
-                 on medical_register_record.patient_fk = patient.id_pk
-
-             LEFT JOIN provided_service_coefficient
-                  ON provided_service_coefficient.service_fk = provided_service.id_pk
+FROM provided_service ps
+                JOIN medical_service ms
+                    ON ps.code_fk = ms.id_pk
+                JOIN provided_event pe
+                    ON ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                    ON pe.record_fk = mrr.id_pk
+                JOIN patient p
+                    on p.id_pk = mrr.patient_fk
+                JOIN medical_register mr
+                    ON mrr.register_fk = mr.id_pk
+                JOIN insurance_policy i
+                    ON p.insurance_policy_fk = i.version_id_pk
+                JOIN person
+                    ON person.version_id_pk = (
+                        SELECT version_id_pk
+                        FROM person WHERE id = (
+                            SELECT id FROM person
+                            WHERE version_id_pk = i.person_fk) AND is_active)
+                left JOIN attachment
+                  ON attachment.id_pk = (
+                      SELECT MAX(id_pk)
+                      FROM attachment
+                      WHERE person_fk = person.version_id_pk AND status_fk = 1
+                         AND attachment.date <= '2014-11-01' AND attachment.is_active)
+                left JOIN medical_organization att_org
+                  ON (att_org.id_pk = attachment.medical_organization_fk
+                      AND att_org.parent_fk IS NULL)
+                      OR att_org.id_pk = (
+                         SELECT parent_fk FROM medical_organization
+                         WHERE id_pk = attachment.medical_organization_fk
+                      )
+               LEFT JOIN provided_service_coefficient
+                  ON provided_service_coefficient.service_fk = ps.id_pk
                       AND provided_service_coefficient.coefficient_fk=3
 
-             WHERE medical_register.is_active
-                 AND medical_register.year = '{year}'
-                 AND medical_register.period = '{period}'
-                 and provided_service.payment_type_fk = 2
-                 and ((provided_event.term_fk = 3
-                 and medical_service.reason_fk in (2, 3)
-                 and medical_service.division_fk in (399, 401, 403, 443, 444)
-                 and medical_service.group_fk is null) or medical_service.group_fk = 4 or
-                 medical_service.code in ('019214', '019215', '019216', '019217'))
-            group by medical_register.organization_code, division
+            WHERE mr.is_active
+             AND mr.year = '{year}'
+             AND mr.period = '{period}'
+             and ps.payment_type_fk = 2
+             and((pe.term_fk = 3 and ms.reason_fk = 1
+             and ((ms.group_fk = 24 and (att_org.code != mr.organization_code or att_org.code is null or ps.department_fk IN (15, 88, 89)))
+                  or (ms.group_fk is null and ms.division_fk in (399, 401, 403, 443, 444))))
+
+             or ((pe.term_fk = 3 and ms.reason_fk in (2, 3) and ms.group_fk is null and ms.division_fk in (399, 401, 403, 443, 444))
+                  or ms.group_fk = 4 or ms.code in ('019214', '019215', '019216', '019217'))
+
+             or (pe.term_fk = 3 and ms.reason_fk = 5 and ms.division_fk in (399, 401, 403, 443, 444)))
+
+            GROUP BY mr.organization_code, division
             """
 
     column_position1 = [100000]
@@ -4614,13 +4661,13 @@ class Command(BaseCommand):
             #policlinic_disease_spec_treatment(),
             #policlinic_disease_spec_patients(),
             #policlinic_disease_spec_cost(),
-            policlinic_disease_primary(),
+            #policlinic_disease_primary(),
             #policlinic_disease_all(),
 
             #policlinic_spec_visit(),
             #policlinic_spec_patients(),
             #policlinic_spec_cost(),
-            policlinic_all(),
+            #policlinic_all(),
 
         ]
         for act in acts:

@@ -14,9 +14,10 @@ def get_outbox_dict(dir):
     outbox_dict = {}
 
     for d in dirs:
-        t = d
-        code, name = t[:6], t[7:]
-        outbox_dict[code] = name
+        if os.path.isdir(os.path.join(dir, d)):
+            t = d
+            code, name = t[:6], t[7:]
+            outbox_dict[code] = name
 
     return outbox_dict
 

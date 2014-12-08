@@ -378,100 +378,100 @@ def get_record_validation(item):
 
 def get_event_validation(item, registry_type=1):
     event = MyCollection().append([
-        Field('IDCASE', item['IDCASE']).append([
+        Field('IDCASE', item['IDCASE'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsLengthBetween(1, 11,
                             error=ERROR_MESSAGES['length exceeded'])
         ]),
-        Field('VIDPOM', item['VIDPOM']).append([
+        Field('VIDPOM', item['VIDPOM'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(list(KINDS), error=ERROR_MESSAGES['wrong value']),
         ]),
-        Field('LPU', item['LPU']).append([
+        Field('LPU', item['LPU'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(list(ORGANIZATIONS),
                      error=ERROR_MESSAGES['wrong value']),
         ]),
-        Field('LPU_1', item['LPU_1']).append([
+        Field('LPU_1', item['LPU_1'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(list(DEPARTMENTS),
                      error=ERROR_MESSAGES['wrong value']),
         ]),
-        Field('NHISTORY', item['NHISTORY']).append([
+        Field('NHISTORY', item['NHISTORY'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsLengthBetween(1, 50, error=ERROR_MESSAGES['wrong format']),
         ]),
-        Field('DATE_1', item['DATE_1']).append([
+        Field('DATE_1', item['DATE_1'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsValidDate(error=ERROR_MESSAGES['wrong format'])
         ]),
-        Field('DATE_2', item['DATE_2']).append([
+        Field('DATE_2', item['DATE_2'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsValidDate(error=ERROR_MESSAGES['wrong format'])
         ]),
-        Field('DS1', item['DS1']).append([
+        Field('DS1', item['DS1'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
             DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True),
         ]),
-        Field('IDSP', item['IDSP']).append([
+        Field('IDSP', item['IDSP'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(METHODS, error=ERROR_MESSAGES['wrong value']),
         ]),
-        Field('ED_COL', item['ED_COL']),
+        Field('ED_COL', item['ED_COL'] or ''),
     ])
 
     if registry_type in (1, 2):
         event.append([
-            Field('USL_OK', item['USL_OK']).append([
+            Field('USL_OK', item['USL_OK'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(TERMS), error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('FOR_POM', item['FOR_POM']).append([
+            Field('FOR_POM', item['FOR_POM'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(FORMS), error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('NPR_MO', item['NPR_MO']).append([
+            Field('NPR_MO', item['NPR_MO'] or '').append([
                 IsInList(list(ORGANIZATIONS),
                          error=ERROR_MESSAGES['wrong value'],
                          pass_on_blank=True),
             ]),
-            Field('EXTR', item['EXTR']).append([
+            Field('EXTR', item['EXTR'] or '').append([
                 IsInList(list(HOSPITALIZATIONS) + ['0'],
                          error=ERROR_MESSAGES['wrong value'],
                          pass_on_blank=True),
             ]),
-            Field('PODR', item['PODR']).append([
+            Field('PODR', item['PODR'] or '').append([
                 IsInList(list(DIVISIONS), error=ERROR_MESSAGES['wrong value'],
                          pass_on_blank=True),
             ]),
-            Field('PROFIL', item['PROFIL']).append([
+            Field('PROFIL', item['PROFIL'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(PROFILES), error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('DET', item['DET']).append([
+            Field('DET', item['DET'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(['0', '1']), error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('DS0', item['DS0']).append([
+            Field('DS0', item['DS0'] or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
                 DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                     pass_on_blank=True),
             ]),
-            Field('RSLT', item['RSLT']).append([
+            Field('RSLT', item['RSLT'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(RESULTS, error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('ISHOD', item['ISHOD']).append([
+            Field('ISHOD', item['ISHOD'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(OUTCOMES, error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('PRVS', item['PRVS']).append([
+            Field('PRVS', item['PRVS'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(SPECIALITIES_NEW, error=ERROR_MESSAGES['wrong value'])
             ]),
-            Field('IDDOKT', item['IDDOKT']).append([
+            Field('IDDOKT', item['IDDOKT'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsLengthBetween(1, 25, error=ERROR_MESSAGES['wrong format']),
             ]),
@@ -480,11 +480,11 @@ def get_event_validation(item, registry_type=1):
 
     if registry_type == 2:
         event.append([
-            Field('VID_HMP', item['VID_HMP']).append([
+            Field('VID_HMP', item['VID_HMP'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(HITECH_KINDS, error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('METOD_HMP', item['METOD_HMP']).append([
+            Field('METOD_HMP', item['METOD_HMP'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(HITECH_METHODS, error=ERROR_MESSAGES['wrong value']),
             ]),
@@ -492,14 +492,14 @@ def get_event_validation(item, registry_type=1):
 
     if registry_type in [3, 4, 6, 7]:
         event.append([
-            Field('P_OTK', item['P_OTK']).append([
+            Field('P_OTK', item['P_OTK'] or '').append([
                 IsInList(['0', '1'], error=ERROR_MESSAGES['wrong value'])
             ]),
         ])
 
     if registry_type in list(range(3, 11)):
         event.append([
-            Field('RSLT_D', item['RSLT_D']).append([
+            Field('RSLT_D', item['RSLT_D'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(EXAMINATION_RESULTS,
                          error=ERROR_MESSAGES['wrong value']),
@@ -508,7 +508,7 @@ def get_event_validation(item, registry_type=1):
 
     if registry_type in (3, 4):
         event.append([
-            Field('COMENTSL', item['COMENTSL']).append([
+            Field('COMENTSL', item['COMENTSL'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 Regex(r'^F(0|1)(0|1)[0-3]{1}(0|1)$',
                       error=ERROR_MESSAGES['wrong format']),
@@ -520,7 +520,7 @@ def get_event_validation(item, registry_type=1):
 
     if registry_type == 5:
         event.append([
-            Field('COMENTSL', item['COMENTSL']).append([
+            Field('COMENTSL', item['COMENTSL'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 Regex(r'^F(0|1)[0-3]{1}(0|1)$',
                       error=ERROR_MESSAGES['wrong format']),
@@ -536,7 +536,7 @@ def get_complicated_disease_validation(item, registry_type=1):
 
     if registry_type in (1, 2):
         disease.append([
-            Field('DS3', item['DS3']).append([
+            Field('DS3', item['DS3'] or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
                 DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                     pass_on_blank=True)
@@ -551,7 +551,7 @@ def get_concomitant_disease_validation(item, registry_type=1):
     disease = MyCollection()
 
     disease.append([
-        Field('DS2', item['DS2']).append([
+        Field('DS2', item['DS2'] or '').append([
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
             DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True)
@@ -566,7 +566,7 @@ def get_event_special_validation(item, registry_type=1):
     special = MyCollection()
 
     special.append([
-        Field('OS_SLUCH', item['OS_SLUCH']).append([
+        Field('OS_SLUCH', item['OS_SLUCH'] or '').append([
             IsInList(SPECIALS, error=ERROR_MESSAGES('wrong value'),
                      pass_on_blank=True)
         ])
@@ -578,39 +578,39 @@ def get_event_special_validation(item, registry_type=1):
 
 def get_service_validation(item, registry_type=1, event={}):
     service = MyCollection().append([
-        Field('IDSERV', item['IDSERV']).append([
+        Field('IDSERV', item['IDSERV'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsLengthBetween(1, 36, error=ERROR_MESSAGES['wrong format']),
         ]),
-        Field('LPU', item['LPU']).append([
+        Field('LPU', item['LPU'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(list(ORGANIZATIONS),
                      error=ERROR_MESSAGES['wrong value']),
         ]),
-        Field('LPU_1', item['LPU_1']).append([
+        Field('LPU_1', item['LPU_1'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(list(DEPARTMENTS),
                      error=ERROR_MESSAGES['wrong value']),
         ]),
-        Field('DATE_IN', item['DATE_IN']).append([
+        Field('DATE_IN', item['DATE_IN'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsValidDate(error=ERROR_MESSAGES['wrong format'])
         ]),
-        Field('DATE_OUT', item['DATE_OUT']).append([
+        Field('DATE_OUT', item['DATE_OUT'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsValidDate(error=ERROR_MESSAGES['wrong format'])
         ]),
-        Field('DS', item['DS']).append([
+        Field('DS', item['DS'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
             DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True),
         ]),
-        Field('CODE_MD', item['CODE_MD']).append([
+        Field('CODE_MD', item['CODE_MD'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsLengthBetween(1, 25, error=ERROR_MESSAGES['length exceeded'])
         ]),
-        Field('CODE_USL', item['CODE_USL']).append([
+        Field('CODE_USL', item['CODE_USL'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(CODES, error=ERROR_MESSAGES['wrong value']),
             IsCorrespondsToRegistryType(
@@ -622,30 +622,30 @@ def get_service_validation(item, registry_type=1, event={}):
                 event.get('METOD_HMP', ''), registry_type,
                 error=ERROR_MESSAGES['hitech method mismatch']),
         ]),
-        Field('KOL_USL', item['KOL_USL']),
-        Field('TARIF', item['TARIF']),
-        Field('SUMV_USL', item['SUMV_USL']),
-        Field('COMENTU', item['COMENTU']),
+        Field('KOL_USL', item['KOL_USL'] or ''),
+        Field('TARIF', item['TARIF'] or ''),
+        Field('SUMV_USL', item['SUMV_USL'] or ''),
+        Field('COMENTU', item['COMENTU'] or ''),
     ])
 
     if registry_type in (1, 2):
         service.append([
-            Field('PODR', item['PODR']).append([
+            Field('PODR', item['PODR'] or '').append([
                 IsInList(list(DIVISIONS), error=ERROR_MESSAGES['wrong value'],
                          pass_on_blank=True),
             ]),
-            Field('PROFIL', item['PROFIL']).append([
+            Field('PROFIL', item['PROFIL'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(PROFILES), error=ERROR_MESSAGES['wrong value']),
             ]),
-            Field('DET', item['DET']).append([
+            Field('DET', item['DET'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(['0', '1']), error=ERROR_MESSAGES['wrong value']),
                 IsMatchedToEvent(
                     event['DET'],
                     error=ERROR_MESSAGES['children profile mismatch'])
             ]),
-            Field('PRVS', item['PRVS']).append([
+            Field('PRVS', item['PRVS'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(SPECIALITIES_NEW, error=ERROR_MESSAGES['wrong value'])
             ]),
