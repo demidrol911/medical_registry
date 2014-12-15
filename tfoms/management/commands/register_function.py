@@ -580,6 +580,14 @@ def calculate_capitation_tariff(term, year, period, mo_code):
         capitation_data['female']['population_tariff']['children'] = \
             capitation_data['female']['population']['children'] * capitation_data['female']['tariff']['children']
 
+        # Для Магдагачи 280029
+        """
+        capitation_data['male']['population_tariff']['adult'] *= 2
+        capitation_data['male']['population_tariff']['children'] *= 2
+        capitation_data['female']['population_tariff']['adult'] *= 2
+        capitation_data['female']['population_tariff']['children'] *= 2
+        """
+
         # Коэффициент по подушевому
         if term == 3:
             fap = TariffFap.objects.filter(organization__code=mo_code,
