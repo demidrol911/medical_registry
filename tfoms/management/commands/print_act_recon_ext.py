@@ -7,11 +7,13 @@ from helpers.excel_style import VALUE_STYLE
 from medical_service_register.path import REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
 from helpers.const import ACT_CELL_POSITION_EXT, MONTH_NAME
-from tfoms.models import ProvidedService
+from tfoms.models import ProvidedService, Sanction
+import datetime
 
 
 ### Печатает сводный акт принятых услуг за месяц
-### Формат вызова print_act_recon год период
+### c доплатой и подушевым
+### Формат вызова print_act_recon_ext год период
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
@@ -56,20 +58,29 @@ class Command(BaseCommand):
             values('organization__code').\
             annotate(sum_capitation=Sum('accepted_payment'))
 
-        def print_sum(act_book, sum_data, sum_key, column):
+        surcharge = Sanction.objects.filter(
+            type=4,
+            date=datetime.date(year=int(year), month=int(period)-1, day=30)).\
+            values('service__organization__code').\
+            annotate(sum_surcharge=Sum('underpayment'))
+
+        def print_sum(act_book, sum_data, sum_key, mo_key, column):
             for data in sum_data:
                 #print data
-                act_book.set_cursor(ACT_CELL_POSITION_EXT[data['organization__code']], column)
+                act_book.set_cursor(ACT_CELL_POSITION_EXT[data[mo_key]], column)
                 act_book.write_cell(data[sum_key])
 
         # Распечатка акта
         with ExcelWriter(u'%s/сверка_%s_%s' % (reestr_path, year, MONTH_NAME[period]),
                          template=ur'%s/templates/excel_pattern/recon_ext.xls' % BASE_DIR) as act_book:
+            act_book.set_cursor(2, 0)
+            act_book.write_cell(u'за %s %s года' % (MONTH_NAME[period], year))
             act_book.set_style(VALUE_STYLE)
-            print_sum(act_book, invoiced_payment, 'sum_invoiced', 3)
-            print_sum(act_book, accepted_payment, 'sum_accepted', 4)
-            print_sum(act_book, policlinic_capitation, 'sum_capitation', 5)
-            print_sum(act_book, acute_care, 'sum_capitation', 6)
+            print_sum(act_book, invoiced_payment, 'sum_invoiced', 'organization__code', 3)
+            print_sum(act_book, accepted_payment, 'sum_accepted', 'organization__code', 4)
+            print_sum(act_book, policlinic_capitation, 'sum_capitation', 'organization__code', 5)
+            print_sum(act_book, acute_care, 'sum_capitation', 'organization__code', 6)
+            print_sum(act_book, surcharge, 'sum_surcharge', 'service__organization__code', 11)
 
         finish = time.time()
         print u'Время выполнения: {:.3f} минут'.format((finish - start)/60)
