@@ -1,14 +1,18 @@
 #! -*- coding: utf-8 -*-
 
 import time
+import datetime
+
 from django.core.management.base import BaseCommand
-from django.db.models import Sum, F
-from helpers.excel_style import VALUE_STYLE
+from django.db.models import Sum
+
+from report_printer.excel_style import VALUE_STYLE
 from medical_service_register.path import REESTR_EXP, BASE_DIR
 from helpers.excel_writer import ExcelWriter
-from helpers.const import ACT_CELL_POSITION_EXT, MONTH_NAME
+from report_printer.const import ACT_CELL_POSITION_EXT, MONTH_NAME
 from tfoms.models import ProvidedService, Sanction
-import datetime
+
+
 
 
 ### Печатает сводный акт принятых услуг за месяц
@@ -66,7 +70,6 @@ class Command(BaseCommand):
 
         def print_sum(act_book, sum_data, sum_key, mo_key, column):
             for data in sum_data:
-                #print data
                 act_book.set_cursor(ACT_CELL_POSITION_EXT[data[mo_key]], column)
                 act_book.write_cell(data[sum_key])
 
