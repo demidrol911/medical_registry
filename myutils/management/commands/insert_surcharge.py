@@ -7,7 +7,6 @@ from tfoms.models import ProvidedService, Sanction
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        #failure_cause = args[0]
         file_service = file('service.csv')
         current_data = datetime.date(year=2014, day=31, month=10)
         for id_service_str in file_service:
