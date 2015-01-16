@@ -125,6 +125,13 @@ class ExcelWriter(Workbook):
             self.cursor['row'] += 1
             self.cursor['column'] += 1
 
+    def write_cella(self, row_index, column_index, value):
+        self.set_cursor(row_index, column_index)
+        self.write_cell(value)
+
+    def set_row_height(self, height):
+        self.sheet.set_row(self.cursor['row'], height)
+
     ### Устанаавливает количество отображаемых знаков после запятой для чисел
     def set_number_precision(self, prec):
         self.number_precision = prec

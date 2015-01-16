@@ -7,7 +7,7 @@ import time
 from django.core.management.base import BaseCommand
 
 from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR
-from helpers.excel_writer import ExcelWriter
+from report_printer.excel_writer import ExcelWriter
 from report_printer.const import MONTH_NAME
 from helpers.correct import date_correct
 import tfoms.func as register_function
