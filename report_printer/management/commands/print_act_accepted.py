@@ -5,6 +5,7 @@ from decimal import Decimal
 import time
 
 from django.core.management.base import BaseCommand
+from django.db import connection
 
 from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
@@ -17,7 +18,685 @@ from report_printer.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
 DEBUG = True
 
 
+def run(query):
+    cursor = connection.cursor()
+    cursor.execute(query)
+    return cursor.fetchall()
+
+
 ### Рвспечатка сводного реестра принятых услуг
+def print_accepted_services(act_book, year, period, mo, sum_capitation_policlinic, sum_capitation_amb, handbooks):
+    query = """
+            --- Все нормальные услуги ---
+            select
+            -- Вид помощи
+            case when pe.term_fk is null then 6
+                 ELSE pe.term_fk
+                 end as term,
+
+            -- Подушевое
+            case when pe.term_fk = 3 THEN (
+                 CASE WHEN ps.payment_kind_fk = 2 THEN 0
+                      WHEN ps.payment_kind_fk = 1 THEN 1
+                 END
+                 )
+                 WHEN pe.term_fk = 4 THEN 0
+                 ELSE 1
+                 END AS capitation,
+
+            case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+                 CASE when pe.term_fk = 3 THEN (
+                           CASE WHEN ms.reason_fk = 1 and
+                           (select count(ps1.id_pk) from provided_service ps1 where ps1.event_fk = ps.event_fk) = 1 then 99
+                           else ms.reason_fk END
+                      )
+                      when pe.term_fk = 2 then msd.term_fk
+                      ELSE 0
+                      END
+                 )
+                 ELSE 0
+                 END AS sub_term,
+
+            -- Группы услуг
+            case when ms.group_fk is NULL THEN 0
+                 WHEN ms.group_fk = 24 THEN 0
+                 ELSE ms.group_fk
+                 END as "group",
+
+            -- Подгруппы
+            CASE when ms.subgroup_fk IS NULL THEN 0
+                 ELSE 1
+                 END AS subgroup,
+
+            -- Отделения
+            case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+                 case WHEn pe.term_fk = 3 THEN ms.division_fk
+                      when pe.term_fk = 4 then ms.division_fk
+                      when pe.term_fk = 2 then ms.tariff_profile_fk
+                      when pe.term_fk = 1 then ms.tariff_profile_fk
+                      end
+                )
+                ELSE (
+                   case when ms.subgroup_fk is null THEN ms.id_pk
+                        else ms.subgroup_fk
+                        END
+                )
+                END AS division,
+
+            -- Пол
+            CASE WHEN ms.subgroup_fk in (8, 16, 9, 10, 24, 25) THEN pt.gender_fk
+                 ELSE 0
+                 END AS gender,
+
+
+            -- Рассчёт --
+            count(distinct CASE WHEN ms.code ilike '0%' THEN pt.id_pk END) AS patient_adult,
+            count(distinct CASE WHEN ms.code ilike '1%' THEN pt.id_pk END) AS patient_child,
+
+            count(distinct CASE WHEN ms.code ilike '0%' and ms.reason_fk = 1 THEN pe.id_pk END) AS treatment_adult,
+            count(distinct CASE WHEN ms.code ilike '1%' and ms.reason_fk = 1 THEN pe.id_pk END) AS treatment_child,
+
+            count(CASE WHEN ms.code ilike '0%' THEN ps.id_pk END) AS service_adult,
+            count(CASE WHEN ms.code ilike '1%' THEN ps.id_pk END) AS service_child,
+
+            sum(CASE WHEN ms.code ilike '0%' THEN ps.quantity ELSE 0 END) AS quantity_adult,
+            sum(CASE WHEN ms.code ilike '1%' THEN ps.quantity ELSE 0 END) AS quantity_child,
+
+            sum(CASE WHEN ms.code ilike '0%' THEN ps.tariff ELSE 0 END) AS tariff_adult,
+            sum(CASE WHEN ms.code ilike '1%' THEN ps.tariff ELSE 0 END) AS tariff_child,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            sum(CASE WHEN ms.code ilike '0%' and ps.payment_kind_fk != 2
+                     THEN ps.accepted_payment ELSE 0 END) AS accepted_payment_adult,
+            sum(CASE WHEN ms.code ilike '1%' and ps.payment_kind_fk != 2
+                     THEN ps.accepted_payment ELSE 0 END) AS accepted_payment_child
+
+            from medical_register mr
+            JOIN medical_register_record mrr
+                ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                ON ps.event_fk=pe.id_pk
+            JOIN medical_organization mo
+                ON ps.organization_fk=mo.id_pk
+            JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+            JOIN patient pt
+                ON pt.id_pk = mrr.patient_fk
+            left join medical_division msd
+                on msd.id_pk = pe.division_fk
+            where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                  and mo.code = '{mo}'
+                  and ps.payment_type_fk in (2, 4)
+                  and (ms.group_fk not in (7, 19, 27) or ms.group_fk is null)
+            group by term, capitation,  sub_term, "group", subgroup, division, gender
+
+            --- Диспансеризация взрослых ---
+            union
+             select
+                -- Вид помощи
+                6 as term,
+
+                -- Подушевое
+                1 AS capitation,
+
+                -- Место или причина
+                (select ms1.subgroup_fk from
+                       provided_service ps1
+                       JOIN medical_service ms1 on ps1.code_fk = ms1.id_pk
+                       WHERE ps1.event_fk = ps.event_fk
+                             and ps1.payment_type_fk = 2
+                             and ms1.code in ('019021',
+                                              '019023',
+                                              '019022',
+                                              '019024'))
+                       as sub_term,
+
+                -- Группы услуг
+                7 as "group",
+
+                -- Подгруппы
+                0 AS subgroup,
+
+                -- Отделения
+                ms.id_pk AS division,
+
+                -- Пол
+                0 AS gender,
+
+
+                 -- Рассчёт --
+                count(distinct CASE WHEN ms.code ilike '0%' THEN mrr.patient_fk END) AS patinet_adult,
+                0,
+
+                0,
+                0,
+
+                count(CASE WHEN ms.code ilike '0%' THEN ps.id_pk END) AS service_adult,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%' THEN ps.quantity ELSE 0 END) AS quantity_adult,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%' THEN ps.tariff ELSE 0 END) AS tariff_adult,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                sum(CASE WHEN ms.code like '0%' and psc.coefficient_fk = 5 THEN 0.07*ps.tariff ELSE 0 END),
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%' and ps.payment_kind_fk != 2
+                         THEN ps.accepted_payment ELSE 0 END) AS accepted_payment_adult,
+                0
+
+                 from medical_register mr
+                 JOIN medical_register_record mrr
+                    ON mr.id_pk=mrr.register_fk
+                 JOIN provided_event pe
+                    ON mrr.id_pk=pe.record_fk
+                 JOIN provided_service ps
+                    ON ps.event_fk=pe.id_pk
+                 JOIN medical_organization mo
+                    ON ps.organization_fk=mo.id_pk
+                 JOIN medical_service ms
+                    ON ms.id_pk = ps.code_fk
+                 left join provided_service_coefficient psc
+                    on psc.service_fk = ps.id_pk
+                 where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                      and mo.code = '{mo}'
+                      and ps.payment_type_fk = 2
+                 AND ms.group_fk = 7 and ms.code in (
+                        '019021', '019023', '019022', '019024',
+                        '019001', '019020'
+                 )
+
+            group by term, capitation,  sub_term, "group", subgroup, division, gender
+            union
+
+            --- Стоматология ---
+            select
+                -- Вид помощи
+                7 as term,
+
+                -- Подушевое
+                1 AS capitation,
+
+                -- Место или причина
+                0 as sub_term,
+
+                -- Группы услуг
+                19 as "group",
+
+                -- Подгруппы
+                1 AS subgroup,
+
+                -- Отделения
+                ms.subgroup_fk AS division,
+
+                -- Пол
+                0 AS gender,
+
+
+                -- Рассчёт --
+                count(distinct CASE WHEN ms.code ilike '0%' THEN mrr.patient_fk END) AS patinet_adult,
+                count(distinct CASE WHEN ms.code ilike '1%' THEN mrr.patient_fk END) AS patinet_child,
+
+                count(distinct CASE WHEN ms.code ilike '0%' THEN ps.event_fk END) AS treatment_adult,
+                count(distinct CASE WHEN ms.code ilike '1%' THEN ps.event_fk END) AS treatment_child,
+
+                count(CASE WHEN ms.code ilike '0%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_adult,
+                count(CASE WHEN ms.code ilike '1%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_child,
+
+                sum(CASE WHEN ms.code ilike '0%'
+                          THEN (SELECT sum(ps1.quantity*ms1.uet)
+                          from provided_service ps1
+                               join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END) AS quantity_adult,
+                sum(CASE WHEN ms.code ilike '1%'
+                          THEN (SELECT sum(ps1.quantity*ms1.uet)
+                          from provided_service ps1
+                               join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END) AS quantity_child,
+
+                sum(CASE WHEN ms.code ilike '0%'
+                          THEN (SELECT sum(ps1.tariff)
+                          from provided_service ps1
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END) AS tariff_adult,
+                sum(CASE WHEN ms.code ilike '1%'
+                          THEN (SELECT sum(ps1.tariff)
+                          from provided_service ps1
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END) AS tariff_child,
+
+                0,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%' and ms.subgroup_fk = 17
+                          THEN (SELECT sum(ps1.tariff*0.2)
+                          from provided_service ps1
+                               join provided_service_coefficient psc
+                                   on ps1.id_pk = psc.service_fk and psc.coefficient_fk = 4
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END),
+                sum(CASE WHEN ms.code ilike '1%' and ms.subgroup_fk = 17
+                          THEN (SELECT sum(ps1.tariff*0.2)
+                          from provided_service ps1
+                               join provided_service_coefficient psc
+                                   on ps1.id_pk = psc.service_fk and psc.coefficient_fk = 4
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END),
+
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                 sum(CASE WHEN ms.code ilike '0%'
+                          THEN (SELECT sum(ps1.accepted_payment)
+                          from provided_service ps1
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END) AS accepted_payment_adult,
+                 sum(CASE WHEN ms.code ilike '1%'
+                          THEN (SELECT sum(ps1.accepted_payment)
+                          from provided_service ps1
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.payment_type_fk = 2
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END) AS accepted_payment_child
+
+                 from medical_register mr
+                 JOIN medical_register_record mrr
+                    ON mr.id_pk=mrr.register_fk
+                 JOIN provided_event pe
+                    ON mrr.id_pk=pe.record_fk
+                 JOIN provided_service ps
+                    ON ps.event_fk=pe.id_pk
+                 JOIN medical_organization mo
+                    ON ps.organization_fk=mo.id_pk
+                 JOIN medical_service ms
+                    ON ms.id_pk = ps.code_fk
+                 where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                      and mo.code = '{mo}'
+                      and ps.payment_type_fk = 2
+                 AND ms.group_fk = 19 and ms.subgroup_fk is not null
+
+                 group by term, capitation,  sub_term, "group", subgroup, division, gender
+
+            order by term, capitation, sub_term, "group", subgroup, division, gender
+            """
+
+    query_coef = """
+                select
+                -- Вид помощи
+                case when pe.term_fk is null then 6
+                     ELSE pe.term_fk
+                     end as term,
+
+                -- Подушевое
+                case when pe.term_fk = 3 THEN (
+                     CASE WHEN ps.payment_kind_fk = 2 THEN 0
+                          WHEN ps.payment_kind_fk = 1 THEN 1
+                     END
+                     )
+                     WHEN pe.term_fk = 4 THEN 0
+                     ELSE 1
+                     END AS capitation,
+
+                -- Место или причина
+                case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+                     CASE when pe.term_fk = 3 THEN ms.reason_fk
+                          when pe.term_fk = 2 then msd.term_fk
+                          ELSE 0
+                          END
+                     )
+                     ELSE 0
+                     END AS sub_term,
+
+                -- Группы услуг
+                case when ms.group_fk is NULL THEN 0
+                     WHEN ms.group_fk = 24 THEN 0
+                     ELSE ms.group_fk
+                     END as "group",
+
+                -- Подгруппы
+                CASE when ms.subgroup_fk IS NULL THEN 0
+                     ELSE 1
+                     END AS subgroup,
+
+                -- Отделения
+                case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+                     case WHEn pe.term_fk = 3 THEN ms.division_fk
+                          when pe.term_fk = 4 then ms.division_fk
+                          when pe.term_fk = 2 then ms.tariff_profile_fk
+                          when pe.term_fk = 1 then ms.tariff_profile_fk
+                          end
+                    )
+                    ELSE (
+                       case when ms.subgroup_fk is null THEN ms.id_pk
+                            else ms.subgroup_fk
+                            END
+                    )
+                    END AS division,
+
+                -- Пол
+                CASE WHEN ms.subgroup_fk in (8, 16, 9, 10, 24, 25) THEN pt.gender_fk
+                     ELSE 0
+                     END AS gender,
+
+
+                -- Рассчёт --
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+                ---
+
+                sum(CASE WHEN ms.code like '0%' and tc.id_pk = 7 THEN tc.value*ps.tariff ELSE 0 END),
+                sum(CASE WHEN ms.code like '1%' and tc.id_pk = 7 THEN tc.value*ps.tariff ELSE 0 END),
+
+                sum(CASE WHEN ms.code like '0%' and tc.id_pk = 4 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+                sum(CASE WHEN ms.code like '1%' and tc.id_pk = 4 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+                sum(CASE WHEN ms.code like '0%' and tc.id_pk = 5 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+                sum(CASE WHEN ms.code like '1%' and tc.id_pk = 5 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+
+                0,
+                0,
+
+                sum(CASE WHEN ms.code like '0%' and tc.id_pk = 6 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+                sum(CASE WHEN ms.code like '1%' and tc.id_pk = 6 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+                sum(CASE WHEN ms.code like '0%' and tc.id_pk in (8, 9, 10, 11, 12) THEN tc.value*ps.tariff ELSE 0 END),
+                sum(CASE WHEN ms.code like '1%' and tc.id_pk in (8, 9, 10, 11, 12) THEN tc.value*ps.tariff ELSE 0 END),
+
+                ---
+                0,
+                0
+
+                from medical_register mr
+                JOIN medical_register_record mrr
+                    ON mr.id_pk=mrr.register_fk
+                JOIN provided_event pe
+                    ON mrr.id_pk=pe.record_fk
+                JOIN provided_service ps
+                    ON ps.event_fk=pe.id_pk
+                JOIN medical_organization mo
+                    ON ps.organization_fk=mo.id_pk
+                JOIN medical_service ms
+                    ON ms.id_pk = ps.code_fk
+                join patient pt on pt.id_pk = mrr.patient_fk
+                left join medical_division msd
+                    on msd.id_pk = pe.division_fk
+                join provided_service_coefficient psc
+                    ON psc.service_fk = ps.id_pk
+                join tariff_coefficient tc
+                    on tc.id_pk = psc.coefficient_fk
+                where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                      and mo.code = '{mo}'
+                      and ps.payment_type_fk in (2, 4)
+                      and (ms.group_fk not in (27, 19, 7) or ms.group_fk is null)
+                group by term, capitation,  sub_term, "group", subgroup, division, gender
+                order by term, capitation, sub_term, "group", subgroup, division, gender
+                """
+
+    print u'='*10, u'Рассчёт сумм по отделениям', u'='*10
+    data = run(query.format(year=year, period=period, mo=mo))
+    print u'='*10, u'Рассчёт коэффициентов', u'='*10
+    data_coef = run(query_coef.format(year=year, period=period, mo=mo))
+    last_title_term = None
+    last_title_division = None
+    last_capitation = 0
+    is_print_capit = True
+    is_print_unit = True
+
+    act_book.set_sheet(0)
+    act_book.set_cursor(2, 0)
+    act_book.write_cell(mo+' '+handbooks['mo_info']['name'])
+    act_book.set_cursor(2, 9)
+    act_book.write_cell(u'за %s %s г.' % (MONTH_NAME[period], year))
+    act_book.set_cursor(3, 0)
+    act_book.write_cell(u'Частичный реестр: %s' % ','.join(handbooks['partial_register']))
+    act_book.set_cursor(7, 0)
+    sum_term = None
+    total_sum = None
+    print data
+    for row in data:
+        term = row[0]
+        capitation = row[1]
+        reason = row[2]
+        group = row[3]
+        subgroup = row[4]
+        division = row[5]
+        gender = row[6]
+        values = list(row[7:])
+
+        # Прибавляем коэффициенты
+        key = row[:6]
+        for key_coef in data_coef:
+            if key == key_coef[:6]:
+                print key
+                values = calc_sum(values, key_coef[7:])
+                break
+
+        if group:
+            if group == 7:
+                term_title = handbooks['medical_subgroups'][reason]['name']
+            elif group == 19:
+                term_title = u'Стоматология'
+            else:
+                term_title = handbooks['medical_groups'][group]['name']
+            if subgroup:
+                division_title = handbooks['medical_subgroups'][division]['name']
+            else:
+                division_title = handbooks['medical_code'][division]['name']
+        else:
+            division_title = ''
+            if term == 1:
+                term_title = u'Стационар'
+                division_title = handbooks['tariff_profile'][division]['name']
+            elif term == 2:
+                if reason == 10:
+                    term_title = u'Дневной стационар (Дневной стационар в стационаре)'
+                elif reason == 11:
+                    term_title = u'Дневной стационар (Дневной стационар при поликлинике)'
+                elif reason == 12:
+                    term_title = u'Дневной стационар (Дневной стационар на дому)'
+                division_title = handbooks['tariff_profile'][division]['name']
+            elif term == 3:
+                if reason == 1:
+                    term_title = u'Поликлиника (заболевание)'
+                elif reason == 2:
+                    term_title = u'Поликлиника (профосмотр)'
+                elif reason == 3:
+                    term_title = u'Поликлиника (прививка)'
+                elif reason == 5:
+                    term_title = u'Поликлиника (неотложка)'
+                elif reason == 99:
+                    term_title = u'Поликлиника (разовые)'
+                division_title = handbooks['medical_division'][division]['name']
+            elif term == 4:
+                term_title = u'Скорая помощь'
+                division_title = handbooks['medical_division'][division]['name']
+            elif term == 7:
+                pass
+        if gender == 1:
+            division_title += u', мальчики'
+        elif gender == 2:
+            division_title += u', девочки'
+
+        # Печатаем заголовок
+        if term_title != last_title_term or last_capitation != capitation:
+            if sum_term:
+                act_book.set_style(TOTAL_STYLE)
+                print_division(act_book, u'Итого', sum_term)
+                act_book.cursor['row'] += 1
+                total_sum = calc_sum(total_sum, sum_term)
+                sum_term = None
+            if term == 3:
+                if capitation == 0 and is_print_capit:
+                    act_book.set_style(TITLE_STYLE)
+                    act_book.write_cell(u'Поликлиника (подушевое)', 'r', 24)
+                    print u'Поликлиника (подушевое)'
+                    is_print_capit = False
+                elif capitation == 1 and is_print_unit:
+                    act_book.set_style(TITLE_STYLE)
+                    act_book.write_cell(u'Поликлиника (за единицу объёма)', 'r', 24)
+                    print u'Поликлиника (за единицу объёма)'
+                    is_print_unit = False
+            print term_title
+            act_book.set_style(TITLE_STYLE)
+            act_book.write_cell(term_title, 'r', 24)
+            act_book.set_style(VALUE_STYLE)
+            last_title_term = term_title
+            last_capitation = capitation
+
+        # Печатаем отделение
+        if division_title != last_title_division:
+            last_title_division = division_title
+            print_division(act_book, division_title, values)
+        sum_term = calc_sum(sum_term, values)
+    if data:
+        act_book.set_style(TOTAL_STYLE)
+        print_division(act_book, u'Итого', sum_term)
+        total_sum = calc_sum(total_sum, sum_term)
+        act_book.row_inc()
+
+    label_list = [
+        u'0 - 1 год мужчина',
+        u'0 - 1 год женщина',
+        u'1 - 4 год мужчина',
+        u'1 - 4 год женщина',
+        u'5 - 17 год мужчина',
+        u'5 - 17 год женщина',
+        u'18 - 59 год мужчина',
+        u'18 - 54 год женщина',
+        u'60 лет и старше мужчина',
+        u'60 лет и старше год женщина',
+    ]
+
+    if sum_capitation_policlinic[0]:
+        act_book.set_style(TITLE_STYLE)
+        act_book.write_cell(u'Подушевой норматив по амбул. мед. помощи', 'r', 24)
+        total_policlinic = None
+        act_book.set_style(VALUE_STYLE)
+        for idx, age_group in enumerate(sum_capitation_policlinic[1]):
+            print_division(act_book, label_list[idx], age_group)
+            total_policlinic = calc_sum(total_policlinic, age_group)
+        if total_policlinic:
+            act_book.set_style(TOTAL_STYLE)
+            print_division(act_book, u'Итого по подушевому нормативу', total_policlinic)
+            total_sum = calc_sum(total_sum, total_policlinic)
+        act_book.row_inc()
+
+    if sum_capitation_amb[0]:
+        act_book.set_style(TITLE_STYLE)
+        act_book.write_cell(u'Подушевой норматив по скорой мед. помощи', 'r', 24)
+        total_amb = None
+        act_book.set_style(VALUE_STYLE)
+        for idx, age_group in enumerate(sum_capitation_amb[1]):
+            print_division(act_book, label_list[idx], age_group)
+            total_amb = calc_sum(total_amb, age_group)
+        if total_amb:
+            act_book.set_style(TOTAL_STYLE)
+            print_division(act_book, u'Итого по подушевому нормативу', total_amb)
+            total_sum = calc_sum(total_sum, total_amb)
+        act_book.row_inc()
+
+    print_division(act_book, u'Итого по МО', total_sum)
+
+
+def print_division(act_book, title, values):
+    act_book.write_cell(title, 'c')
+    for value in values[:-1]:
+        act_book.write_cell(value, 'c')
+    act_book.write_cell(values[-1], 'r')
+
+
+def calc_sum(total_sum, cur_sum):
+    if total_sum:
+        for i, value in enumerate(cur_sum):
+            total_sum[i] = total_sum[i] + value
+        return total_sum
+    else:
+        return list(cur_sum)
+
+"""
 def print_accepted_service(act_book, year, period, mo,
                            capitation_events, treatment_events,
                            sum_capitation_policlinic,
@@ -606,6 +1285,7 @@ def print_accepted_service(act_book, year, period, mo,
         act_book.row_inc()
         print_sum(act_book, u'ИТОГО по МО с подушевым нормативом',
                   total_sum_mo, column_keys, style=TOTAL_STYLE)
+"""
 
 
 ### Распечатка ошибок МЭК (в форме удобной для проверки)
@@ -1025,11 +1705,29 @@ def print_order_146(act_book, year, period, mo, capitation_events,
         ('hospital_hemodialysis', 26),             # Гемодиализ в стационаре
         ('hospital_peritoneal_dialysis', 27),      # Перитонеальный диализ в стационаре
         ('ambulance', 28),                         # Скорая помощь
-        ('capitation_policlinic_male', 30),        # Подушевое в поликлинике муж.
-        ('capitation_policlinic_female', 31),      # Подушевое в поликлинике жен.
-        ('capitation_ambulance_male', 32),         # Подушевое по скорой помощи муж.
-        ('capitation_ambulance_female', 33),       # Подушевое по скорой помощи жен.
-        ('total', 34)                              # Итого
+
+        ('capitation_policlinic_male_1', 31),        # Подушевое в поликлинике муж.
+        ('capitation_policlinic_female_1', 32),      # Подушевое в поликлинике жен.
+        ('capitation_policlinic_male_2', 33),        # Подушевое в поликлинике муж.
+        ('capitation_policlinic_female_2', 34),      # Подушевое в поликлинике жен.
+        ('capitation_policlinic_male1_3', 35),       # Подушевое в поликлинике муж.
+        ('capitation_policlinic_female_3', 36),      # Подушевое в поликлинике жен.
+        ('capitation_policlinic_male_4', 37),        # Подушевое в поликлинике муж.
+        ('capitation_policlinic_female_4', 38),      # Подушевое в поликлинике жен.
+        ('capitation_policlinic_male_5', 39),        # Подушевое в поликлинике муж.
+        ('capitation_policlinic_female_5', 40),      # Подушевое в поликлинике жен.
+
+        ('capitation_ambulance_male_1', 42),         # Подушевое по скорой помощи муж.
+        ('capitation_ambulance_female_1', 43),       # Подушевое по скорой помощи жен.
+        ('capitation_ambulance_male_2', 44),         # Подушевое по скорой помощи муж.
+        ('capitation_ambulance_female_2', 45),       # Подушевое по скорой помощи жен.
+        ('capitation_ambulance_male_3', 46),         # Подушевое по скорой помощи муж.
+        ('capitation_ambulance_female_3', 47),       # Подушевое по скорой помощи жен.
+        ('capitation_ambulance_male_4', 48),         # Подушевое по скорой помощи муж.
+        ('capitation_ambulance_female_4', 49),       # Подушевое по скорой помощи жен.
+        ('capitation_ambulance_male_5', 50),         # Подушевое по скорой помощи муж.
+        ('capitation_ambulance_female_5', 51),       # Подушевое по скорой помощи жен.
+        ('total', 52)                                # Итого
     )
 
     # Инициализация сумм по видам помощи
@@ -1291,8 +1989,16 @@ def print_order_146(act_book, year, period, mo, capitation_events,
             unique_events.append(service['event_id'])
 
     # Рассчёт подушевого по поликлинике
-    sum_service_kind['capitation_policlinic_male']['accepted_payment']['adult'] = \
-        sum_capitation_policlinic['male']['accepted_payment']['adult']
+    for index, key, in enumerate(service_kind_keys[16: 26]):
+        sum_service_kind[key[0]]['accepted_payment']['adult'] = sum_capitation_policlinic[1][index][22]
+        sum_service_kind[key[0]]['accepted_payment']['children'] = sum_capitation_policlinic[1][index][23]
+
+    for index, key, in enumerate(service_kind_keys[26:-1]):
+        sum_service_kind[key[0]]['accepted_payment']['adult'] = sum_capitation_ambulance[1][index][22]
+        sum_service_kind[key[0]]['accepted_payment']['children'] = sum_capitation_ambulance[1][index][23]
+
+    """
+    sum_service_kind['capitation_policlinic_male']['accepted_payment']['adult'] =
     sum_service_kind['capitation_policlinic_female']['accepted_payment']['adult'] = \
         sum_capitation_policlinic['female']['accepted_payment']['adult']
     sum_service_kind['capitation_policlinic_male']['accepted_payment']['children'] = \
@@ -1309,14 +2015,15 @@ def print_order_146(act_book, year, period, mo, capitation_events,
         sum_capitation_ambulance['male']['accepted_payment']['children']
     sum_service_kind['capitation_ambulance_female']['accepted_payment']['children'] = \
         sum_capitation_ambulance['female']['accepted_payment']['children']
+    """
 
     # Рассчёт итоговой суммы
     for service_kind, _ in service_kind_keys[:-1]:
         for sum_kind in sum_kind_keys:
             sum_service_kind['total'][sum_kind[0]]['adult'] += \
-                round(sum_service_kind[service_kind][sum_kind[0]]['adult'], 2)
+                Decimal(sum_service_kind[service_kind][sum_kind[0]]['adult'])
             sum_service_kind['total'][sum_kind[0]]['children'] += \
-                round(sum_service_kind[service_kind][sum_kind[0]]['children'], 2)
+                Decimal(sum_service_kind[service_kind][sum_kind[0]]['children'])
 
     # Рассчёт сумм по детям и взрослым вместе
     for service_kind, _ in service_kind_keys:
@@ -1700,7 +2407,7 @@ class Command(BaseCommand):
         status = int(args[2])
         is_partial_register = args[3] if len(args) == 4 else 0
         printed_act = []
-        template = BASE_DIR + r'\templates\excel_pattern\reestr_201408_test.xls'
+        template = BASE_DIR + r'\templates\excel_pattern\reestr_201501.xls'
         target_dir = REESTR_DIR if status in (8, 6) else REESTR_EXP
         handbooks = {'failure_causes': register_function.get_failure_causes(),
                      'errors_code': register_function.get_errors(),
@@ -1715,6 +2422,7 @@ class Command(BaseCommand):
                      'medical_profile': register_function.get_medical_profile(),
                      'coefficient_type': register_function.get_coefficient_type()}
         organizations = register_function.get_mo_register(year, period, status=status)
+        #organizations = [u'280019']
         for mo in organizations:
             start = time.clock()
             partial_register = register_function.get_partial_register(year, period, mo)
@@ -1748,20 +2456,31 @@ class Command(BaseCommand):
 
             with ExcelWriter(target, template=template) as act_book:
                 act_book.set_overall_style({'font_size': 11})
+                print_accepted_services(
+                    act_book=act_book, year=year, period=period,
+                    mo=mo,
+                    sum_capitation_policlinic=sum_capitation_policlinic,
+                    sum_capitation_amb=sum_capitation_ambulance,
+                    handbooks=handbooks
+                )
+                """
                 print_accepted_service(act_book, year, period, mo, capitation_events,
                                        treatment_events,
                                        sum_capitation_policlinic,
                                        sum_capitation_ambulance,
                                        data, handbooks)
+                """
                 print_errors_page(act_book, year, period, mo, capitation_events,
                                   treatment_events, data, handbooks)
                 print_error_pk(act_book, year, period, mo,
                                capitation_events, treatment_events,
                                data, handbooks)
+
                 print_order_146(act_book, year, period, mo,
                                 capitation_events, treatment_events,
                                 sum_capitation_policlinic,
                                 sum_capitation_ambulance, data, handbooks)
+
                 print_error_fund(act_book, year, period, mo, data, handbooks)
                 if status == 8:
                     register_function.pse_export(year, period, mo, 6, data, handbooks)
@@ -1794,10 +2513,19 @@ class Command(BaseCommand):
 
                     with ExcelWriter(target, template=template) as act_book:
                         act_book.set_overall_style({'font_size': 11})
+                        print_accepted_services(
+                            act_book=act_book, year=year, period=period,
+                            mo=mo,
+                            sum_capitation_policlinic=sum_capitation_policlinic,
+                            sum_capitation_amb=sum_capitation_ambulance,
+                            handbooks=handbooks
+                        )
+                        """
                         print_accepted_service(act_book, year, period, mo,
                                                capitation_events, treatment_events,
                                                sum_capitation_policlinic, sum_capitation_ambulance,
                                                data, handbooks)
+                        """
                         print_errors_page(act_book, year, period, mo,
                                           capitation_events, treatment_events,
                                           data, handbooks)

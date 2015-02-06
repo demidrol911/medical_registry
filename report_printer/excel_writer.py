@@ -42,7 +42,7 @@ class ExcelWriter(Workbook):
             format_info = template_book.xf_list
             colour_map = template_book.colour_map
             vert_align = {0: 'vleft', 1: 'vcenter', 2: 'vcenter', 4: 'vcenter'}
-            hort_align = {0: 'left', 1: 'left', 2: 'center', 3: 'right'}
+            hort_align = {0: 'left', 1: 'left', 2: 'center', 3: 'right', 5: 'left'}
             for idx, temp_sheet in enumerate(template_book.sheets()):
                 self.sheet = self.add_worksheet(sheet_names[idx]+temp_sheet.name
                                                 if len(sheet_names) > idx
