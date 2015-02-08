@@ -400,6 +400,9 @@ def main():
         patients = {}
         fatal_error = False
         registry_has_errors = False
+        has_surgery = False
+        has_hospitalization = False
+        has_insert = True
 
         current_year = current_period = None
 
@@ -474,7 +477,20 @@ def main():
                 current_year = '20'+year
                 current_period = period
 
+            old_register_status = MedicalRegister.objects.filter(
+                is_active=True, year=current_year,
+                period=current_period,
+                organization_code=organization_code
+            ).values_list('status_id', flat=True).distinct()
+
+            print old_register_status
+
+            if old_register_status and old_register_status[0] in (4, 6, 8):
+                has_insert = False
+                continue
+
             registry_type = registry_types.get(_type.lower())
+            print type(registry_type), registry_type
 
             if registry_pk_list:
                 registry_pk = registry_pk_list.pop()
@@ -590,6 +606,9 @@ def main():
                         new_event['record_id'] = new_record['pk']
                         new_event_list.append(new_event)
 
+                        if new_event.get('USL_OK', '') == '1' and _type == 'H':
+                            has_hospitalization = True
+
                         for concomitant in item['DS2'] or []:
                             raw_concomitant = get_concomitant_disease_validation(concomitant)
                             new_concomitant = raw_concomitant.get_dict()
@@ -650,6 +669,10 @@ def main():
                             new_service['pk'] = service_pk
                             new_service['event_id'] = new_event['pk']
                             new_service_list.append(new_service)
+                            #print '*', _type
+
+                            if new_event.get('USL_OK', '') == '1' and new_service.get('CODE_USL', '').startswith('A') and _type == 'H':
+                                has_surgery = True
 
                             services_errors += handle_errors(
                                 raw_service.errors() or [], parent='USL',
@@ -657,6 +680,16 @@ def main():
                                 event_uid=new_event['IDCASE'],
                                 service_uid=new_service['IDSERV']
                             )
+
+            """
+            if not has_surgery and has_hospitalization:
+                services_errors.append(set_error(
+                    '902', field='', parent='',
+                    record_uid='',
+                    comment=u'Нет сведений об операциях (услуги класса А) в круглосуточном стационаре'
+                ))
+                print u'Нет операции'
+            """
 
             if services_errors:
                 registry_has_errors = True
@@ -681,76 +714,79 @@ def main():
                 hflk.end('FLK_P')
                 hflk.close()
 
-            if patients_errors:
-                registry_has_errors = True
-                errors_files.append("V%s" % person_filename)
-                lflk = xml_writer.Xml(TEMP_DIR+"V%s" % person_filename)
-                lflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
-                lflk.start('FLK_P')
-                lflk.put('FNAME', "V%s" % person_filename[:-4])
-                lflk.put('FNAME_I', '%s' % person_filename[:-4])
+        if patients_errors:
+            registry_has_errors = True
+            errors_files.append("V%s" % person_filename)
+            print '#', errors_files
+            lflk = xml_writer.Xml(TEMP_DIR+"V%s" % person_filename)
+            lflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
+            lflk.start('FLK_P')
+            lflk.put('FNAME', "V%s" % person_filename[:-4])
+            lflk.put('FNAME_I', '%s' % person_filename[:-4])
 
-                for rec in patients_errors:
-                    lflk.start('PR')
-                    lflk.put('OSHIB', rec['code'])
-                    lflk.put('IM_POL', rec['field'])
-                    lflk.put('BASE_EL', rec['parent'])
-                    lflk.put('N_ZAP', rec['record_uid'])
-                    lflk.put('IDCASE', rec.get('event_uid', '').encode('cp1251'))
-                    lflk.put('IDSERV', rec.get('service_uid', '').encode('cp1251'))
-                    lflk.put('COMMENT', rec['comment'].encode('cp1251'))
-                    lflk.end('PR')
+            for rec in patients_errors:
+                lflk.start('PR')
+                lflk.put('OSHIB', rec['code'])
+                lflk.put('IM_POL', rec['field'])
+                lflk.put('BASE_EL', rec['parent'])
+                lflk.put('N_ZAP', rec['record_uid'])
+                lflk.put('IDCASE', rec.get('event_uid', '').encode('cp1251'))
+                lflk.put('IDSERV', rec.get('service_uid', '').encode('cp1251'))
+                lflk.put('COMMENT', rec['comment'].encode('cp1251'))
+                lflk.end('PR')
 
-                lflk.end('FLK_P')
-                lflk.close()
+            lflk.end('FLK_P')
+            lflk.close()
 
-        if registry_has_errors:
-            print u'Ошибки ФЛК'
+        if has_insert:
+            if registry_has_errors:
+                print u'Ошибки ФЛК'
 
-            zipname = TEMP_DIR+'VM%sS28002_%s.zip' % (
-                organization_code, person_filename[person_filename.index('_')+1:-4]
-            )
+                zipname = TEMP_DIR+'VM%sS28002_%s.zip' % (
+                    organization_code, person_filename[person_filename.index('_')+1:-4]
+                )
 
-            with ZipFile(zipname, 'w') as zipfile:
-                for filename in errors_files:
-                    zipfile.write(TEMP_DIR+filename, filename, 8)
-                    os.remove(TEMP_DIR+filename)
+                print errors_files
+                with ZipFile(zipname, 'w') as zipfile:
+                    for filename in errors_files:
+                        zipfile.write(TEMP_DIR+filename, filename, 8)
+                        os.remove(TEMP_DIR+filename)
 
-            shutil.copy2(zipname, FLC_DIR)
+                shutil.copy2(zipname, FLC_DIR)
 
-            if os.path.exists(copy_path):
-                shutil.copy2(zipname, copy_path)
+                if os.path.exists(copy_path):
+                    shutil.copy2(zipname, copy_path)
 
-            os.remove(zipname)
+                os.remove(zipname)
 
-        else:
-            print u'ФЛК пройден. Вставка данных...'
-            MedicalRegister.objects.filter(
-                is_active=True, year=current_year, period=current_period,
-                organization_code=organization_code).update(is_active=False)
-            MedicalRegister.objects.bulk_create(registries_objects)
-            Patient.objects.bulk_create(
-                set(get_patients_objects(new_patient_list)))
-            MedicalRegisterRecord.objects.bulk_create(
-                get_records_objects(new_record_list))
-            ProvidedEvent.objects.bulk_create(
-                get_events_objects(new_event_list))
-            ProvidedEventConcomitantDisease.objects.bulk_create(
-                get_concomitant_diseases_objects(new_concomitant_list))
-            ProvidedEventComplicatedDisease.objects.bulk_create(
-                get_complicated_diseases_objects(new_complicated_list))
-            ProvidedEventSpecial.objects.bulk_create(
-                get_specials_objects(new_special_list))
-            ProvidedService.objects.bulk_create(
-                get_services_objects(new_service_list))
-            MedicalRegister.objects.filter(
-                pk__in=[rec.pk for rec in registries_objects]
-            ).update(status=MedicalRegisterStatus.objects.get(pk=1))
+            else:
+                print u'ФЛК пройден. Вставка данных...'
+                MedicalRegister.objects.filter(
+                    is_active=True, year=current_year, period=current_period,
+                    organization_code=organization_code).update(is_active=False)
+                MedicalRegister.objects.bulk_create(registries_objects)
+                Patient.objects.bulk_create(
+                    set(get_patients_objects(new_patient_list)))
+                MedicalRegisterRecord.objects.bulk_create(
+                    get_records_objects(new_record_list))
+                ProvidedEvent.objects.bulk_create(
+                    get_events_objects(new_event_list))
+                ProvidedEventConcomitantDisease.objects.bulk_create(
+                    get_concomitant_diseases_objects(new_concomitant_list))
+                ProvidedEventComplicatedDisease.objects.bulk_create(
+                    get_complicated_diseases_objects(new_complicated_list))
+                ProvidedEventSpecial.objects.bulk_create(
+                    get_specials_objects(new_special_list))
+                ProvidedService.objects.bulk_create(
+                    get_services_objects(new_service_list))
+                MedicalRegister.objects.filter(
+                    pk__in=[rec.pk for rec in registries_objects]
+                ).update(status=MedicalRegisterStatus.objects.get(pk=1))
 
-            print u'...ок'
+                print u'...ок'
 
-            if os.path.exists(copy_path):
-                shutil.copy2(OUTBOX_SUCCESS, copy_path)
+                if os.path.exists(copy_path):
+                    shutil.copy2(OUTBOX_SUCCESS, copy_path)
 
         print organization, current_year, current_period
 
