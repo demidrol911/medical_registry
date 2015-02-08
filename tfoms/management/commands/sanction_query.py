@@ -44,6 +44,7 @@ from documents d
      left join objects o on dr.defect = o.id
 where
     cast(strtodate(getheap(d.heap, 'OpDate')) as date) between ? and ?
-    and d.doctype in(5,6,7,17,19)
+    and d.doctype in (5,6,7,17,19)
     and d.status >= 1100
+    and (strtofloat(getheap(dr.heap,'SUM_ALL_OMS')) <> 0 or strtofloat(getheap(dr.heap,'SUM_BONUS')) <> 0)
 """

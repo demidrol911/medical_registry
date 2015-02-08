@@ -669,7 +669,6 @@ def update_payment_kind(register_element):
     cursor.close()
 
 
-
 def sanctions_on_repeated_service(register_element):
     """
         Санкции на повторно поданные услуги
