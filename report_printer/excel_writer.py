@@ -42,7 +42,7 @@ class ExcelWriter(Workbook):
             format_info = template_book.xf_list
             colour_map = template_book.colour_map
             vert_align = {0: 'vleft', 1: 'vcenter', 2: 'vcenter', 4: 'vcenter'}
-            hort_align = {0: 'left', 1: 'left', 2: 'center', 3: 'right'}
+            hort_align = {0: 'left', 1: 'left', 2: 'center', 3: 'right', 5: 'left'}
             for idx, temp_sheet in enumerate(template_book.sheets()):
                 self.sheet = self.add_worksheet(sheet_names[idx]+temp_sheet.name
                                                 if len(sheet_names) > idx
@@ -124,6 +124,13 @@ class ExcelWriter(Workbook):
         elif increment == 'rc':
             self.cursor['row'] += 1
             self.cursor['column'] += 1
+
+    def write_cella(self, row_index, column_index, value):
+        self.set_cursor(row_index, column_index)
+        self.write_cell(value)
+
+    def set_row_height(self, height):
+        self.sheet.set_row(self.cursor['row'], height)
 
     ### Устанаавливает количество отображаемых знаков после запятой для чисел
     def set_number_precision(self, prec):

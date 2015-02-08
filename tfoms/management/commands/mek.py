@@ -17,7 +17,7 @@ from dateutil.relativedelta import relativedelta
 
 def get_register_element():
     register_element = MedicalRegister.objects.filter(
-        is_active=True, year='2014', status_id__in=(1, 5, 500),
+        is_active=True, year='2015', status_id__in=(1, 5, 500),
     ) \
         .values('organization_code',
                 'year',
@@ -132,6 +132,7 @@ def get_services(register_element):
             ELSE 1 END
         ) as nkd,
         medical_organization.is_agma_cathedra,
+        medical_organization.level as level,
         patient.insurance_policy_fk as patient_policy,
         patient.birthdate as patient_birthdate,
         person.deathdate as person_deathdate,
@@ -238,6 +239,147 @@ def get_services(register_element):
                             END) END
                         )
                 )
+    where
+        medical_register.is_active
+        and medical_register.year = %(year)s
+        and medical_register.period = %(period)s
+        and medical_register.organization_code = %(organization_code)s
+    """
+
+    query = """
+    select DISTINCT provided_service.id_pk,
+        medical_service.code as service_code,
+        (
+            select min(ps2.start_date)
+            from provided_service ps2
+            where ps2.event_fk = provided_event.id_pk
+        ) as event_start_date,
+        case WHEN (
+                select count(ps2.id_pk)
+                from provided_service ps2
+                where ps2.event_fk = provided_event.id_pk) = 1
+            and medical_service.reason_fk = 1
+                THEN tariff_basic.capitation
+            WHEN medical_service.group_fk = 19
+                THEN COALESCE(medical_service.uet, 0)*tariff_basic.value
+            ELSE
+                tariff_basic.value  END as expected_tariff,
+        provided_event.term_fk as service_term,
+        medical_service.code as service_code,
+        medical_service.examination_special as service_examination_special,
+        medical_service.group_fk as service_group,
+        medical_service.subgroup_fk as service_subgroup,
+        medical_service.examination_group as service_examination_group,
+        medical_service.tariff_profile_fk as service_tariff_profile,
+        medical_service.reason_fk as reason_code,
+        provided_event.examination_result_fk as examination_result,
+        COALESCE(case provided_event.term_fk
+            when 1 THEN
+                (
+                    select tariff_nkd.value
+                    from tariff_nkd
+                    where start_date = (
+                        select max(start_date)
+                        from tariff_nkd
+                        where start_date <= CASE
+                                            when provided_service.end_date < '2014-02-01' then '2014-02-01'
+                                            else provided_service.end_date end
+                            and profile_fk = medical_service.tariff_profile_fk
+                            and is_children_profile = provided_service.is_children_profile
+                            and "level" = department.level
+                    ) and profile_fk = medical_service.tariff_profile_fk
+                        and is_children_profile = provided_service.is_children_profile
+                        and "level" = department.level
+                    order by start_date DESC
+                    limit 1
+                )
+            WHEN 2 THEN
+                (
+                    select tariff_nkd.value
+                    from tariff_nkd
+                    where start_date = (
+                        select max(start_date)
+                        from tariff_nkd
+                        where start_date <= CASE
+                                            when provided_service.end_date < '2014-02-01' then '2014-02-01'
+                                            else provided_service.end_date end
+                            and profile_fk = medical_service.tariff_profile_fk
+                            and is_children_profile = provided_service.is_children_profile
+                    ) and profile_fk = medical_service.tariff_profile_fk
+                        and is_children_profile = provided_service.is_children_profile
+                    order by start_date DESC
+                    limit 1
+                )
+            ELSE 1 END
+        ) as nkd,
+        medical_organization.is_agma_cathedra,
+        medical_organization.level as level,
+        patient.insurance_policy_fk as patient_policy,
+        patient.birthdate as patient_birthdate,
+        person.deathdate as person_deathdate,
+        insurance_policy.stop_date as policy_stop_date,
+        operation.reason_stop_fk as stop_reason,
+        insurance_policy.type_fk as policy_type,
+        medical_register.organization_code,
+        provided_event.comment as event_comment,
+        medical_register_record.is_corrected as record_is_corrected,
+        CASE medical_service.group_fk
+        when 19 THEN
+            (
+                select 1
+                from provided_service inner_ps
+                    join medical_service inner_ms
+                        on inner_ps.code_fk = inner_ms.id_pk
+                where inner_ps.event_fk = provided_event.id_pk
+                    and inner_ms.group_fk = 19 and inner_ms.subgroup_fk = 17
+                    and inner_ps.end_date = provided_service.end_date
+            )
+        ELSE
+            NULL
+        END as coefficient_4
+    from
+        provided_service
+        join provided_event
+            on provided_event.id_pk = provided_service.event_fk
+        join medical_register_record
+            on medical_register_record.id_pk = provided_event.record_fk
+        join patient
+            on patient.id_pk = medical_register_record.patient_fk
+        left join insurance_policy
+            on patient.insurance_policy_fk = insurance_policy.version_id_pk
+        left join person
+            on person.version_id_pk = insurance_policy.person_fk
+        left join operation
+            on operation.insurance_policy_fk = insurance_policy.version_id_pk
+                and operation.id_pk = (
+                    select op.id_pk
+                    from operation op
+                        join operation_status os
+                            on op.id_pk = os.operation_fk
+                    where op.insurance_policy_fk = insurance_policy.version_id_pk
+                        and os.timestamp = (
+                            select min(timestamp)
+                            from operation_status
+                            where operation_status.operation_fk = op.id_pk)
+                    order by timestamp desc limit 1)
+        join medical_register
+            on medical_register_record.register_fk = medical_register.id_pk
+        JOIN medical_service
+            on medical_service.id_pk = provided_service.code_fk
+        join medical_organization
+            on medical_organization.code = medical_register.organization_code
+                and medical_organization.parent_fk is null
+        JOIN medical_organization department
+            on department.id_pk = provided_service.department_fk
+        LEFT join tariff_basic
+            on tariff_basic.service_fk = provided_service.code_fk
+                and tariff_basic.group_fk =
+                    CASE
+                    WHEN department.alternate_tariff_group_FK is NULL
+                        THEN medical_organization.tariff_group_FK
+                    ELSE department.alternate_tariff_group_FK
+                    END
+                and tariff_basic.start_date = '2015-01-01'
     where
         medical_register.is_active
         and medical_register.year = %(year)s
@@ -554,7 +696,7 @@ def update_patient_attacment_code(register_element):
                   SELECT MAX(id_pk)
                   FROM attachment
                   WHERE person_fk = person.version_id_pk AND status_fk = 1
-                     AND attachment.date <= (format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE) + INTERVAL '1 months' AND attachment.is_active)
+                     AND attachment.date <= (format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE) AND attachment.is_active)
             LEFT JOIN medical_organization att_org
               ON (att_org.id_pk = attachment.medical_organization_fk
                   AND att_org.parent_fk IS NULL)
@@ -2377,6 +2519,7 @@ def main():
             for row, service in enumerate(get_services(register_element)):
                 if row % 1000 == 0:
                     print row
+                #print '$$$', dir(service), service.payment_type
                 if not service.payment_type_id:
 
                     if not service.patient_policy:
@@ -2413,8 +2556,25 @@ def main():
 
                 term = service.service_term
                 nkd = service.nkd or 1
+
+                ### Выбор nkd для РСЦ и ПСО
+                if service.service_code in ('098958', '098959'):
+                    nkd = 12
+                elif service.service_code in ('098960', '098961'):
+                    nkd = 12
+                elif service.service_code in ('098962', '098963'):
+                    nkd = 7
+                elif service.service_code in ('098964', '098965'):
+                    nkd = 30
+                elif service.service_code in ('098966', '098967'):
+                    nkd = 30
+                elif service.service_code in ('098968', '098969'):
+                    nkd = 30
+
+                '''
                 if service.service_tariff_profile == 11 and service.organization_code == '280043':
                     nkd = 19
+                '''
 
                 if service.service_group in (3, 5):
                     term = 3
@@ -2426,6 +2586,23 @@ def main():
                                            len(service.comment) == 6 and
                                            service.comment[0] == '1')
 
+                    if term == 1:
+                        duration_coefficient = 70
+                        if service.service_group == 20:
+                            duration_coefficient = 90
+                        # КСГ 76, 77, 78
+                        if service.code in (
+                                '098964', '098965', '098966',
+                                '098967', '098968', '098969'):
+                            duration_coefficient = 50
+                        if is_endovideosurgery:
+                            duration_coefficient = 0
+                    elif term == 2:
+                        duration_coefficient = 90
+                        if is_endovideosurgery:
+                            duration_coefficient = 50
+
+                    '''
                     if term == 1:
                         duration_coefficient = 80
                         if service.service_tariff_profile == 24:
@@ -2467,6 +2644,8 @@ def main():
                     if service.basic_disease_id in (7124, 7125, 7128, 7129,
                                                     7130, 7131, 7132, ):
                         nkd = 70
+                    '''
+
                     duration = (days / float(nkd)) * 100
 
                     if duration < duration_coefficient:
@@ -2478,11 +2657,56 @@ def main():
 
                     accepted_payment = tariff
 
+                    if term == 1:
+                        # Коэффициент курации
+                        if service.quantity >= nkd * 2 and service.service_group != 20:
+                            accepted_payment += round(accepted_payment * 0.25, 2)
+                            provided_tariff += round(provided_tariff * 0.25, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=7)
+
+                        # Коэффициенты КПГ
+                        if service.service_tariff_profile == 36 and \
+                                (service.level == 1 or service.organization_code in ('280027', '280075')):
+                            accepted_payment += round(accepted_payment * 0.38, 2)
+                            provided_tariff += round(provided_tariff * 0.38, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=8)
+
+                        if service.service_tariff_profile == 10:
+                            accepted_payment += round(accepted_payment * 0.34, 2)
+                            provided_tariff += round(provided_tariff * 0.34, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=9)
+
+                        if service.service_tariff_profile == 28 and \
+                                service.organization_code == "280064":
+                            accepted_payment += round(accepted_payment * 0.65, 2)
+                            provided_tariff += round(provided_tariff * 0.65, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=10)
+
+                        if service.service_tariff_profile == 37 and \
+                                service.organization_code == "280064":
+                            accepted_payment += round(accepted_payment * 0.8, 2)
+                            provided_tariff += round(provided_tariff * 0.8, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=11)
+
+                        if service.service_tariff_profile == 38 and \
+                                service.organization_code == "280064":
+                            accepted_payment += round(accepted_payment * 0.47, 2)
+                            provided_tariff += round(provided_tariff * 0.47, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=12)
+
+                    '''
                     if service.is_agma_cathedra and term == 1:
                         accepted_payment += round(accepted_payment * 0.015, 2)
                         provided_tariff += round(provided_tariff * 0.015, 2)
                         ProvidedServiceCoefficient.objects.create(
                             service=service, coefficient_id=2)
+                    '''
 
                 elif term == 3 or term is None:
                     quantity = service.quantity or 1
@@ -2498,16 +2722,14 @@ def main():
                     tariff *= float(quantity)
 
                     if (is_single_visit or service.reason_code == 3) and not \
-                            (service.reason_code in (1, 4, 5) or \
-                                         service.service_group in \
-                                             single_visit_exception_group):
+                            (service.reason_code in (1, 4, 5) or service.service_group in single_visit_exception_group):
 
                         accepted_payment -= round(accepted_payment * 0.6, 2)
                         provided_tariff -= round(provided_tariff * 0.6, 2)
                         ProvidedServiceCoefficient.objects.create(
                             service=service, coefficient_id=3)
 
-                    if is_mobile_brigade and service.service_group in (7, 25, 26):
+                    if is_mobile_brigade and service.service_group in (7, 25, 26,  11, 15, 16,  12, 13,  4):
                         accepted_payment += round(accepted_payment * 0.07, 2)
                         provided_tariff += round(provided_tariff * 0.07, 2)
                         ProvidedServiceCoefficient.objects.create(

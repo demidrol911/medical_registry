@@ -17,7 +17,8 @@ from tfoms.models import (MedicalError, ProvidedService, MedicalRegister,
                           MedicalServiceSubgroup, MedicalServiceTerm,
                           TariffProfile, MedicalServiceGroup,
                           MedicalServiceReason, ProvidedServiceCoefficient,
-                          TariffCoefficient)
+                          TariffCoefficient,
+                          ProvidedEventConcomitantDisease)
 
 from medical_service_register.path import BASE_DIR, REESTR_PSE
 
@@ -30,7 +31,22 @@ from pandas import DataFrame
 def get_date_following_reporting_period(year, period):
     return datetime.strptime('{year}-{period}-1'.format(year=year,
                                                         period=period),
-                             '%Y-%m-%d') + relativedelta(months=1)
+                             '%Y-%m-%d')
+    #+ relativedelta(months=1)
+
+
+def get_concomitant_disease(year, period, department):
+    diseases = ProvidedEventConcomitantDisease.objects.filter(
+        event__record__register__year=year,
+        event__record__register__period=period,
+        event__record__register__is_active=True,
+        event__department__old_code=department
+    ).values('event__id_pk', 'disease__idc_code')
+    disease_list = {}
+    for disease in diseases:
+        if disease['event__id_pk'] not in disease_list:
+            disease_list[disease['event__id_pk']] = disease['disease__idc_code']
+    return disease_list
 
 
 ### Информация о пациентах в указанной больнице
@@ -169,171 +185,6 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
         for service in services_values]
 
     return services_list
-
-
-def get_service_df(year, period, mo_code):
-    services = ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
-        event__record__register__is_active=True,
-        event__record__register__organization_code=mo_code
-    )
-    services_values = services.values_list(
-        'id_pk',                                            # Ид услуги
-        'id',                                               # Ид из xml
-        'event__anamnesis_number',                          # Амбулаторная карта
-        'event__term__pk',                                  # Условие оказания МП
-        'worker_code',                                      # Код мед. работника
-        'quantity',                                         # Количество дней (услуг)
-        'comment',                                          # Комментарий
-        'code__pk',                                         # Ид кода услуги
-        'code__code',                                       # Код услуги
-        'code__name',                                       # Название услуги
-        'start_date',                                       # Дата начала услуги
-        'end_date',                                         # Дата конца услуги
-        'basic_disease__idc_code',                          # Основной диагноз
-        'event__concomitant_disease__idc_code',             # Сопутствующий диагноз
-        'code__group__id_pk',                               # Группа
-        'code__subgroup__id_pk',                            # Подгруппа услуги
-        'code__reason__ID',                                 # Причина
-        'division__code',                                   # Код отделения
-        'division__term__pk',                               # Вид отделения
-        'code__division__pk',                               # Ид отделения (для поликлиники)
-        'code__tariff_profile__pk',                         # Тарифный профиль (для стационара и дн. стационара)
-        'profile__pk',                                      # Профиль услуги
-        'worker_speciality__pk',                            # Специалист
-        'payment_type__pk',                                 # Тип оплаты
-        'tariff',                                           # Основной тариф
-        'invoiced_payment',                                 # Поданная сумма
-        'accepted_payment',                                 # Принятая сумма
-        'calculated_payment',                               # Рассчётная сумма
-        'provided_tariff',                                  # Снятая сумма
-        'code__uet',                                        # УЕТ
-        'event__pk',                                        # Ид случая
-        'department__old_code',                             # Код филиала
-        'event__record__patient__pk'                        # Ид патиента
-    ).order_by('event__record__patient__last_name',
-               'event__record__patient__first_name')
-
-    fields = ['id', 'xml_id', 'anamnesis_number', 'term',
-              'worker_code', 'quantity', 'comment',
-              'code_id', 'code', 'name', 'start_date',
-              'end_date', 'basic_disease',
-              'concomitant_disease', 'group',
-              'subgroup', 'reason', 'division_code',
-              'division_term', 'division_id',
-              'tariff_profile_id', 'profile',
-              'worker_speciality', 'payment_type',
-              'tariff', 'invoiced_payment', 'accepted_payment',
-              'calculated_payment', 'provided_tariff',
-              'uet', 'event_id', 'department', 'patient_id',
-
-              'index015', 'index_6', 'index2',
-              'index07', 'indexFAP', 'index_7']
-
-    coefficients = ProvidedServiceCoefficient.objects.filter(
-        service__event__record__register__year=year,
-        service__event__record__register__period=period,
-        service__event__record__register__is_active=True,
-        service__event__record__register__organization_code=mo_code
-    )
-
-    coefficients_list = coefficients.values(
-        'service__pk', 'coefficient__pk'
-    ).distinct()
-    coefficients_dict = {}
-    for coefficient in coefficients_list:
-        if coefficient['coefficient__pk'] not in coefficients_dict:
-            coefficients_dict[coefficient['coefficient__pk']] = []
-        coefficients_dict[coefficient['coefficient__pk']].append(coefficient['service__pk'])
-
-    coef_type = get_coefficient_type()
-    code_to_field = {2: 'index015', 3: 'index_6', 4: 'index2',
-                     5: 'index07', 1: 'indexFAP', 6: 'index_7'}
-
-    services_df = DataFrame([list(row)+[0, 0, 0, 0, 0, 0] for row in services_values],
-                            columns=fields)
-
-    for coef, service_list in coefficients_dict.iteritems():
-        services_df.loc[services_df.id.isin(service_list), code_to_field[coef]] = \
-            services_df[services_df.id.isin(service_list)].\
-            apply(lambda s: (s.tariff+s.index015)*(coef_type[coef]['value']-1), axis=1)
-    return services_df
-
-
-def get_service_df_mini(year, period, mo_list):
-    services = ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
-        event__record__register__is_active=True,
-        event__record__register__organization_code__in=mo_list,
-        payment_type__in=[2, 4]
-    ).values_list(
-        'id_pk',
-        'event__record__patient__pk',
-        'event__pk',
-        'code__code',
-        'code__group__pk',
-        'code__subgroup__pk',
-        'code__division__pk',
-        'code__tariff_profile__pk',
-        'event__term__pk',
-        'division__term__pk',
-        'organization__code',
-        'event__record__patient__gender__pk',
-        'quantity',
-        'tariff',
-        'accepted_payment'
-    )
-    columns_df = [
-        'id',
-        'patient_id',
-        'event_id',
-        'code',
-        'group',
-        'subgroup',
-        'code_division',
-        'tariff_profile',
-        'term',
-        'division_term',
-        'mo_code',
-        'gender',
-        'quantity_days',
-        'tariff',
-        'accepted_payment',
-
-        'index015', 'index_6', 'index2',
-        'index07', 'indexFAP', 'index_7',
-
-        'is_children'
-    ]
-
-    coefficients = ProvidedServiceCoefficient.objects.filter(
-        service__event__record__register__year=year,
-        service__event__record__register__period=period,
-        service__event__record__register__is_active=True,
-        service__event__record__register__organization_code__in=mo_list
-    ).values(
-        'service__pk', 'coefficient__pk'
-    ).distinct()
-    coefficients_dict = {}
-    for coefficient in coefficients:
-        if coefficient['coefficient__pk'] not in coefficients_dict:
-            coefficients_dict[coefficient['coefficient__pk']] = []
-        coefficients_dict[coefficient['coefficient__pk']].append(coefficient['service__pk'])
-
-    coe_type = get_coefficient_type()
-    code_to_field = {2: 'index015', 3: 'index_6', 4: 'index2',
-                     5: 'index07', 1: 'indexFAP', 6: 'index_7'}
-
-    services_df = DataFrame([list(row)+[0, 0, 0, 0, 0, 0, row[3][0] == '1'] for row in services],
-                            columns=columns_df)
-
-    for coe, service_list in coefficients_dict.iteritems():
-        services_df.loc[services_df.id.isin(service_list), code_to_field[coe]] = \
-            services_df[services_df.id.isin(service_list)].\
-            apply(lambda s: (s.tariff+s.index015)*(coe_type[coe]['value']-1), axis=1)
-    return services_df
 
 
 ### Информация об ошибках в указанной больнице
@@ -514,6 +365,97 @@ def get_total_sum(year, period, mo):
     return total_sum['tariff']
 
 
+### Расчёт тарифа по подушевому по поликлинике и скорой помощи c января 2015
+def calculate_capitation_tariff(term, year, period, mo_code):
+    data_attachment = get_date_following_reporting_period(year, period)
+    tariff = TariffCapitation.objects.filter(
+        term=term, organization__code=mo_code,
+        start_date__lte=data_attachment,
+        is_children_profile=True
+    )
+    result = [
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0]
+    ]
+
+    if tariff:
+        if term == 3:
+            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
+                get_attachment_count(data_attachment)
+        elif term == 4:
+            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
+                get_ambulance_attachment_count(data_attachment)
+    else:
+        return False, result
+
+        # Чмсленность
+
+        result[0][1] = population[1]['men']
+        result[1][1] = population[1]['fem']
+
+        result[2][1] = population[2]['men']
+        result[3][1] = population[2]['fem']
+
+        result[4][1] = population[3]['men']
+        result[5][1] = population[3]['fem']
+
+        result[6][0] = population[4]['men']
+        result[7][0] = population[4]['fem']
+
+        result[8][0] = population[5]['men']
+        result[9][0] = population[5]['fem']
+
+        # Тариф основной
+
+        result[0][5] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
+        result[1][5] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
+
+        result[2][5] = tariff.filter(age_group=2, gender=1).order_by('-start_date')[0].value
+        result[3][5] = tariff.filter(age_group=2, gender=2).order_by('-start_date')[0].value
+
+        result[4][5] = tariff.filter(age_group=3, gender=1).order_by('-start_date')[0].value
+        result[5][5] = tariff.filter(age_group=3, gender=2).order_by('-start_date')[0].value
+
+        result[6][4] = tariff.filter(age_group=4, gender=1).order_by('-start_date')[0].value
+        result[7][4] = tariff.filter(age_group=4, gender=2).order_by('-start_date')[0].value
+
+        result[8][4] = tariff.filter(age_group=5, gender=1).order_by('-start_date')[0].value
+        result[9][4] = tariff.filter(age_group=5, gender=2).order_by('-start_date')[0].value
+
+    for idx in xrange(0, 10):
+        result[idx][8] = result[idx][0]*result[idx][4]
+        result[idx][9] = result[idx][1]*result[idx][5]
+
+    if term == 3:
+        fap = TariffFap.objects.filter(organization__code=mo_code,
+                                       start_date__lte=data_attachment,
+                                       is_children_profile=True)
+        if fap:
+            coeff = fap.order_by('-start_date')[0].value
+            for idx in xrange(0, 10):
+                result[idx][16] = result[idx][8]*(coeff-1)
+                result[idx][17] = result[idx][9]*(coeff-1)
+
+    for idx in xrange(0, 10):
+        result[idx][22] = result[idx][8] + result[idx][16]
+        result[idx][23] = result[idx][9] + result[idx][17]
+
+    return True, result
+
+
+'''
 ### Расчёт тарифа по подушевому по поликлинике и скорой помощи c сентября 2014
 def calculate_capitation_tariff(term, year, period, mo_code):
     if term == 3:
@@ -580,6 +522,14 @@ def calculate_capitation_tariff(term, year, period, mo_code):
         capitation_data['female']['population_tariff']['children'] = \
             capitation_data['female']['population']['children'] * capitation_data['female']['tariff']['children']
 
+        # Для Магдагачи 280029
+        """
+        capitation_data['male']['population_tariff']['adult'] *= 2
+        capitation_data['male']['population_tariff']['children'] *= 2
+        capitation_data['female']['population_tariff']['adult'] *= 2
+        capitation_data['female']['population_tariff']['children'] *= 2
+        """
+
         # Коэффициент по подушевому
         if term == 3:
             fap = TariffFap.objects.filter(organization__code=mo_code,
@@ -622,6 +572,7 @@ def calculate_capitation_tariff(term, year, period, mo_code):
             Decimal(round(capitation_data['female']['coefficient']['children'], 2))
 
     return capitation_data
+'''
 
 
 ### Коды больниц в медицинском реестре за указанный период
@@ -653,6 +604,7 @@ def pse_export(year, period, mo_code, register_status, data, handbooks):
             services_group[service['department']].append(index)
 
     for department in services_group:
+        concomitant_diseases = get_concomitant_disease(year, period, department)
         rec_id = 1
         unique_patients = []
         copy2('%s/template_p.dbf' % templates_path,
@@ -684,7 +636,7 @@ def pse_export(year, period, mo_code, register_status, data, handbooks):
             s_rec['D_U'] = date_correct(service['end_date'], service['id'], 'end_date')
             s_rec['K_U'] = service['quantity'] or 1
             s_rec['DS'] = (service['basic_disease'] or '').encode('cp866')
-            s_rec['DS2'] = (service['concomitant_disease'] or '').encode('cp866')
+            s_rec['DS2'] = (concomitant_diseases[service['event_id']] or '').encode('cp866')
             #s_rec['TR'] = ''
             s_rec['EXTR'] = '0'
             s_rec['PS'] = 1 if service['term'] == 1 else 0
@@ -763,7 +715,14 @@ def pse_export(year, period, mo_code, register_status, data, handbooks):
 
 ### Устанавливает статус реестру
 def change_register_status(year, period, mo_code, register_status):
+    MedicalRegister.objects.filter(
+        year=year,
+        period=period,
+        organization_code=mo_code
+    ).update(status=register_status)
+    '''
     register_files = MedicalRegister.objects.filter(year=year, period=period, organization_code=mo_code, is_active=True)
     for register_file in register_files:
         register_file.status_id = register_status
         register_file.save()
+    '''

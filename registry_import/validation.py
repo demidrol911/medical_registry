@@ -336,7 +336,7 @@ def get_policy_patient_validation(item, registry_type=1):
                      error=ERROR_MESSAGES['wrong value']),
         ]),
         Field('SPOLIS', item['SPOLIS'] or '').append([
-            IsLengthBetween(1, 20,
+            IsLengthBetween(1, 10,
                             error=ERROR_MESSAGES['length exceeded'],
                             pass_on_blank=True)
         ]),

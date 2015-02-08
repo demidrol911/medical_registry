@@ -1,14 +1,16 @@
 #! -*- coding: utf-8 -*-
 
 from time import clock
+
 from django.core.management.base import BaseCommand
-from register_function import (get_patients, get_services,
-                               get_sanctions, get_mo_info,
-                               get_failure_causes, get_errors,
-                               pse_export)
+
+from tfoms.func import (get_patients, get_services,
+                        get_sanctions, get_mo_info,
+                        get_failure_causes, get_errors,
+                        pse_export)
 from medical_service_register.path import REESTR_EXP, BASE_DIR
-from helpers.excel_writer import ExcelWriter
-from helpers.const import MONTH_NAME
+from report_printer.excel_writer import ExcelWriter
+from report_printer.const import MONTH_NAME
 
 
 ### Печать сокращённого сводного акта для экспертов
