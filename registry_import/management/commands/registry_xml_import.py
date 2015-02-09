@@ -610,7 +610,7 @@ def main():
                         if new_event.get('USL_OK', '') == '1' and _type == 'H':
                             has_hospitalization = True
 
-                        for concomitant in item['DS2'] or []:
+                        for concomitant in event['DS2'] or []:
                             raw_concomitant = get_concomitant_disease_validation(concomitant)
                             new_concomitant = raw_concomitant.get_dict()
                             new_concomitant['event_id'] = new_event['pk']
@@ -622,7 +622,7 @@ def main():
                                 event_uid=new_event['ISCASE']
                             )
 
-                        for complicated in item['DS3'] or []:
+                        for complicated in event['DS3'] or []:
                             raw_complicated = get_complicated_disease_validation(complicated)
                             new_complicated = raw_complicated.get_dict()
                             new_complicated['event_id'] = new_event['pk']

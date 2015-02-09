@@ -13,6 +13,7 @@ from tfoms.models import (
 from helpers import mek_raw_query
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
+import re
 
 
 def get_register_element():
@@ -82,178 +83,6 @@ def get_services(register_element):
             from provided_service ps2
             where ps2.event_fk = provided_event.id_pk
         ) as event_start_date,
-        tariff_basic.value as expected_tariff,
-        provided_event.term_fk as service_term,
-        medical_service.code as service_code,
-        medical_service.examination_special as service_examination_special,
-        medical_service.group_fk as service_group,
-        medical_service.subgroup_fk as service_subgroup,
-        medical_service.examination_group as service_examination_group,
-        medical_service.tariff_profile_fk as service_tariff_profile,
-        medical_service.reason_fk as reason_code,
-        provided_event.examination_result_fk as examination_result,
-        COALESCE(case provided_event.term_fk
-            when 1 THEN
-                (
-                    select tariff_nkd.value
-                    from tariff_nkd
-                    where start_date = (
-                        select max(start_date)
-                        from tariff_nkd
-                        where start_date <= CASE
-                                            when provided_service.end_date < '2014-02-01' then '2014-02-01'
-                                            else provided_service.end_date end
-                            and profile_fk = medical_service.tariff_profile_fk
-                            and is_children_profile = provided_service.is_children_profile
-                            and "level" = department.level
-                    ) and profile_fk = medical_service.tariff_profile_fk
-                        and is_children_profile = provided_service.is_children_profile
-                        and "level" = department.level
-                    order by start_date DESC
-                    limit 1
-                )
-            WHEN 2 THEN
-                (
-                    select tariff_nkd.value
-                    from tariff_nkd
-                    where start_date = (
-                        select max(start_date)
-                        from tariff_nkd
-                        where start_date <= CASE
-                                            when provided_service.end_date < '2014-02-01' then '2014-02-01'
-                                            else provided_service.end_date end
-                            and profile_fk = medical_service.tariff_profile_fk
-                            and is_children_profile = provided_service.is_children_profile
-                    ) and profile_fk = medical_service.tariff_profile_fk
-                        and is_children_profile = provided_service.is_children_profile
-                    order by start_date DESC
-                    limit 1
-                )
-            ELSE 1 END
-        ) as nkd,
-        medical_organization.is_agma_cathedra,
-        medical_organization.level as level,
-        patient.insurance_policy_fk as patient_policy,
-        patient.birthdate as patient_birthdate,
-        person.deathdate as person_deathdate,
-        insurance_policy.stop_date as policy_stop_date,
-        operation.reason_stop_fk as stop_reason,
-        insurance_policy.type_fk as policy_type,
-        medical_register.organization_code,
-        provided_event.comment as event_comment,
-        medical_register_record.is_corrected as record_is_corrected,
-        CASE medical_service.group_fk
-        when 19 THEN
-            (
-                select 1
-                from provided_service inner_ps
-                    join medical_service inner_ms
-                        on inner_ps.code_fk = inner_ms.id_pk
-                where inner_ps.event_fk = provided_event.id_pk
-                    and inner_ms.group_fk = 19 and inner_ms.subgroup_fk = 17
-                    and inner_ps.end_date = provided_service.end_date
-            )
-        ELSE
-            NULL
-        END as coefficient_4
-    from
-        provided_service
-        join provided_event
-            on provided_event.id_pk = provided_service.event_fk
-        join medical_register_record
-            on medical_register_record.id_pk = provided_event.record_fk
-        join patient
-            on patient.id_pk = medical_register_record.patient_fk
-        left join insurance_policy
-            on patient.insurance_policy_fk = insurance_policy.version_id_pk
-        left join person
-            on person.version_id_pk = insurance_policy.person_fk
-        left join operation
-            on operation.insurance_policy_fk = insurance_policy.version_id_pk
-                and operation.id_pk = (
-                    select op.id_pk
-                    from operation op
-                        join operation_status os
-                            on op.id_pk = os.operation_fk
-                    where op.insurance_policy_fk = insurance_policy.version_id_pk
-                        and os.timestamp = (
-                            select min(timestamp)
-                            from operation_status
-                            where operation_status.operation_fk = op.id_pk)
-                    order by timestamp desc limit 1)
-        join medical_register
-            on medical_register_record.register_fk = medical_register.id_pk
-        JOIN medical_service
-            on medical_service.id_pk = provided_service.code_fk
-        join medical_organization
-            on medical_organization.code = medical_register.organization_code
-                and medical_organization.parent_fk is null
-        JOIN medical_organization department
-            on department.id_pk = provided_service.department_fk
-        LEFT join tariff_basic
-            on tariff_basic.service_fk = provided_service.code_fk
-                and tariff_basic.group_fk =
-                    CASE
-                    WHEN department.alternate_tariff_group_FK is NULL
-                        THEN medical_organization.tariff_group_FK
-                    ELSE department.alternate_tariff_group_FK
-                    END
-                and tariff_basic.start_date = (
-                    select max(start_date)
-                    from tariff_basic
-                    where
-                        start_date <= (
-                            CASE WHEN (SELECT CASE
-                            WHEN (
-                                SELECT case
-                                when medical_service.reason_fk = 1
-                                    and provided_service.end_date >= '2014-02-01'
-                                    THEN provided_event.end_date
-                                else provided_service.end_date end
-                            ) < (select min(start_date) from tariff_basic)
-                            THEN (select min(start_date) from tariff_basic)
-                            ELSE (
-                                SELECT case
-                                when medical_service.reason_fk = 1
-                                    and provided_service.end_date >= '2014-02-01'
-                                    THEN provided_event.end_date
-                                else provided_service.end_date end
-                            )
-                            END) < '2014-02-01'::DATE THEN '2014-02-01'::DATE
-                            ELSE (SELECT CASE
-                            WHEN (
-                                SELECT case
-                                when medical_service.reason_fk = 1
-                                    and provided_service.end_date >= '2014-02-01'
-                                    THEN provided_event.end_date
-                                else provided_service.end_date end
-                            ) < (select min(start_date) from tariff_basic)
-                            THEN (select min(start_date) from tariff_basic)
-                            ELSE (
-                                SELECT case
-                                when medical_service.reason_fk = 1
-                                    and provided_service.end_date >= '2014-02-01'
-                                    THEN provided_event.end_date
-                                else provided_service.end_date end
-                            )
-                            END) END
-                        )
-                )
-    where
-        medical_register.is_active
-        and medical_register.year = %(year)s
-        and medical_register.period = %(period)s
-        and medical_register.organization_code = %(organization_code)s
-    """
-
-    query = """
-    select DISTINCT provided_service.id_pk,
-        medical_service.code as service_code,
-        (
-            select min(ps2.start_date)
-            from provided_service ps2
-            where ps2.event_fk = provided_event.id_pk
-        ) as event_start_date,
         case WHEN (
                 select count(ps2.id_pk)
                 from provided_service ps2
@@ -282,7 +111,7 @@ def get_services(register_element):
                         select max(start_date)
                         from tariff_nkd
                         where start_date <= CASE
-                                            when provided_service.end_date < '2014-02-01' then '2014-02-01'
+                                            when provided_service.end_date < '2015-01-01' then '2015-01-01'
                                             else provided_service.end_date end
                             and profile_fk = medical_service.tariff_profile_fk
                             and is_children_profile = provided_service.is_children_profile
@@ -301,7 +130,7 @@ def get_services(register_element):
                         select max(start_date)
                         from tariff_nkd
                         where start_date <= CASE
-                                            when provided_service.end_date < '2014-02-01' then '2014-02-01'
+                                            when provided_service.end_date < '2015-01-01' then '2015-01-01'
                                             else provided_service.end_date end
                             and profile_fk = medical_service.tariff_profile_fk
                             and is_children_profile = provided_service.is_children_profile
@@ -1507,7 +1336,7 @@ def sanctions_on_wrong_examination_age_group(register_element):
                 and ms.examination_group != (
                     select "group"
                     from examination_age_bracket
-                    where "year" = date_part('year', p.birthdate)))
+                    where age = (date_part('year', ps.end_date) - date_part('year', p.birthdate))))
             )
             and (select count(1) from provided_service_sanction where service_fk = ps.id_pk
                            and error_fk = 35) = 0
@@ -1772,7 +1601,7 @@ def sanctions_on_invalid_outpatient_event(register_element):
                             and provided_service.tariff > 0
                             and medical_service.reason_fk = 1 and (medical_service.group_fk != 19
                                 or medical_service.group_fk is NUll)
-                    ) > 1 or (
+                    ) > 1 /*or (
                         (
                             select count(1)
                             from provided_service
@@ -1791,7 +1620,7 @@ def sanctions_on_invalid_outpatient_event(register_element):
                                 and provided_service.tariff = 0
                                 and medical_service.reason_fk = 1 and (medical_service.group_fk != 19
                                     or medical_service.group_fk is NUll)
-                        ) = 0
+                        ) = 0*/
                     ) or (
                         (
                             select count(1)
@@ -2442,6 +2271,7 @@ def sanctions_on_service_term_mismatch(register_element):
 
 
 def main():
+    COMMENT_COEFFICIENT_CURATION = re.compile(r'[0-1]{6}1')
     min_date_for_stopped_policy = datetime.strptime('2011-01-01', '%Y-%m-%d').date()
 
     register_element = get_register_element()
@@ -2659,7 +2489,8 @@ def main():
 
                     if term == 1:
                         # Коэффициент курации
-                        if service.quantity >= nkd * 2 and service.service_group != 20:
+                        if service.quantity >= nkd * 2 and service.service_group != 20 \
+                                and COMMENT_COEFFICIENT_CURATION.match(service.comment):
                             accepted_payment += round(accepted_payment * 0.25, 2)
                             provided_tariff += round(provided_tariff * 0.25, 2)
                             ProvidedServiceCoefficient.objects.create(
