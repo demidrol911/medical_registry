@@ -400,39 +400,40 @@ def calculate_capitation_tariff(term, year, period, mo_code):
     else:
         return False, result
 
-        # Чмсленность
+    print '*', population
+    # Чмсленность
 
-        result[0][1] = population[1]['men']
-        result[1][1] = population[1]['fem']
+    result[0][1] = population[1]['men']
+    result[1][1] = population[1]['fem']
 
-        result[2][1] = population[2]['men']
-        result[3][1] = population[2]['fem']
+    result[2][1] = population[2]['men']
+    result[3][1] = population[2]['fem']
 
-        result[4][1] = population[3]['men']
-        result[5][1] = population[3]['fem']
+    result[4][1] = population[3]['men']
+    result[5][1] = population[3]['fem']
 
-        result[6][0] = population[4]['men']
-        result[7][0] = population[4]['fem']
+    result[6][0] = population[4]['men']
+    result[7][0] = population[4]['fem']
 
-        result[8][0] = population[5]['men']
-        result[9][0] = population[5]['fem']
+    result[8][0] = population[5]['men']
+    result[9][0] = population[5]['fem']
 
-        # Тариф основной
+    # Тариф основной
 
-        result[0][5] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
-        result[1][5] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
+    result[0][5] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
+    result[1][5] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
 
-        result[2][5] = tariff.filter(age_group=2, gender=1).order_by('-start_date')[0].value
-        result[3][5] = tariff.filter(age_group=2, gender=2).order_by('-start_date')[0].value
+    result[2][5] = tariff.filter(age_group=2, gender=1).order_by('-start_date')[0].value
+    result[3][5] = tariff.filter(age_group=2, gender=2).order_by('-start_date')[0].value
 
-        result[4][5] = tariff.filter(age_group=3, gender=1).order_by('-start_date')[0].value
-        result[5][5] = tariff.filter(age_group=3, gender=2).order_by('-start_date')[0].value
+    result[4][5] = tariff.filter(age_group=3, gender=1).order_by('-start_date')[0].value
+    result[5][5] = tariff.filter(age_group=3, gender=2).order_by('-start_date')[0].value
 
-        result[6][4] = tariff.filter(age_group=4, gender=1).order_by('-start_date')[0].value
-        result[7][4] = tariff.filter(age_group=4, gender=2).order_by('-start_date')[0].value
+    result[6][4] = tariff.filter(age_group=4, gender=1).order_by('-start_date')[0].value
+    result[7][4] = tariff.filter(age_group=4, gender=2).order_by('-start_date')[0].value
 
-        result[8][4] = tariff.filter(age_group=5, gender=1).order_by('-start_date')[0].value
-        result[9][4] = tariff.filter(age_group=5, gender=2).order_by('-start_date')[0].value
+    result[8][4] = tariff.filter(age_group=5, gender=1).order_by('-start_date')[0].value
+    result[9][4] = tariff.filter(age_group=5, gender=2).order_by('-start_date')[0].value
 
     for idx in xrange(0, 10):
         result[idx][8] = result[idx][0]*result[idx][4]
@@ -630,13 +631,15 @@ def pse_export(year, period, mo_code, register_status, data, handbooks):
             s_rec['SN_POL'] = police.encode('cp866')
             s_rec['C_I'] = service['anamnesis_number'].encode('cp866')
             s_rec['OTD'] = service['division_code'] or ''
+            if service['code'] is None:
+                print service
             s_rec['COD'] = float(service['code'])
             #s_rec['TIP'] = ''
             s_rec['D_BEG'] = date_correct(service['start_date'], service['id'], 'start_date')
             s_rec['D_U'] = date_correct(service['end_date'], service['id'], 'end_date')
             s_rec['K_U'] = service['quantity'] or 1
             s_rec['DS'] = (service['basic_disease'] or '').encode('cp866')
-            s_rec['DS2'] = (concomitant_diseases[service['event_id']] or '').encode('cp866')
+            s_rec['DS2'] = (concomitant_diseases.get(service['event_id'], '')).encode('cp866')
             #s_rec['TR'] = ''
             s_rec['EXTR'] = '0'
             s_rec['PS'] = 1 if service['term'] == 1 else 0
