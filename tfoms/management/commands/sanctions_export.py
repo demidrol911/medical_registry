@@ -128,7 +128,7 @@ def get_records(register_element, start_date, end_date):
             person_id_type.code as patient_id_type,
             provided_event.id as event_uid,
             provided_event.term_fk as event_term_code,
-            provided_event.kind_fk as event_kind_code,
+            medical_service_kind.code as event_kind_code,
             provided_event.form_fk as event_form_code,
             medical_service_hitech_kind.code as hitech_kind_code,
             provided_event.hitech_method_fk as hitech_method_code,
@@ -403,6 +403,8 @@ def get_records(register_element, start_date, end_date):
                 on provided_service.code_fk = medical_service.id_pk
             JOIN payment_type
                 on provided_service.payment_type_fk = payment_type.id_pk
+            left join medical_service_kind
+                on medical_service_kind.id_pk = provided_event.kind_fk
             JOIN provided_service_sanction pss2
                 on pss2.id_pk = (
                     select max(id_pk)
@@ -430,9 +432,9 @@ def get_records(register_element, start_date, end_date):
 
 
 def main():
-    sanction_start_date = '2014-08-01'
-    sanction_end_date = '2014-08-31'
-    period = '10'
+    sanction_start_date = '2014-11-01'
+    sanction_end_date = '2014-11-30'
+    period = '12'
 
     print datetime.datetime.now()
     registers = Sanction.objects.filter(
@@ -796,7 +798,10 @@ def main():
                 hm_xml.put('DATE_IN', start_date)
                 hm_xml.put('DATE_OUT', end_date)
             hm_xml.put('DS', (record.service_basic_disease_code or '').encode('cp1251'))
-            hm_xml.put('CODE_USL', record.service_code or '')
+            if record.event_comment == 'VMP':
+                hm_xml.put('CODE_USL', record.service_comment or '')
+            else:
+                hm_xml.put('CODE_USL', record.service_code or '')
             hm_xml.put('KOL_USL', record.quantity or '')
             hm_xml.put('TARIF', round(float(record.service_tariff or 0), 2) or 0)
             if record.service_payment_type_code != 2:

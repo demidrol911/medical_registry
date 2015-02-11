@@ -14,7 +14,7 @@ def unicode_to_cp866(string):
 
 def main():
     year = '2014'
-    period = '09'
+    period = '11'
     path = 'd:/work/expertiza_export/%s/%s' % (year, period)
 
     services = ProvidedService.objects.filter(
@@ -89,7 +89,6 @@ def main():
         )
         exclude_departments = []
         for department_service in department_services:
-            patient = Patient.objects.get(pk=department_service['event__record__patient'])
 
             address_string = u'Амурская область, %(area)s, , , %(street)s, %(house)s, %(extra)s, %(room)s'
             address = patient.get_address()

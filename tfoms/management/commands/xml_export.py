@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from tfoms.models import (
+from main.models import (
     ProvidedEvent, ProvidedService, MedicalRegister, IDC, MedicalRegisterRecord,
     MedicalOrganization, Gender, InsurancePolicyType, MedicalServiceTerm,
     MedicalServiceKind, MedicalServiceForm, MedicalHospitalization,
@@ -10,7 +10,7 @@ from tfoms.models import (
     MedicalDivision, Special, MedicalService, Patient)
 from django.db.models import Sum, Max, Min
 from django.db import connection, transaction
-from tfoms.models import SERVICE_XML_TYPES, EXAMINATION_TYPES
+from main.models import SERVICE_XML_TYPES, EXAMINATION_TYPES
 from helpers import xml_writer as writer
 import datetime
 from collections import defaultdict
@@ -33,8 +33,9 @@ def safe_int(val):
 def get_patients(period):
     attachment_date = '2014-%s-01' % str(int(period)+1)
     query = """
-        select p1.*, medOrg.code as attachment_code
+        select p1.*, medOrg.code as attachment_code_custom
             , person_id_type.code as id_type
+            , p1.attachment_code
         from
             patient p1
             left join insurance_policy
@@ -56,7 +57,7 @@ def get_patients(period):
                     where
                         person_fk = person.version_id_pk
                         and status_fk = 1
-                        and date <= %s
+                        and date <= '2014-12-15'
                         and attachment.is_active)
             LEFT join medical_organization medOrg
                 on (
@@ -86,7 +87,7 @@ def get_patients(period):
                 --and medical_register.organization_code in ('280036')
             )
         """
-    return Patient.objects.raw(query, [attachment_date, period])
+    return Patient.objects.raw(query, [period])
 
 
 def get_records(register_pk):
@@ -377,7 +378,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '10'
+    period = '12'
     year = '2014'
     print datetime.datetime.now()
     registers = MedicalRegister.objects.filter(
@@ -580,7 +581,7 @@ def main():
                         hm_xml.put('RSLT', record.treatment_result_code or '')
                         hm_xml.put('ISHOD', record.treatment_outcome_code or '')
                         hm_xml.put('PRVS', record.event_worker_speciality_code or '')
-                        hm_xml.put('VERS_SPEC', record.speciality_dict_version or '')
+                        hm_xml.put('VERS_SPEC', 'V015' or '')
                         hm_xml.put('IDDOKT', (record.event_worker_code or '').encode('cp1251'))
                         hm_xml.put('OS_SLUCH', record.event_special_code or '')
                     if register_type > 2:

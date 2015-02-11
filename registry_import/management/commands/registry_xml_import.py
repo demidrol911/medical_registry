@@ -392,7 +392,7 @@ def main():
 
     for organization in registries:
         if not is_files_completeness(registries[organization]):
-            send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
+            #send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
 
         registry_list = registries[organization]
@@ -460,11 +460,13 @@ def main():
         for registry in registry_list:
 
             if registry in files_errors:
-                send_error_file(OUTBOX_DIR, registry, files_errors[registry])
+                #send_error_file(OUTBOX_DIR, registry, files_errors[registry])
                 continue
 
             services_errors = []
             _type, organization_code, year, period = get_registry_info(registry)
+
+            print organization, current_year, current_period, _type
 
             if current_year \
                     and current_period \
@@ -523,6 +525,7 @@ def main():
                     registries_objects.append(new_registry)
 
                 if 'N_ZAP' in item:
+
                     if record_pk_list:
                         record_pk = record_pk_list.pop()
                     else:
@@ -609,7 +612,12 @@ def main():
                         if new_event.get('USL_OK', '') == '1' and _type == 'H':
                             has_hospitalization = True
 
-                        for concomitant in item['DS2'] or []:
+                        if event['DS2'] and type(event['DS2']) != list:
+                            concomitants = [event['DS2']]
+                        else:
+                            concomitants = event['DS2'] or []
+
+                        for concomitant in concomitants:
                             raw_concomitant = get_concomitant_disease_validation(concomitant)
                             new_concomitant = raw_concomitant.get_dict()
                             new_concomitant['event_id'] = new_event['pk']
@@ -618,10 +626,15 @@ def main():
                             services_errors += handle_errors(
                                 raw_concomitant.errors() or [], parent='SLUCH',
                                 record_uid=new_record['N_ZAP'],
-                                event_uid=new_event['ISCASE']
+                                event_uid=new_event['IDCASE']
                             )
 
-                        for complicated in item['DS3'] or []:
+                        if event['DS3'] and type(event['DS3']) != list:
+                            complicateds = [event['DS3']]
+                        else:
+                            complicateds = event['DS3'] or []
+
+                        for complicated in complicateds or []:
                             raw_complicated = get_complicated_disease_validation(complicated)
                             new_complicated = raw_complicated.get_dict()
                             new_complicated['event_id'] = new_event['pk']
@@ -650,6 +663,14 @@ def main():
                             record_uid=new_record['N_ZAP'],
                             event_uid=new_event['IDCASE']
                         )
+
+                        if not event['USL']:
+                            services_errors.append(set_error(
+                                '902', field='USL', parent='SLUCH',
+                                record_uid=new_record['N_ZAP'],
+                                event_uid=event['IDCASE'],
+                                comment=u'Отсутствуют услуги в случае'))
+                            continue
 
                         if type(event['USL']) == list:
                             services = event['USL']

@@ -526,17 +526,26 @@ def get_event_validation(item, registry_type=1):
                       error=ERROR_MESSAGES['wrong format']),
             ])
         ])
+
+    if registry_type in (6, 7, 8, 9, 10):
+        event.append([
+            Field('COMENTSL', item['COMENTSL'] or '').append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                Regex(r'^F(0|1)[0-9]{1}$',
+                      error=ERROR_MESSAGES['wrong format']),
+            ])
+        ])
+
     event.run()
 
     return event
-
 
 def get_complicated_disease_validation(item, registry_type=1):
     disease = MyCollection()
 
     if registry_type in (1, 2):
         disease.append([
-            Field('DS3', item['DS3'] or '').append([
+            Field('DS3', item or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
                 DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                     pass_on_blank=True)
@@ -551,7 +560,7 @@ def get_concomitant_disease_validation(item, registry_type=1):
     disease = MyCollection()
 
     disease.append([
-        Field('DS2', item['DS2'] or '').append([
+        Field('DS2', item or '').append([
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
             DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True)

@@ -6,12 +6,13 @@ import shutil
 
 #OUTBOX_DIR = 'd:/work/test/outbox/'
 OUTBOX_DIR = u'//alpha/vipnet/medical_registry/outbox/'
-ACTS_DIR = 'x:/reestr/g2014/period10/'
+ACTS_DIR = u'x:/reestr/g2014/period12/доплаты'
 
-AGMA_DIR = u'x:/reestr/g2014/period10/АГМА'
-custom_file = u'X:/REESTR/G2014/Period10/Больницам октябрь.jpg'
+AGMA_DIR = u'x:/reestr/g2014/period12/АГМА'
+custom_file = ''#u'X:/REESTR/G2014/Period10/Больницам октябрь.jpg'
 
 act_name_pattern = re.compile(r'_+\d*$')
+
 
 def get_outbox_dict(dir):
     dirs = os.listdir(dir)
@@ -43,10 +44,11 @@ for act in acts:
 
     try:
         shutil.copy2(src_path, dst_path)
-        shutil.copy2(custom_file, dst_path)
+        #shutil.copy2(custom_file, dst_path)
     except:
         print u'не смог', dst_path
 
+"""
 acts = os.listdir(AGMA_DIR)
 
 for act in acts:
@@ -65,6 +67,7 @@ for act in acts:
 
     try:
         shutil.copy2(src_path, dst_path)
-        shutil.copy2(custom_file, dst_path)
+        #shutil.copy2(custom_file, dst_path)
     except:
         print u'не смог', dst_path
+"""

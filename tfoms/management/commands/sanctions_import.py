@@ -17,8 +17,8 @@ S_POL, K_U, DS, TN1, SUM_USL, FFOMS, TFOMS, S_PPP, S_SNK, SNILS, SANK_TYPE,\
 DOC_NUMBER, STATUS, S_SNT, S_SNF, SANCTION_DATE,\
 ANAMNESIS_NUMBER, LPU_NUMBER = range(0, 28)
 
-sanction_start_date = '2014-07-01'
-sanction_end_date = '2014-07-31'
+sanction_start_date = '2014-11-01'
+sanction_end_date = '2014-11-30'
 z = csv.writer(open('d:/work/duplicates_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
 
 
@@ -58,7 +58,8 @@ def find(rec):
                 or (ps.start_date = %(end_date)s or ps.end_date = %(end_date)s)
             )
             and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or upper(%(anamnesis)s) = '')
-            --and department.old_code = %(department)s
+            and (department.old_code = %(department)s or mr.organization_code = %(organization_code)s)
+            --%(organization_code)s
             and ps.payment_type_fk in (2, 4)
         order by ps.end_date, mr.year, mr.period DESC
         --limit 1
@@ -97,8 +98,9 @@ def find(rec):
             and (ps.end_date = %(end_date)s or ps.start_date = %(start_date)s)
             -- %(start_date)s
             --and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or upper(%(anamnesis)s) = '')
-            --and department.old_code = %(department)s
+            and (department.old_code = %(department)s or mr.organization_code = %(organization_code)s)
             and ps.payment_type_fk in (2, 4)
+            --and
         order by ps.end_date, mr.year, mr.period DESC
         --limit 1
     """
@@ -132,27 +134,12 @@ def find(rec):
                     service=service_code, disease=rec[DS][:3]+'%',
                     start_date=rec[STARTDATE], end_date=rec[ENDDATE],
                     anamnesis=rec[ANAMNESIS_NUMBER] or '',
-                    department=rec[LPU_NUMBER])))
+                    department=rec[LPU_NUMBER],
+                    organization_code=rec[CODE_MO])))
     if service:
-        if len(service) > 1:
-            w = []
-            for r in rec:
-                if isinstance(r, unicode):
-                    w.append(r.encode('utf-8'))
-                else:
-                    w.append(r)
-            z.writerow(w)
-            for r in service:
-                print r.pk
-                z.writerow([r.pk])
-
         service = service[0]
     else:
-        print 'not found', rec[LPU_NUMBER], series, number, service_code, rec[DS], rec[STARTDATE], rec[ANAMNESIS_NUMBER]
         service = None
-
-    if service and service.payment_type_id == 3:
-        raise ValueError('Fuck!!!!!!!!!!!!!!!!!!!')
 
     return service
 
@@ -164,7 +151,7 @@ def main():
     cursor_fb = connect_fb.cursor()
 
     n = csv.writer(open('d:/work/none_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
-    #csv_data = csv.reader(open('d:/work/none_%s.csv' % sanction_start_date, 'rb'), delimiter=';')
+
     n.writerow((
         'FIO', 'DR', 'KMU', 'S_OPL', 'S_SN', 'STARTDATE', 'ENDDATE', 'NUMBER',
         'PERIOD_USL', 'CODE_MO', 'S_POL', 'K_U', 'DS', 'TN1', 'SUM_USL',
@@ -180,13 +167,12 @@ def main():
                                          sanction_end_date))
     data = cursor_fb.fetchall()
 
-    #data = csv_data
     none = 0
     print len(data)
 
     for i, rec in enumerate(data):
-        if float(rec[S_SN]) == 0 and float(rec[S_SNK]) == 0:
-            continue
+        if i % 1000 == 0:
+            print i
 
         service = find(rec)
 
@@ -202,7 +188,6 @@ def main():
             none += 1
 
             n.writerow(w)
-
         else:
             sanction_date = datetime.datetime.strptime(
                 rec[SANCTION_DATE], '%d.%m.%Y')
@@ -218,27 +203,23 @@ def main():
             underpayment = rec[S_SN]
             penalty = rec[S_SNK]
 
-            if underpayment or penalty:
-                try:
-                    failure = PaymentFailureCause.objects.get(number=rec[NUMBER])
-                except:
-                    last_failure = PaymentFailureCause.objects.latest('pk')
-                    PaymentFailureCause.objects.create(pk=last_failure.pk + 1,
-                                                       code=last_failure.pk + 1,
-                                                       number=rec[NUMBER])
-                    failure = PaymentFailureCause.objects.get(number=rec[NUMBER])
-                    print rec[NUMBER], failure
+            try:
+                failure = PaymentFailureCause.objects.get(number=rec[NUMBER])
+            except:
+                last_failure = PaymentFailureCause.objects.latest('pk')
+                PaymentFailureCause.objects.create(pk=last_failure.pk + 1,
+                                                   code=last_failure.pk + 1,
+                                                   number=rec[NUMBER])
+                failure = PaymentFailureCause.objects.get(number=rec[NUMBER])
+                print rec[NUMBER], failure
 
-                Sanction.objects.create(date=sanction_date,
-                            type_id=sanction_type,
-                            act=sanction_act,
-                            underpayment=underpayment,
-                            penalty=penalty,
-                            service=service,
-                            failure_cause=failure)
-                #print 'inserted'
+            Sanction.objects.create(
+                date=sanction_date, type_id=sanction_type, act=sanction_act,
+                underpayment=underpayment, penalty=penalty, service=service,
+                failure_cause=failure)
 
-        #print i, none
+    print i
+
     connect_fb.close()
 
 

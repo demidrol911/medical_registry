@@ -947,6 +947,7 @@ class Patient(models.Model):
     insurance_policy_number = models.CharField(max_length=20)
     newborn_code = models.CharField(max_length=9)
     weight = models.DecimalField(max_digits=10, decimal_places=4)
+    attachment_code = models.CharField(max_length=6)
 
     class Meta:
         db_table = 'patient'
