@@ -145,6 +145,13 @@ def get_services(register_element):
                 )
             ELSE 1 END
         ) as nkd,
+        case when medical_service.tariff_profile_fk IN (12) and medical_register.organization_code in ('280068', '280012', '280059')
+        THEN (
+                case when medical_organization.regional_coefficient = 1.6 then 34661
+                when medical_organization.regional_coefficient = 1.7 then 36827
+                WHEN medical_organization.regional_coefficient = 1.8 THEN 38994
+                END
+        ) else 0 end as alternate_tariff,
         medical_organization.is_agma_cathedra,
         medical_organization.level as level,
         patient.insurance_policy_fk as patient_policy,
@@ -2383,7 +2390,11 @@ def main():
                     #    set_sanction_mek(service, 35)
 
                 provided_tariff = float(service.tariff)
-                tariff = float(service.expected_tariff or 0)
+
+                if service.alternate_tariff:
+                    tariff = float(service.alternate_tariff)
+                else:
+                    tariff = float(service.expected_tariff or 0)
 
                 term = service.service_term
                 nkd = service.nkd or 1
