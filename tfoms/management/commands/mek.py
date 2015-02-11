@@ -85,9 +85,13 @@ def get_services(register_element):
         ) as event_start_date,
         case WHEN (
                 select count(ps2.id_pk)
-                from provided_service ps2
-                where ps2.event_fk = provided_event.id_pk) = 1
+                   from provided_service ps2
+                   join medical_service ms2 on ms2.id_pk = ps2.code_fk
+                   where ps2.event_fk = provided_event.id_pk
+                   and (ms2.group_fk != 27 or ms2.group_fk is null)) = 1
             and medical_service.reason_fk = 1
+            and provided_event.term_fk=3
+            and (medical_service.group_fk = 24 or medical_service.group_fk is NULL)
                 THEN tariff_basic.capitation
             WHEN medical_service.group_fk = 19
                 THEN COALESCE(medical_service.uet, 0)*tariff_basic.value
@@ -558,8 +562,25 @@ def update_payment_kind(register_element):
             medical_service.code, ps1.end_date, T1.end_date, T1.period,
             case provided_event.term_fk
             when 3 then
-                CASE medical_service.reason_fk = 1
-                    and medical_service.group_fk = 24
+                CASE
+                    ((medical_service.group_fk = 24 and medical_service.reason_fk in (1, 2, 3, 8) and provided_event.term_fk=3)
+                      or ((select count(ps2.id_pk)
+                              from provided_service ps2
+                              join medical_service ms2 on ms2.id_pk = ps2.code_fk
+                              where ps2.event_fk = ps1.event_fk and
+                              (ms2.group_fk != 27 or ms2.group_fk is null)) = 1
+                           and medical_service.reason_fk = 1
+                           and medical_service.group_fk is NULL and provided_event.term_fk=3)
+                           and ps1.department_fk NOT IN (
+                                90,
+                                91,
+                                92,
+                                111,
+                                115,
+                                123,
+                                124,
+                                134)
+                    )
                     AND ps1.department_fk NOT IN (15, 88, 89)
                 when TRUE THEN
                     CASE p1.attachment_code = mr1.organization_code -- если пациент прикреплён щас к МО
@@ -1601,27 +1622,7 @@ def sanctions_on_invalid_outpatient_event(register_element):
                             and provided_service.tariff > 0
                             and medical_service.reason_fk = 1 and (medical_service.group_fk != 19
                                 or medical_service.group_fk is NUll)
-                    ) > 1 /*or (
-                        (
-                            select count(1)
-                            from provided_service
-                                join medical_service
-                                    on provided_service.code_fk = medical_service.id_pk
-                            where provided_service.event_fk = provided_event.id_pk
-                                and provided_service.tariff > 0
-                                and medical_service.reason_fk = 1 and (medical_service.group_fk != 19
-                                    or medical_service.group_fk is NUll)
-                        ) = 1 and (
-                            select count(1)
-                            from provided_service
-                                join medical_service
-                                    on provided_service.code_fk = medical_service.id_pk
-                            where provided_service.event_fk = provided_event.id_pk
-                                and provided_service.tariff = 0
-                                and medical_service.reason_fk = 1 and (medical_service.group_fk != 19
-                                    or medical_service.group_fk is NUll)
-                        ) = 0*/
-                    ) or (
+                    ) > 1 or (
                         (
                             select count(1)
                             from provided_service
@@ -2552,6 +2553,7 @@ def main():
                     accepted_payment = tariff * float(quantity)
                     tariff *= float(quantity)
 
+                    '''
                     if (is_single_visit or service.reason_code == 3) and not \
                             (service.reason_code in (1, 4, 5) or service.service_group in single_visit_exception_group):
 
@@ -2559,6 +2561,7 @@ def main():
                         provided_tariff -= round(provided_tariff * 0.6, 2)
                         ProvidedServiceCoefficient.objects.create(
                             service=service, coefficient_id=3)
+                    '''
 
                     if is_mobile_brigade and service.service_group in (7, 25, 26,  11, 15, 16,  12, 13,  4):
                         accepted_payment += round(accepted_payment * 0.07, 2)

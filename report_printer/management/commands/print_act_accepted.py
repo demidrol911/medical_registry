@@ -47,7 +47,11 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
             case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
                  CASE when pe.term_fk = 3 THEN (
                            CASE WHEN ms.reason_fk = 1 and
-                           (select count(ps1.id_pk) from provided_service ps1 where ps1.event_fk = ps.event_fk) = 1 then 99
+                           (ms.group_fk = 24 or ms.group_fk is NULL) and
+                           (select count(ps1.id_pk) from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms.group_fk is null)
+                           ) = 1 then 99
                            else ms.reason_fk END
                       )
                       when pe.term_fk = 2 then msd.term_fk
@@ -273,8 +277,8 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                 count(distinct CASE WHEN ms.code ilike '0%' THEN mrr.patient_fk END) AS patinet_adult,
                 count(distinct CASE WHEN ms.code ilike '1%' THEN mrr.patient_fk END) AS patinet_child,
 
-                count(distinct CASE WHEN ms.code ilike '0%' THEN ps.event_fk END) AS treatment_adult,
-                count(distinct CASE WHEN ms.code ilike '1%' THEN ps.event_fk END) AS treatment_child,
+                count(distinct CASE WHEN ms.code ilike '0%' and ms.subgroup_fk = 12 THEN ps.event_fk END) AS treatment_adult,
+                count(distinct CASE WHEN ms.code ilike '1%' and ms.subgroup_fk = 12 THEN ps.event_fk END) AS treatment_child,
 
                 count(CASE WHEN ms.code ilike '0%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_adult,
                 count(CASE WHEN ms.code ilike '1%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_child,
@@ -409,13 +413,21 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
 
                 -- Место или причина
                 case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
-                     CASE when pe.term_fk = 3 THEN ms.reason_fk
-                          when pe.term_fk = 2 then msd.term_fk
-                          ELSE 0
-                          END
-                     )
-                     ELSE 0
-                     END AS sub_term,
+                 CASE when pe.term_fk = 3 THEN (
+                           CASE WHEN ms.reason_fk = 1 and
+                           (ms.group_fk = 24 or ms.group_fk is NULL) and
+                           (select count(ps1.id_pk) from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms.group_fk is null)
+                           ) = 1 then 99
+                           else ms.reason_fk END
+                      )
+                      when pe.term_fk = 2 then msd.term_fk
+                      ELSE 0
+                      END
+                 )
+                 ELSE 0
+                 END AS sub_term,
 
                 -- Группы услуг
                 case when ms.group_fk is NULL THEN 0
@@ -535,7 +547,6 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
     act_book.set_cursor(7, 0)
     sum_term = None
     total_sum = None
-    print data
     for row in data:
         term = row[0]
         capitation = row[1]
@@ -556,9 +567,11 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
 
         if group:
             if group == 7:
+                #last_title_division = None
                 term_title = handbooks['medical_subgroups'][reason]['name']
             elif group == 19:
                 term_title = u'Стоматология'
+                #last_title_division = None
             else:
                 term_title = handbooks['medical_groups'][group]['name']
             if subgroup:
@@ -587,6 +600,8 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                     term_title = u'Поликлиника (прививка)'
                 elif reason == 5:
                     term_title = u'Поликлиника (неотложка)'
+                elif reason == 8:
+                    term_title = u'Поликлиника (с иными целями)'
                 elif reason == 99:
                     term_title = u'Поликлиника (разовые)'
                 division_title = handbooks['medical_division'][division]['name']
@@ -607,18 +622,23 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                 print_division(act_book, u'Итого', sum_term)
                 act_book.cursor['row'] += 1
                 total_sum = calc_sum(total_sum, sum_term)
+                last_title_division = None
                 sum_term = None
+
             if term == 3:
                 if capitation == 0 and is_print_capit:
                     act_book.set_style(TITLE_STYLE)
                     act_book.write_cell(u'Поликлиника (подушевое)', 'r', 24)
                     print u'Поликлиника (подушевое)'
+                    last_title_division = None
                     is_print_capit = False
                 elif capitation == 1 and is_print_unit:
                     act_book.set_style(TITLE_STYLE)
                     act_book.write_cell(u'Поликлиника (за единицу объёма)', 'r', 24)
                     print u'Поликлиника (за единицу объёма)'
+                    last_title_division = None
                     is_print_unit = False
+
             print term_title
             act_book.set_style(TITLE_STYLE)
             act_book.write_cell(term_title, 'r', 24)
@@ -637,6 +657,8 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
         total_sum = calc_sum(total_sum, sum_term)
         act_book.row_inc()
 
+    print_division(act_book, u'Итого по МО', total_sum)
+
     label_list = [
         u'0 - 1 год мужчина',
         u'0 - 1 год женщина',
@@ -650,6 +672,7 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
         u'60 лет и старше год женщина',
     ]
 
+    act_book.row_inc()
     if sum_capitation_policlinic[0]:
         act_book.set_style(TITLE_STYLE)
         act_book.write_cell(u'Подушевой норматив по амбул. мед. помощи', 'r', 24)
@@ -678,7 +701,8 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
             total_sum = calc_sum(total_sum, total_amb)
         act_book.row_inc()
 
-    print_division(act_book, u'Итого по МО', total_sum)
+    if sum_capitation_policlinic[0] or sum_capitation_amb[0]:
+        print_division(act_book, u'Итого по МО c подушевым', total_sum)
 
 
 def print_division(act_book, title, values):

@@ -466,6 +466,8 @@ def main():
             services_errors = []
             _type, organization_code, year, period = get_registry_info(registry)
 
+            print organization, current_year, current_period, _type
+
             if current_year \
                     and current_period \
                     and current_year != '20'+year \
@@ -610,10 +612,10 @@ def main():
                         if new_event.get('USL_OK', '') == '1' and _type == 'H':
                             has_hospitalization = True
 
-                        if type(event['DS2']) == list:
-                            concomitants = event['DS2']
-                        else:
+                        if event['DS2'] and type(event['DS2']) != list:
                             concomitants = [event['DS2']]
+                        else:
+                            concomitants = event['DS2'] or []
 
                         for concomitant in concomitants:
                             raw_concomitant = get_concomitant_disease_validation(concomitant)
@@ -624,15 +626,13 @@ def main():
                             services_errors += handle_errors(
                                 raw_concomitant.errors() or [], parent='SLUCH',
                                 record_uid=new_record['N_ZAP'],
-                                event_uid=new_event['ISCASE']
+                                event_uid=new_event['IDCASE']
                             )
 
-
-                        if type(event['DS3']) == list:
-                            complicateds = event['DS3']
-                        else:
+                        if event['DS3'] and type(event['DS3']) != list:
                             complicateds = [event['DS3']]
-
+                        else:
+                            complicateds = event['DS3'] or []
 
                         for complicated in complicateds or []:
                             raw_complicated = get_complicated_disease_validation(complicated)
@@ -663,6 +663,14 @@ def main():
                             record_uid=new_record['N_ZAP'],
                             event_uid=new_event['IDCASE']
                         )
+
+                        if not event['USL']:
+                            services_errors.append(set_error(
+                                '902', field='USL', parent='SLUCH',
+                                record_uid=new_record['N_ZAP'],
+                                event_uid=event['IDCASE'],
+                                comment=u'Отсутствуют услуги в случае'))
+                            continue
 
                         if type(event['USL']) == list:
                             services = event['USL']
@@ -805,7 +813,7 @@ def main():
 
         print organization, current_year, current_period
 
-        #move_files_to_archive(registry_list + [patient_path])
+        move_files_to_archive(registry_list + [patient_path])
 
     try:
         for rec in patients_errors:

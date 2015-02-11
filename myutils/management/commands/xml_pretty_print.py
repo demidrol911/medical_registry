@@ -19,8 +19,8 @@ def print_xml(output_file, xml_obj, tab=0):
 
 
 def main():
-    xml_file_name = 'HM280064S28002_141112.xml'
-    output_dir = ur'C:\work\big_archive\period11\register_import_archive'
+    xml_file_name = 'HM280043S28002_150112.xml'
+    output_dir = ur'C:\work\dir'
     target_dir = ur'c:\work\xml_struct'
 
     file_xml = file(path.join(output_dir, xml_file_name))
