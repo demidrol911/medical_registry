@@ -4,7 +4,7 @@ import xlrd
 import logging
 import re
 
-IDENT_TABLE = u'd:/work/medical_service_register/templates/ident_table/table2.xls'
+IDENT_TABLE = u'd:/work/medical_service_register/templates/ident_table/table.xls'
 MO_CODE_PATTERN = r'^28\d{4}$'
 
 logging.basicConfig(filename='d:/work/medical_register_log/text.log',

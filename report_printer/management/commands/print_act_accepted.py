@@ -50,7 +50,7 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                            (ms.group_fk = 24 or ms.group_fk is NULL) and
                            (select count(ps1.id_pk) from provided_service ps1
                            join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms.group_fk is null)
+                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
                            ) = 1 then 99
                            else ms.reason_fk END
                       )
@@ -127,10 +127,16 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
             0,
             0,
 
-            sum(CASE WHEN ms.code ilike '0%' and ps.payment_kind_fk != 2
-                     THEN ps.accepted_payment ELSE 0 END) AS accepted_payment_adult,
-            sum(CASE WHEN ms.code ilike '1%' and ps.payment_kind_fk != 2
-                     THEN ps.accepted_payment ELSE 0 END) AS accepted_payment_child
+            sum(CASE WHEN ms.code ilike '0%' THEN (
+                    CASE WHEN ps.payment_kind_fk = 2 THEN 0
+                    ELSE ps.accepted_payment END
+                    )
+                    ELSE 0 END) AS accepted_payment_adult,
+            sum(CASE WHEN ms.code ilike '1%' THEN (
+                    CASE WHEN ps.payment_kind_fk = 2 THEN 0
+                    ELSE ps.accepted_payment END
+                    )
+                    ELSE 0 END) AS accepted_payment_child
 
             from medical_register mr
             JOIN medical_register_record mrr
@@ -221,7 +227,7 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                 0,
                 0,
 
-                sum(CASE WHEN ms.code ilike '0%' and ps.payment_kind_fk != 2
+                sum(CASE WHEN ms.code ilike '0%'
                          THEN ps.accepted_payment ELSE 0 END) AS accepted_payment_adult,
                 0
 
@@ -418,7 +424,7 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                            (ms.group_fk = 24 or ms.group_fk is NULL) and
                            (select count(ps1.id_pk) from provided_service ps1
                            join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms.group_fk is null)
+                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
                            ) = 1 then 99
                            else ms.reason_fk END
                       )
@@ -604,6 +610,8 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                     term_title = u'Поликлиника (с иными целями)'
                 elif reason == 99:
                     term_title = u'Поликлиника (разовые)'
+                    values[2] = 0
+                    values[3] = 0
                 division_title = handbooks['medical_division'][division]['name']
             elif term == 4:
                 term_title = u'Скорая помощь'
@@ -657,7 +665,8 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
         total_sum = calc_sum(total_sum, sum_term)
         act_book.row_inc()
 
-    print_division(act_book, u'Итого по МО', total_sum)
+    if data:
+        print_division(act_book, u'Итого по МО', total_sum)
 
     label_list = [
         u'0 - 1 год мужчина',
@@ -1693,6 +1702,330 @@ def calculate_total_sum(total_sum, intermediate_sum):
 
 
 ### Распечатка акта по 146-му приказу
+def print_order_146_1(act_book, year, period, mo, sum_capitation_policlinic,
+                    sum_capitation_ambulance, handbooks):
+    print u'Приказ 146...'
+    query = """
+             --- Все нормальные услуги ---
+            select
+            -- Вид помощи
+             case  WHEN pe.term_fk = 3 and ms.reason_fk = 1                 -- по поводу заболевания (первич. )
+                     and ms.division_fk in (
+                                  443,
+                                  399,
+                                  401,
+                                  403,
+                                  444
+                     )   THEN 2
+
+                     WHEN (pe.term_fk = 3 AND ms.reason_fk in (2, 3, 8)      -- Профилактика (первич. )
+                                 and ms.division_fk in (443, 399, 401, 403, 444))
+                                 or  ms.group_fk = 4
+                                 or ms.code in ('019201', '019212')
+                                --Новые коды по профосмотру взрослых
+                                 or  ms.code in ('019214', '019215', '019216', '019217')
+			         or  ms.code in ('019001', '019021', '019023', '019022', '019024')
+			         or  ms.code  = '019107'
+			         or ms.code = '119001'
+			        --Новые коды по диспансеризации детей сирот в стац. учреждениях
+			         or ms.code in ('119020', '119021', '119022', '119023',
+						     '119024', '119025', '119026', '119027',
+						     '119028', '119029', '119030', '119031')
+			         or  ms.code = '119201'
+			        --Новые коды по диспансеризации детей сирот без попечения родителей
+			         or  ms.code in ('119220', '119221', '119222', '119223',
+						     '119224', '119225', '119226', '119227',
+						     '119228', '119229', '119230', '119231')
+			         or  ms.code in ('119051', '119052', '119053', '119054', '119055', '119056')
+			        --Новые коды по профосмотрам несовершеннолетних
+			         or ms.code in ('119080', '119081', '119082', '119083',
+						     '119084', '119085', '119086', '119087',
+						     '119088', '119089', '119090', '119091')
+			         or  ms.code in ('119101', '119119', '119120')
+			         or  ms.code =  '119151'
+			         THEN 3
+
+
+                     WHEN pe.term_fk = 3 and ms.reason_fk = 5                  -- Неотложка (первич.)
+                     and ms.group_fk is null
+                     and ms.division_fk in (
+                                  443, 399,
+                                  401, 403,
+                                  444
+                     )   THEN 4
+
+                     when ms.group_fk = 19  then 5                                     -- Стоматология
+
+                     WHEN pe.term_fk = 2                                                       -- Дневной стационар (на дому)
+                               and ms.group_fk is null
+                               and msd.term_fk = 12      THEN 6
+
+                     WHEN pe.term_fk = 3 and ms.reason_fk = 1                  -- по поводу заболевания (спец.)
+                     AND (ms.group_fk != 19 or ms.group_fk is null)
+                     and ms.division_fk not in (
+                                  443,
+                                  399,
+                                  401,
+                                  403,
+                                  444
+                     )   THEN 9
+
+                     when (pe.term_fk = 3
+                              and ms.group_fk is NULL
+                              AND ms.reason_fk in (2, 3, 8)
+                              AND ms.division_fk not in (443, 399, 401, 403, 444))
+                              or   ms.code = '019020'
+                              or  ms.code in ('019108', '019106', '019105', '019104', '019103', '019102')
+                              or  ms.code in ('019114', '019113', '019112', '019111', '019110', '019109')
+                              or  ms.subgroup_fk in (9, 10, 8, 11)
+                      THEN 10
+
+
+                     WHEN pe.term_fk = 3 and ms.reason_fk = 5                    -- Неотложка (спец.)
+                     and ms.group_fk is null
+                     and ms.division_fk not in (
+                                  443, 399,
+                                  401, 403,
+                                  444
+                     )   THEN 11
+
+                     when ms.code in ('049021', '149021') then 12               -- Гемодиализ в поликлинике
+
+                     when ms.code in ('049022', '149022') THEN 13               -- Перитонеальный диализ в поликлинике
+
+                     WHEN (pe.term_fk = 2                                                       -- Дневной стационар (при стационаре  и поликлинике)
+                               and ms.group_fk is null
+                               and msd.term_fk in (10, 11) )
+                                  or ms.group_fk = 28    THEN 14
+
+                     WHEN ms.group_fk = 17 THEN 15                                    -- ЭКО
+
+                     WHEN pe.term_fk = 1                                                       -- Стационар
+                                and (ms.group_fk not in (17, 3, 5)
+                                         or ms.group_fk is null) THEN 17
+
+                     when ms.code in ('049023', '149023')  THEN  18           -- Гемодиализ в стационаре
+
+                     WHEN ms.code in ('049024', '149024')  THEN 19            -- Перитонеальный диализ в стационаре
+
+                     WHEN pe.term_fk = 4 THEN 20                                        -- Скорая медицинская помощь
+
+
+
+
+                 ELSE 0
+                 end as term,
+
+            -- Количество пациентов
+            count(distinct  CASE when
+                                  ms.code in ('019201', '019214', '019215',  '019001', '019020' )
+                                  or ms.subgroup_fk not in  (12, 13, 14, 17)
+                                  or ms.subgroup_fk in (9, 10, 8, 11)
+                                        THEN NULL
+
+                                  ELSE (
+                                      CASE when (ms.group_fk is null or ms.group_fk = 24) and pe.term_fk = 3 THEN (1, ps.payment_kind_fk, ms.reason_fk, ms.division_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null and pe.term_fk = 4 THEN (2, 0, 0, ms.division_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null AND pe.term_fk = 1 THEN (3, 0, 0, ms.tariff_profile_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null AND pe.term_fk = 2 THEN (3, 0, 0, ms.tariff_profile_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk = 19 and subgroup_fk is NOT NULL THEN  (ms.group_fk, 0, 0, ms.subgroup_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk != 19 and subgroup_fk is NULL THEN  (ms.group_fk, 0, 0, ms.id_pk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk != 19 and subgroup_fk is NOT NULL THEN  (ms.group_fk, 0, 0, ms.subgroup_fk,  pt.id_pk,  ms.code ilike '0%')
+                                       END
+                                  )
+                                  END) AS patient,
+
+            count(distinct CASE WHEN  ms.code ilike '0%'  THEN (
+                        CASE when
+                                  ms.code in ('019201', '019214', '019215',  '019001', '019020' )
+                                  or ms.subgroup_fk not in  (12, 13, 14, 17)
+                                  or ms.subgroup_fk in (9, 10, 8, 11)
+                                        THEN NULL
+
+                                  ELSE (
+                                      CASE when (ms.group_fk is null or ms.group_fk = 24) and pe.term_fk = 3 THEN (1, ps.payment_kind_fk, ms.reason_fk, ms.division_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null and pe.term_fk = 4 THEN (2, 0, 0, ms.division_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null AND pe.term_fk = 1 THEN (3, 0, 0, ms.tariff_profile_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null AND pe.term_fk = 2 THEN (3, 0, 0, ms.tariff_profile_fk,  pt.id_pk,  ms.code ilike '0%')
+                                                WHEN ms.group_fk = 19 and subgroup_fk is NOT NULL THEN  (ms.group_fk, 0, 0, ms.subgroup_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk != 19 and subgroup_fk is NULL THEN  (ms.group_fk, 0, 0, ms.id_pk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk != 19 and subgroup_fk is NOT NULL THEN  (ms.group_fk, 0, 0, ms.subgroup_fk,  pt.id_pk,  ms.code ilike '0%')
+                                       END
+                                  )
+                                  END
+
+            )
+            ELSE NULL END) AS patient_adult,
+
+            count(distinct CASE WHEN  ms.code ilike '1%'  THEN (
+                        CASE when
+                                  ms.code in ('019201', '019214', '019215',  '019001', '019020' )
+                                  or ms.subgroup_fk not in  (12, 13, 14, 17)
+                                  or ms.subgroup_fk in (9, 10, 8, 11)
+                                        THEN NULL
+
+                                  ELSE (
+                                      CASE when (ms.group_fk is null or ms.group_fk = 24) and pe.term_fk = 3 THEN (1, ps.payment_kind_fk, ms.reason_fk, ms.division_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null and pe.term_fk = 4 THEN (2, 0, 0, ms.division_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null AND pe.term_fk = 1 THEN (3, 0, 0, ms.tariff_profile_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk is null AND pe.term_fk = 2 THEN (3, 0, 0, ms.tariff_profile_fk,  pt.id_pk,  ms.code ilike '0%')
+                                                WHEN ms.group_fk = 19 and subgroup_fk is NOT NULL THEN  (ms.group_fk, 0, 0, ms.subgroup_fk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk != 19 and subgroup_fk is NULL THEN  (ms.group_fk, 0, 0, ms.id_pk,  pt.id_pk,  ms.code ilike '0%')
+                                               WHEN ms.group_fk != 19 and subgroup_fk is NOT NULL THEN  (ms.group_fk, 0, 0, ms.subgroup_fk,  pt.id_pk,  ms.code ilike '0%')
+                                       END
+                                  )
+                                  END
+
+            )
+            ELSE NULL END) AS patient_children,
+
+            -- Количество обращений
+            count(distinct CASE when ms.subgroup_fk=12
+                      or (
+                            (select count(ps1.id_pk) from provided_service ps1
+                            join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                            where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null))>1
+                            and ms.reason_fk = 1 AND pe.term_fk = 3 and (ms.group_fk is null or ms.group_fk = 24)
+                      ) THEN pe.id_pk END) AS treatments,
+            count(distinct CASE WHEN  ms.code ilike '0%'  THEN (
+                                    CASE when ms.subgroup_fk=12
+                                    or (
+                                    (select count(ps1.id_pk) from provided_service ps1
+                                     join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                                     where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null))>1
+                                    and ms.reason_fk = 1 AND pe.term_fk = 3 and (ms.group_fk is null or ms.group_fk = 24)
+                                    ) THEN pe.id_pk END
+                                   )
+                            END) AS treatments_adult,
+            count(distinct CASE WHEN  ms.code ilike '1%'  THEN (
+                                    CASE when ms.subgroup_fk=12
+                                    or (
+                                    (select count(ps1.id_pk) from provided_service ps1
+                                     join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                                     where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null))>1
+                                    and ms.reason_fk = 1 AND pe.term_fk = 3 and (ms.group_fk is null or ms.group_fk = 24)
+                                    ) THEN pe.id_pk END
+                                   )
+                           END)  AS treatments_children,
+
+            -- Количество услуг
+            count(distinct CASE when ms.group_fk = 19 and ms.subgroup_fk is NULL then NULL
+                              ELSE ps.id_pk
+                              END) AS services,
+            count(distinct CASE WHEN  ms.code ilike '0%' THEN (
+                         CASE when ms.group_fk = 19 and ms.subgroup_fk is NULL then NULL
+                              ELSE ps.id_pk
+                              END
+                      )
+                      END) AS services_adult,
+            count(distinct CASE WHEN  ms.code ilike '1%' THEN (
+                         CASE when ms.group_fk = 19 and ms.subgroup_fk is NULL then NULL
+                              ELSE ps.id_pk
+                              END
+                      )
+                      END) AS services_children,
+
+            -- Количество дней
+            sum(CASE when ms.group_fk = 19 THEN ps.quantity*ms.uet
+                              WHEN ps.quantity is NULL THEN 1
+                              else ps.quantity
+                              END) as quantity,
+            sum(CASE WHEN ms.code ilike '0%' THEN (
+                            CASE when ms.group_fk = 19 THEN ps.quantity*ms.uet
+                                     WHEN ps.quantity is NULL THEN 1
+                                     else ps.quantity
+                                     END
+                            ) ELSE 0 END
+                   ) AS quantity_adult,
+
+            sum(CASE WHEN ms.code ilike '1%' THEN (
+                           CASE when ms.group_fk = 19 THEN ps.quantity*ms.uet
+                                     WHEN ps.quantity is NULL THEN 1
+                                     else ps.quantity
+                                     END
+                            ) ELSE 0 END
+                   ) AS quantity_children,
+
+
+            -- Принятая сумма
+            sum(CASE WHEN ps.payment_kind_fk=2  then 0 ELSE ps.accepted_payment END) as accepted_payment,
+            sum(CASE WHEN ms.code ilike '0%' THEN (
+                            CASE when ps.payment_kind_fk=2 THEN 0 else ps.accepted_payment  END
+                            ) ELSE 0 END
+                   ) AS accepted_payment_adult,
+
+            sum(CASE WHEN ms.code ilike '1%' THEN (
+                            CASE when ps.payment_kind_fk=2 THEN 0 else ps.accepted_payment  END
+                            ) ELSE 0 END
+                   ) AS accepted_payment_children
+
+
+            from medical_register mr
+            JOIN medical_register_record mrr
+                ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                ON ps.event_fk=pe.id_pk
+            JOIN medical_organization mo
+                ON ps.organization_fk=mo.id_pk
+            JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+            JOIN patient pt
+                ON pt.id_pk = mrr.patient_fk
+            left join medical_division msd
+                on msd.id_pk = pe.division_fk
+            where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                  and mo.code = '{mo}'
+                  and ps.payment_type_fk in (2, 4)
+                  and (ms.group_fk != 27 or ms.group_fk is null)
+            group by term
+            order by term
+            """
+    data = run(query.format(year=year, period=period, mo=mo))
+
+    act_book.set_sheet(4)
+    act_book.set_style()
+    act_book.set_cursor(2, 0)
+    act_book.write_cell(handbooks['mo_info']['name'])
+    act_book.set_cursor(3, 10)
+    act_book.write_cell(u'за %s %s г.' % (MONTH_NAME[period], year))
+    act_book.set_style(VALUE_STYLE)
+    total = [Decimal(0)]*15
+    for row in data:
+        if row[0]:
+            act_book.set_cursor(8 + int(row[0]), 3)
+            for idx, value in enumerate(row[1:]):
+                act_book.write_cell(value, 'c')
+                total[idx] += Decimal(value)
+    if sum_capitation_policlinic[0]:
+        act_book.set_cursor(31, 15)
+        for value in sum_capitation_policlinic[1]:
+            total[13] += value[22]
+            total[14] += value[23]
+            total[12] += value[22] + value[23]
+            act_book.write_cell(value[22], 'c')
+            act_book.write_cell(value[23], 'c')
+            act_book.write_cell(value[22] + value[23], 'c')
+            act_book.cursor['row'] += 1
+            act_book.cursor['column'] = 15
+    if sum_capitation_ambulance[0]:
+        act_book.set_cursor(42, 15)
+        for value in sum_capitation_ambulance[1]:
+            total[13] += value[22]
+            total[14] += value[23]
+            total[12] += value[22] + value[23]
+            act_book.write_cell(value[22], 'c')
+            act_book.write_cell(value[23], 'c')
+            act_book.write_cell(value[22] + value[23], 'c')
+            act_book.cursor['row'] += 1
+            act_book.cursor['column'] = 15
+    act_book.set_cursor(52, 3)
+    for value in total:
+        act_book.write_cell(value, 'c')
+
+
+
 def print_order_146(act_book, year, period, mo, capitation_events,
                     treatment_events, sum_capitation_policlinic,
                     sum_capitation_ambulance, data, handbooks):
@@ -1821,7 +2154,8 @@ def print_order_146(act_book, year, period, mo, capitation_events,
                  'population': {
                      'condition': service['code'] in ('019201', '019214', '019215',
                                                       '019001'),
-                     'value': 0}}},
+                     'value': 0}},
+                 'accepted_payment': {'condition': service['event_id'] in capitation_events, 'value': 0}},
 
             # Поликлиника (неотложка)
             {'condition': service['term'] == 3 and service['reason'] == 5
@@ -1829,7 +2163,9 @@ def print_order_146(act_book, year, period, mo, capitation_events,
             'term': 'policlinic_ambulance_primary',
             'patient_division': (service['patient_id'], service['reason'],
                                  service['division_id'], is_children_profile),
-            'column_condition': {}},
+            'column_condition': {
+                'accepted_payment': {'condition': service['event_id'] in capitation_events, 'value': 0}
+            }},
 
             # Стоматология
             {'condition': service['term'] == 3 and service['group'] == 19,
@@ -2499,11 +2835,18 @@ class Command(BaseCommand):
                 print_error_pk(act_book, year, period, mo,
                                capitation_events, treatment_events,
                                data, handbooks)
-
+                '''
                 print_order_146(act_book, year, period, mo,
                                 capitation_events, treatment_events,
                                 sum_capitation_policlinic,
                                 sum_capitation_ambulance, data, handbooks)
+                '''
+
+                print_order_146_1(
+                    act_book, year, period, mo,
+                    sum_capitation_policlinic,
+                    sum_capitation_ambulance, handbooks
+                )
 
                 print_error_fund(act_book, year, period, mo, data, handbooks)
                 if status == 8:
@@ -2556,10 +2899,17 @@ class Command(BaseCommand):
                         print_error_pk(act_book, year, period, mo,
                                        capitation_events, treatment_events,
                                        data, handbooks)
+                        '''
                         print_order_146(act_book, year, period, mo,
                                         capitation_events, treatment_events,
                                         sum_capitation_policlinic, sum_capitation_ambulance,
                                         data, handbooks)
+                        '''
+                        print_order_146_1(
+                            act_book, year, period, mo,
+                            sum_capitation_policlinic,
+                            sum_capitation_ambulance, handbooks
+                        )
                         print_error_fund(act_book, year, period, mo, data, handbooks)
                     print u'Выгружен', department
             elapsed = time.clock() - start

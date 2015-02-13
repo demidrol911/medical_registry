@@ -47,7 +47,7 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                            (ms.group_fk = 24 or ms.group_fk is NULL) and
                            (select count(ps1.id_pk) from provided_service ps1
                            join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms.group_fk is null)
+                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
                            ) = 1 then 99
                            else ms.reason_fk END
                       )
@@ -124,22 +124,26 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
             0,
             0,
 
-            sum(CASE WHEN ms.code ilike '0%' and ps.payment_kind_fk != 2
-                     THEN (
-                         CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
-                              WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
-                              WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
-                         END
+            sum(CASE WHEN ms.code ilike '0%'
+                     THEN (CASE when ps.payment_kind_fk = 2 or pe.term_fk = 4 THEN 0
+                           ELSE (
+                                 CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
+                                      WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
+                                      WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
+                                 END)
+                           END
                      )
                      ELSE 0 END) AS accepted_payment_adult,
-            sum(CASE WHEN ms.code ilike '1%' and ps.payment_kind_fk != 2
-                     THEN (
-                         CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
-                              WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
-                              WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
-                         END
+            sum(CASE WHEN ms.code ilike '1%'
+                     THEN (CASE when ps.payment_kind_fk = 2 or pe.term_fk = 4 THEN 0
+                           ELSE (
+                                 CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
+                                      WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
+                                      WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
+                                 END)
+                           END
                      )
-                     ELSE 0 END) AS accepted_payment_child
+                     ELSE 0 END) AS accepted_payment_children
 
             from medical_register mr
             JOIN medical_register_record mrr
@@ -229,7 +233,7 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                 0,
                 0,
 
-                sum(CASE WHEN ms.code ilike '0%' and ps.payment_kind_fk != 2
+                sum(CASE WHEN ms.code ilike '0%'
                      THEN (
                          CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
                               WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
@@ -426,7 +430,7 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                            (ms.group_fk = 24 or ms.group_fk is NULL) and
                            (select count(ps1.id_pk) from provided_service ps1
                            join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms.group_fk is null)
+                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
                            ) = 1 then 99
                            else ms.reason_fk END
                       )
@@ -575,7 +579,10 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
         if group:
             if group == 7:
                 #last_title_division = None
-                term_title = handbooks['medical_subgroups'][reason]['name']
+                if not reason:
+                    term_title = ''
+                else:
+                    term_title = handbooks['medical_subgroups'][reason]['name']
             elif group == 19:
                 term_title = u'Стоматология'
                 #last_title_division = None
@@ -611,6 +618,8 @@ def print_accepted_services(act_book, year, period, mo, sum_capitation_policlini
                     term_title = u'Поликлиника (с иными целями)'
                 elif reason == 99:
                     term_title = u'Поликлиника (разовые)'
+                    values[2] = 0
+                    values[3] = 0
                 division_title = handbooks['medical_division'][division]['name']
             elif term == 4:
                 term_title = u'Скорая помощь'
@@ -1352,10 +1361,9 @@ class Command(BaseCommand):
         year = args[0]
         period = args[1]
         status = int(args[2])
-        is_partial_register = args[3] if len(args) == 4 else 0
         printed_act = []
         template = BASE_DIR + r'\templates\excel_pattern\reestr_201408_test.xls'
-        target_dir = REESTR_DIR if status in (8, 6) else REESTR_EXP
+        target_dir = REESTR_DIR
         handbooks = {'failure_causes': register_function.get_failure_causes(),
                      'errors_code': register_function.get_errors(),
                      'workers_speciality': register_function.get_medical_worker_speciality(),
@@ -1407,12 +1415,6 @@ class Command(BaseCommand):
                     sum_capitation_amb=sum_capitation_ambulance,
                     handbooks=handbooks
                 )
-
-                if status == 8:
-                    register_function.pse_export(year, period, mo, 6, data, handbooks)
-                if status == 3:
-                    register_function.change_register_status(year, period, mo, 9)
-                printed_act.append(act_book.name)
             print u'Выгружен', mo
 
         print u'-'*50
