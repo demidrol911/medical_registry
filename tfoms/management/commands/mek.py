@@ -105,6 +105,7 @@ def get_services(register_element):
         medical_service.examination_group as service_examination_group,
         medical_service.tariff_profile_fk as service_tariff_profile,
         medical_service.reason_fk as reason_code,
+        medical_service.vmp_group,
         provided_event.examination_result_fk as examination_result,
         COALESCE(case provided_event.term_fk
             when 1 THEN
@@ -145,6 +146,13 @@ def get_services(register_element):
                 )
             ELSE 1 END
         ) as nkd,
+        case when medical_service.tariff_profile_fk IN (12) and medical_register.organization_code in ('280068', '280012', '280059')
+        THEN (
+                case when medical_organization.regional_coefficient = 1.6 then 34661
+                when medical_organization.regional_coefficient = 1.7 then 36827
+                WHEN medical_organization.regional_coefficient = 1.8 THEN 38994
+                END
+        ) else 0 end as alternate_tariff,
         medical_organization.is_agma_cathedra,
         medical_organization.level as level,
         patient.insurance_policy_fk as patient_policy,
@@ -639,7 +647,7 @@ def update_payment_kind(register_element):
                         on i.version_id_pk = p.insurance_policy_fk
                 where mr.is_active
                     and mr.organization_code = %(organization)s
-                    and format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE < format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
+                    and format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE between format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE - interval '4 months' and format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE - interval '1 months'
                     and ps.payment_type_fk = 3
             ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
                 and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
@@ -648,6 +656,7 @@ def update_payment_kind(register_element):
             and mr1.year = %(year)s
             and mr1.period = %(period)s
             and mr1.organization_code = %(organization)s
+
         ORDER BY payment_kind_code, T1.pk) as T
         where provided_service.id_pk = T.service_pk
     """
@@ -2383,7 +2392,11 @@ def main():
                     #    set_sanction_mek(service, 35)
 
                 provided_tariff = float(service.tariff)
-                tariff = float(service.expected_tariff or 0)
+
+                if service.alternate_tariff:
+                    tariff = float(service.alternate_tariff)
+                else:
+                    tariff = float(service.expected_tariff or 0)
 
                 term = service.service_term
                 nkd = service.nkd or 1
@@ -2401,6 +2414,10 @@ def main():
                     nkd = 30
                 elif service.service_code in ('098968', '098969'):
                     nkd = 30
+
+
+                if service.service_code == '098964':
+                    print service.service_code, nkd
 
                 '''
                 if service.service_tariff_profile == 11 and service.organization_code == '280043':
@@ -2422,16 +2439,27 @@ def main():
                         if service.service_group == 20:
                             duration_coefficient = 90
                         # КСГ 76, 77, 78
-                        if service.code in (
+                        if service.service_code in (
                                 '098964', '098965', '098966',
                                 '098967', '098968', '098969'):
                             duration_coefficient = 50
-                        if is_endovideosurgery:
+
+                        if is_endovideosurgery or service.service_code in ('098913', ):
+                            duration_coefficient = 0
+                        if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
                             duration_coefficient = 0
                     elif term == 2:
                         duration_coefficient = 90
                         if is_endovideosurgery:
                             duration_coefficient = 50
+
+                    if service.service_code == '098964':
+                        print service.service_code, duration_coefficient, nkd
+
+                    '''
+                    if service.service_code == '098901':
+                        print service.service_code, duration_coefficient, nkd, is_endovideosurgery
+                    '''
 
                     '''
                     if term == 1:

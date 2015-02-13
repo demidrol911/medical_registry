@@ -677,6 +677,8 @@ def main():
                         else:
                             services = [event['USL']]
 
+
+
                         for service in services:
                             if service_pk_list:
                                 service_pk = service_pk_list.pop()

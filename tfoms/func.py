@@ -631,8 +631,6 @@ def pse_export(year, period, mo_code, register_status, data, handbooks):
             s_rec['SN_POL'] = police.encode('cp866')
             s_rec['C_I'] = service['anamnesis_number'].encode('cp866')
             s_rec['OTD'] = service['division_code'] or ''
-            if service['code'] is None:
-                print service
             s_rec['COD'] = float(service['code'])
             #s_rec['TIP'] = ''
             s_rec['D_BEG'] = date_correct(service['start_date'], service['id'], 'start_date')
@@ -721,7 +719,8 @@ def change_register_status(year, period, mo_code, register_status):
     MedicalRegister.objects.filter(
         year=year,
         period=period,
-        organization_code=mo_code
+        organization_code=mo_code,
+        is_active=True
     ).update(status=register_status)
     '''
     register_files = MedicalRegister.objects.filter(year=year, period=period, organization_code=mo_code, is_active=True)
