@@ -8,11 +8,9 @@ from django.db.models import Sum
 
 from report_printer.excel_style import VALUE_STYLE
 from medical_service_register.path import REESTR_EXP, BASE_DIR
-from helpers.excel_writer import ExcelWriter
+from report_printer.excel_writer import ExcelWriter
 from report_printer.const import ACT_CELL_POSITION_EXT, MONTH_NAME
 from tfoms.models import ProvidedService, Sanction
-
-
 
 
 ### Печатает сводный акт принятых услуг за месяц
@@ -64,7 +62,7 @@ class Command(BaseCommand):
 
         surcharge = Sanction.objects.filter(
             type=4,
-            date=datetime.date(year=int(year), month=int(period)-1, day=30)).\
+            date=datetime.date(year=int(year), month=1, day=30)).\
             values('service__organization__code').\
             annotate(sum_surcharge=Sum('underpayment'))
 
