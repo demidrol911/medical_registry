@@ -1,6 +1,7 @@
 #! -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand
-from report_printer.func import print_act_2, run_sql1
+
+from report_printer.management.commands.term_fond.func import print_act_2, run_sql1
 
 
 ### Стоматология

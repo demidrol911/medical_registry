@@ -4,7 +4,7 @@ from django.db import connection
 from medical_service_register.path import REESTR_EXP, BASE_DIR
 from report_printer.const import MONTH_NAME, ACT_CELL_POSITION
 from report_printer.excel_style import VALUE_STYLE, PERIOD_VALUE_STYLE
-from helpers.excel_writer import ExcelWriter
+from report_printer.excel_writer import ExcelWriter
 
 
 ACT_PATH = ur'{dir}\{title}_{month}_{year}'
