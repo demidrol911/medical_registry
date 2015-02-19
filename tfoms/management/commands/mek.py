@@ -1791,7 +1791,7 @@ def sanctions_on_invalid_hitech_service_diseases(register_element):
         query2, [register_element['year'], register_element['period'],
                  register_element['organization_code']])
 
-    return get_sanction_tuple(services1, 77) + get_sanction_tuple(services2, 78)
+    return get_sanction_tuple(services2, 78) #get_sanction_tuple(services1, 77) +
 
 
 def sanctions_on_wrong_age_adult_examination(register_element):
@@ -2415,6 +2415,8 @@ def main():
                 elif service.service_code in ('098968', '098969'):
                     nkd = 30
 
+                if service.service_group == 20 and service.vmp_group == 11:
+                    nkd = 70
 
                 if service.service_code == '098964':
                     print service.service_code, nkd
@@ -2444,7 +2446,7 @@ def main():
                                 '098967', '098968', '098969'):
                             duration_coefficient = 50
 
-                        if is_endovideosurgery or service.service_code in ('098913', ):
+                        if is_endovideosurgery or service.service_code in ('098913', '098940'):
                             duration_coefficient = 0
                         if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
                             duration_coefficient = 0
