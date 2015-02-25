@@ -1,7 +1,8 @@
 #! -*- coding: utf-8 -*-
 
 from datetime import datetime
-from django.db.models import Q, Sum
+from decimal import Decimal
+from django.db.models import Q
 from django.db import connection
 from tfoms.models import (
     MedicalError, ProvidedService, MedicalRegister,
@@ -22,7 +23,7 @@ from tfoms.models import (
 cur_date = datetime.now()
 
 YEAR = str(cur_date.year)
-PERIOD_INT = cur_date.month if cur_date.day > 20 else cur_date.month - 1
+PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
 PERIOD = ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
@@ -478,8 +479,8 @@ def calculate_capitation_tariff(term, mo_code):
     result[9][4] = tariff.filter(age_group=5, gender=2).order_by('-start_date')[0].value
 
     for idx in xrange(0, 10):
-        result[idx][8] = result[idx][0]*result[idx][4]
-        result[idx][9] = result[idx][1]*result[idx][5]
+        result[idx][8] = Decimal(round(result[idx][0]*result[idx][4], 2))
+        result[idx][9] = Decimal(round(result[idx][1]*result[idx][5], 2))
         # Повышающий коэффициент для Магдагачей
         if mo_code == '280029' and term == 4:
             result[idx][8] *= 2
@@ -492,12 +493,12 @@ def calculate_capitation_tariff(term, mo_code):
         if fap:
             coeff = fap.order_by('-start_date')[0].value
             for idx in xrange(0, 10):
-                result[idx][16] = result[idx][8]*(coeff-1)
-                result[idx][17] = result[idx][9]*(coeff-1)
+                result[idx][16] = Decimal(round(float(result[idx][8])*float(coeff-1), 2))
+                result[idx][17] = Decimal(round(float(result[idx][9])*float(coeff-1), 2))
 
     for idx in xrange(0, 10):
-        result[idx][22] = result[idx][8] + result[idx][16]
-        result[idx][23] = result[idx][9] + result[idx][17]
+        result[idx][22] = Decimal(round(result[idx][8] + result[idx][16], 2))
+        result[idx][23] = Decimal(round(result[idx][9] + result[idx][17], 2))
 
     return True, result
 

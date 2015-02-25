@@ -537,7 +537,7 @@ class MedicalOrganization(models.Model):
     def get_ambulance_attachment_count(self, date):
         # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
         # при рассчёт численности для 280017 и 280001 используется следующий запрос
-        if self.code in ('280017', '280001', '280027'):
+        if self.code in ('280017', '280001'):
             query = """
             select medical_organization.id_pk, count(*) as attachment_count,
             sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) < '1 years' then 1 else 0 end) as men1,

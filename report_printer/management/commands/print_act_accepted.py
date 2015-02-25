@@ -129,7 +129,10 @@ def print_first_page(act_book, mo, data, data_coefficient,
             else:
                 term_title = get_title(func.MEDICAL_GROUPS, group)
             if subgroup:
-                division_title = get_title(func.MEDICAL_SUBGROUPS, division)
+                if division == 999:
+                    division_title = u'Стоматология'
+                else:
+                    division_title = get_title(func.MEDICAL_SUBGROUPS, division)
             else:
                 division_title = get_title(func.MEDICAL_SERVICES, division)
                 if group == 20:
@@ -141,13 +144,16 @@ def print_first_page(act_book, mo, data, data_coefficient,
                 term_title = u'Стационар'
                 division_title = get_title(func.TARIFF_PROFILES, division)
             elif term == 2:
-                if reason == 10:
-                    term_title = u'Дневной стационар (Дневной стационар в стационаре)'
-                elif reason == 11:
-                    term_title = u'Дневной стационар (Дневной стационар при поликлинике)'
-                elif reason == 12:
-                    term_title = u'Дневной стационар (Дневной стационар на дому)'
-                division_title = get_title(func.TARIFF_PROFILES, division)
+                if reason:
+                    if reason == 10:
+                        term_title = u'Дневной стационар (Дневной стационар в стационаре)'
+                    elif reason == 11:
+                        term_title = u'Дневной стационар (Дневной стационар при поликлинике)'
+                    elif reason == 12:
+                        term_title = u'Дневной стационар (Дневной стационар на дому)'
+                    division_title = get_title(func.TARIFF_PROFILES, division)
+                else:
+                    division_title = u'Дневной стационар'
             elif term == 3:
                 if reason == 1:
                     term_title = u'Поликлиника (заболевание)'
@@ -533,7 +539,7 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
                 1 AS subgroup,
 
                 -- Отделения
-                12 AS division,
+                999 AS division,
 
                 -- Пол
                 0 AS gender,
@@ -590,9 +596,9 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
                 0,
                 0,
 
-                sum(round(CASE WHEN ms.code ilike '0%' THEN ps.accepted_payment
+                sum(round(CASE WHEN ms.code ilike '0%' THEN ps.provided_tariff
                           ELSE 0 END, 2)) as accepted_payment_adult,
-                sum(round(CASE WHEN ms.code ilike '1%' THEN ps.accepted_payment
+                sum(round(CASE WHEN ms.code ilike '1%' THEN ps.provided_tariff
                           ELSE 0 END, 2)) as accepted_payment_children
 
                  from medical_register mr
