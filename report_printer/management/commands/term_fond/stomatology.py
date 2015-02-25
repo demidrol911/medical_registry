@@ -1,319 +1,176 @@
 #! -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand
 
-from report_printer.management.commands.term_fond.func import print_act_2, run_sql1
+from report_printer.management.commands.term_fond.func import print_act, DIVISION_ALL_1_2
 
 
 ### Стоматология
-def stomatology(calc):
+def stomatology():
     """
     Стоматология
     """
-    stomatology_disease_query = """
-         SELECT medical_register.organization_code,
+    title = u'Стоматология'
+    pattern = 'stomatology'
+    query = """
+            select
+            mo.code as mo,
+            ms.subgroup_fk AS division,
 
-         COUNT(DISTINCT (patient.id_pk, medical_service.code like '0%')) AS all_population,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
-               THEN patient.id_pk END) AS adult_population,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
-               THEN patient.id_pk END) AS adult_population,
+            count(DISTINCT mrr.patient_fk) AS patient,
+            count(distinct CASE WHEN ms.code ilike '0%' THEN mrr.patient_fk END) AS patinet_adult,
+            count(distinct CASE WHEN ms.code ilike '1%' THEN mrr.patient_fk END) AS patinet_child,
 
-         COUNT(DISTINCT provided_service.event_fk) AS all_treatment,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
-               THEN provided_service.event_fk END) AS adult_treatment,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
-               THEN provided_service.event_fk END) AS adult_treatment,
+            count(Distinct CASE WHEN ms.subgroup_fk = 12 THEN ps.event_fk END) AS treatment,
+            count(distinct CASE WHEN ms.code ilike '0%' and ms.subgroup_fk = 12 THEN ps.event_fk END) AS treatment_adult,
+            count(distinct CASE WHEN ms.code ilike '1%' and ms.subgroup_fk = 12 THEN ps.event_fk END) AS treatment_child,
 
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL
-               THEN provided_service.id_pk END) AS all_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '0%'
-               THEN provided_service.id_pk END) AS adult_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '1%'
-               THEN provided_service.id_pk END) AS children_receiving,
+            count(CASE WHEN ms.subgroup_fk is NOT NULL then ps.id_pk END) AS service,
+            count(CASE WHEN ms.code ilike '0%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_adult,
+            count(CASE WHEN ms.code ilike '1%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_child,
 
-         SUM(provided_service.quantity*medical_service.uet) AS all_uet,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS adult_uet,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS children_uet,
+            sum((SELECT sum(ps1.quantity*ms1.uet)
+                      from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                    ) AS quantity,
+            sum(CASE WHEN ms.code ilike '0%'
+                      THEN (SELECT sum(ps1.quantity*ms1.uet)
+                      from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END) AS quantity_adult,
+            sum(CASE WHEN ms.code ilike '1%'
+                      THEN (SELECT sum(ps1.quantity*ms1.uet)
+                      from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END) AS quantity_child,
 
-         SUM(provided_service.accepted_payment) AS all_payment,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS adult_payment,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS children_payment
+            sum((SELECT sum(ps1.tariff)
+                      from provided_service ps1
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                     ) AS tariff,
+             sum(CASE WHEN ms.code ilike '0%'
+                      THEN (SELECT sum(ps1.tariff)
+                      from provided_service ps1
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END) AS tariff_adult,
+             sum(CASE WHEN ms.code ilike '1%'
+                      THEN (SELECT sum(ps1.tariff)
+                      from provided_service ps1
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END) AS tariff_child,
 
-         FROM provided_service
-         JOIN medical_service
-             ON provided_service.code_fk = medical_service.id_pk
-         JOIN provided_event
-             ON provided_service.event_fk = provided_event.id_pk
-         JOIN medical_register_record
-             ON provided_event.record_fk = medical_register_record.id_pk
-         JOIN patient
-             ON patient.id_pk = medical_register_record.patient_fk
-         JOIN medical_register
-             ON medical_register_record.register_fk = medical_register.id_pk
-         WHERE medical_register.is_active
-             AND medical_register.year = '{year}'
-             AND medical_register.period = '{period}'
-             AND (medical_service.group_fk = 19
-                  AND EXISTS (
-                         SELECT 1
-                         FROM provided_service ps2
-                         JOIN medical_service ms2
-                             ON ps2.code_fk = ms2.id_pk
-                         JOIN provided_event pe2
-                             ON (pe2.id_pk = ps2.event_fk
-                                 AND pe2.id_pk = provided_event.id_pk
-                                 AND provided_service.end_date = ps2.end_date
-                                 AND provided_service.start_date = ps2.start_date)
-                         WHERE ms2.subgroup_fk in ({condition})
-                               AND ps2.payment_type_fk = 2
-                        )
-                 )
-             AND provided_service.payment_type_fk = 2
-         GROUP BY medical_register.organization_code
-         """
 
-    stomatology_proph_or_ambulance_query = """
-         SELECT medical_register.organization_code,
+            sum(CASE WHEN ms.subgroup_fk = 17
+                      THEN (SELECT sum(ps1.tariff*0.2)
+                      from provided_service ps1
+                           join provided_service_coefficient psc
+                               on ps1.id_pk = psc.service_fk and psc.coefficient_fk = 4
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END),
+            sum(CASE WHEN ms.code ilike '0%' and ms.subgroup_fk = 17
+                      THEN (SELECT sum(ps1.tariff*0.2)
+                      from provided_service ps1
+                           join provided_service_coefficient psc
+                               on ps1.id_pk = psc.service_fk and psc.coefficient_fk = 4
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END),
+            sum(CASE WHEN ms.code ilike '1%' and ms.subgroup_fk = 17
+                      THEN (SELECT sum(ps1.tariff*0.2)
+                      from provided_service ps1
+                           join provided_service_coefficient psc
+                               on ps1.id_pk = psc.service_fk and psc.coefficient_fk = 4
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END),
 
-         COUNT(DISTINCT (patient.id_pk, medical_service.code like '0%')) AS all_population,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
-               THEN patient.id_pk END) AS adult_population,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
-              THEN patient.id_pk END) AS adult_population,
+              sum((SELECT sum(ps1.accepted_payment)
+                      from provided_service ps1
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                     ) AS accepted_payment,
+             sum(CASE WHEN ms.code ilike '0%'
+                      THEN (SELECT sum(ps1.accepted_payment)
+                      from provided_service ps1
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END) AS accepted_payment_adult,
+             sum(CASE WHEN ms.code ilike '1%'
+                      THEN (SELECT sum(ps1.accepted_payment)
+                      from provided_service ps1
+                           where ps1.event_fk = ps.event_fk
+                                 and ps1.payment_type_fk = 2
+                                 and ps1.start_date = ps.start_date
+                                 and ps1.end_date = ps.end_date)
+                      ELSE 0 END) AS accepted_payment_child
 
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL
-              THEN provided_service.id_pk END) AS all_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '0%'
-              THEN provided_service.id_pk END) AS adult_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '1%'
-              THEN provided_service.id_pk END) AS children_receiving,
+             from medical_register mr
+             JOIN medical_register_record mrr
+                ON mr.id_pk=mrr.register_fk
+             JOIN provided_event pe
+                ON mrr.id_pk=pe.record_fk
+             JOIN provided_service ps
+                ON ps.event_fk=pe.id_pk
+             JOIN medical_organization mo
+                ON ps.organization_fk=mo.id_pk
+             JOIN medical_organization dep ON ps.department_fk = dep.id_pk
+             JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+             where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                  and ps.payment_type_fk = 2
+             AND ms.group_fk = 19 and ms.subgroup_fk is not null
 
-         SUM(provided_service.quantity*medical_service.uet) AS all_uet,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS adult_uet,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS children_uet,
+             group by mo, division
+        order by mo, division
+    """
 
-         SUM(provided_service.accepted_payment) AS all_payment,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS adult_payment,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS children_payment
+    column_position = [12, 13, 14, 17]
 
-         FROM provided_service
-         JOIN medical_service
-             ON provided_service.code_fk = medical_service.id_pk
-         JOIN provided_event
-             ON provided_service.event_fk = provided_event.id_pk
-         JOIN medical_register_record
-             ON provided_event.record_fk = medical_register_record.id_pk
-         JOIN patient
-             ON patient.id_pk = medical_register_record.patient_fk
-         JOIN medical_register
-             ON medical_register_record.register_fk = medical_register.id_pk
-         WHERE medical_register.is_active
-             AND medical_register.year = '{year}'
-             AND medical_register.period = '{period}'
-             AND (medical_service.group_fk = 19
-                  AND EXISTS (
-                         SELECT 1
-                         FROM provided_service ps2
-                         JOIN medical_service ms2
-                             ON ps2.code_fk = ms2.id_pk
-                         JOIN provided_event pe2
-                             ON (pe2.id_pk = ps2.event_fk
-                                 AND pe2.id_pk = provided_event.id_pk
-                                 AND provided_service.end_date = ps2.end_date
-                                 AND provided_service.start_date = ps2.start_date
-                                 )
-                         WHERE ms2.subgroup_fk in ({condition})
-                             AND ps2.payment_type_fk = 2
-                        )
-                 )
-             AND provided_service.payment_type_fk = 2
-         GROUP BY medical_register.organization_code
-         """
+    column_division = {(12, 13, 14, 17): DIVISION_ALL_1_2}
 
-    stomatology_emergency_query = """
-         SELECT medical_register.organization_code,
+    column_length = {
+        (12, ): [0, 1, 2, 3, 6],
+        (13, 14): [0, 2, 3, 6],
+        (17, ): [0, 2, 3, 4, 5, 6]
+    }
 
-         COUNT(DISTINCT (patient.id_pk, medical_service.code like '0%')) AS all_population,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '0%'
-               THEN patient.id_pk END) AS adult_population,
-         COUNT(DISTINCT CASE WHEN medical_service.code like '1%'
-               THEN patient.id_pk END) AS adult_population,
-
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL
-               THEN provided_service.id_pk END) AS all_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '0%'
-               THEN provided_service.id_pk END) AS adult_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '1%'
-               THEN provided_service.id_pk END) AS children_receiving,
-
-         SUM(provided_service.quantity*medical_service.uet) AS all_uet,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS adult_uet,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS children_uet,
-
-         SUM(provided_service.tariff) AS all_tariff,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.tariff ELSE 0 END) AS adult_tariff,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.tariff ELSE 0 END) AS children_tariff,
-
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL
-             THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS all_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '0%'
-             THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS adult_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '1%'
-             THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS children_emergency,
-
-         SUM(provided_service.accepted_payment) AS all_payment,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS adult_payment,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS children_payment
-
-         FROM provided_service
-         JOIN medical_service
-             ON provided_service.code_fk = medical_service.id_pk
-         JOIN provided_event
-             ON provided_service.event_fk = provided_event.id_pk
-         JOIN medical_register_record
-             ON provided_event.record_fk = medical_register_record.id_pk
-         JOIN patient
-             ON patient.id_pk = medical_register_record.patient_fk
-         JOIN medical_register
-             ON medical_register_record.register_fk = medical_register.id_pk
-        LEFT JOIN provided_service_coefficient
-             ON provided_service_coefficient.service_fk=provided_service.id_pk
-         WHERE medical_register.is_active
-             AND medical_register.year = '{year}'
-             AND medical_register.period = '{period}'
-             AND (medical_service.group_fk = 19
-                     AND EXISTS (
-                         SELECT 1
-                         FROM provided_service ps2
-                         JOIN medical_service ms2
-                             ON ps2.code_fk = ms2.id_pk
-                         JOIN provided_event pe2
-                             ON (pe2.id_pk = ps2.event_fk
-                                 AND pe2.id_pk = provided_event.id_pk
-                                 AND provided_service.end_date = ps2.end_date
-                                 AND provided_service.start_date = ps2.start_date
-                                 )
-                         WHERE ms2.subgroup_fk in ({condition})
-                             AND ps2.payment_type_fk = 2
-                        )
-                 )
-             AND provided_service.payment_type_fk = 2
-         GROUP BY medical_register.organization_code
-         """
-
-    stomatology_total_query = """
-         SELECT medical_register.organization_code,
-
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL
-               THEN (patient.id_pk, medical_service.subgroup_fk, medical_service.code like '0%') END) AS all_population,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '0%'
-               THEN (patient.id_pk, medical_service.subgroup_fk) END) AS adult_population,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '1%'
-               THEN (patient.id_pk, medical_service.subgroup_fk) END) AS adult_population,
-
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk=12
-               THEN provided_service.event_fk END) AS all_treatment,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk=12 AND medical_service.code like '0%'
-               THEN provided_service.event_fk END) AS adult_treatment,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk=12 AND medical_service.code like '1%'
-               THEN provided_service.event_fk END) AS adult_treatment,
-
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL
-               THEN provided_service.id_pk END) AS all_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '0%'
-               THEN provided_service.id_pk END) AS adult_receiving,
-         COUNT(DISTINCT CASE WHEN medical_service.subgroup_fk IS NOT NULL AND medical_service.code like '1%'
-               THEN provided_service.id_pk END) AS children_receiving,
-
-         SUM(provided_service.quantity*medical_service.uet) AS all_uet,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS adult_uet,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.quantity*medical_service.uet ELSE 0 END) AS children_uet,
-
-         SUM(provided_service.tariff) AS all_tariff,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.tariff ELSE 0 END) AS adult_tariff,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.tariff ELSE 0 END) AS children_tariff,
-
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL
-             THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS all_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '0%'
-             THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS adult_emergency,
-         SUM(CASE WHEN provided_service_coefficient.coefficient_fk IS NOT NULL AND medical_service.code like '1%'
-             THEN round(provided_service.tariff*0.2, 2) ELSE 0 END) AS children_emergency,
-
-         SUM(provided_service.accepted_payment) AS all_payment,
-         SUM(CASE WHEN medical_service.code like '0%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS adult_payment,
-         SUM(CASE WHEN medical_service.code like '1%'
-             THEN provided_service.accepted_payment ELSE 0 END) AS children_payment
-
-         FROM provided_service
-         JOIN medical_service
-             ON provided_service.code_fk = medical_service.id_pk
-         JOIN provided_event
-             ON provided_service.event_fk = provided_event.id_pk
-         JOIN medical_register_record
-             ON provided_event.record_fk = medical_register_record.id_pk
-         JOIN patient
-             ON patient.id_pk = medical_register_record.patient_fk
-         JOIN medical_register
-             ON medical_register_record.register_fk = medical_register.id_pk
-         LEFT JOIN provided_service_coefficient
-             ON provided_service_coefficient.service_fk=provided_service.id_pk
-         WHERE medical_register.is_active
-             AND medical_register.year = '{year}'
-             AND medical_register.period = '{period}'
-             AND (medical_service.group_fk = 19
-                  AND EXISTS (
-                         SELECT 1
-                         FROM provided_service ps2
-                         JOIN medical_service ms2
-                             ON ps2.code_fk = ms2.id_pk
-                         JOIN provided_event pe2
-                             ON (pe2.id_pk = ps2.event_fk
-                                 AND pe2.id_pk = provided_event.id_pk
-                                 AND provided_service.end_date = ps2.end_date
-                                 AND provided_service.start_date = ps2.start_date
-                                 )
-                         WHERE ms2.subgroup_fk in ({condition})
-                             AND ps2.payment_type_fk = 2
-                        )
-                 )
-              AND provided_service.payment_type_fk = 2
-         GROUP BY medical_register.organization_code
-         """
-
-    return [{'title': u'Стоматология',
-             'pattern': 'stomatology',
-             'sum': [
-                 {'query': calc((stomatology_disease_query, '12')),
-                  'separator_length': 0, 'len': 15},
-                 {'query': calc((stomatology_proph_or_ambulance_query, '13')),
-                  'separator_length': 0, 'len': 12},
-                 {'query': calc((stomatology_proph_or_ambulance_query, '14')),
-                  'separator_length': 0, 'len': 12},
-                 {'query': calc((stomatology_emergency_query, '17')),
-                  'separator_length': 0, 'len': 18},
-                 {'query': calc((stomatology_total_query, '12, 13, 14, 17')),
-                  'separator_length': 0, 'len': 21}]},
-            ]
+    return {
+        'title': title,
+        'pattern': pattern,
+        'data': [{'structure': (query, column_position, column_division),
+                  'column_length': column_length}, ]
+    }
 
 
 class Command(BaseCommand):
@@ -321,11 +178,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         year = args[0]
         period = args[1]
-        calc = run_sql1(year, period)
         acts = [
-           stomatology(calc),
+            stomatology()
         ]
         for act in acts:
-            for rule in act:
-                print rule['title']
-                print_act_2(year, period, rule)
+            print_act(year, period, act)
