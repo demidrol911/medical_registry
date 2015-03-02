@@ -1,6 +1,7 @@
 #! -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand
-from report_printer.func import (DIVISION_1, DIVISION_2, DIVISION_1_2,
+
+from report_printer.management.commands.term_fond.func import (DIVISION_1, DIVISION_2, DIVISION_1_2,
                             DIVISION_ALL_1_2, print_act, print_act_1)
 
 

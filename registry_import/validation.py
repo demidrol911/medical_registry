@@ -34,7 +34,8 @@ ERROR_MESSAGES = {
                        u'в текущем периоде',
     'children profile mismatch': u'904;Признак детского профила услуги не '
                                  u'совпадает с признаком детского профиля '
-                                 u'случая'
+                                 u'случая',
+    'kind term mismatch': u'904;Вид помощи не соответствует условиям оказания',
 }
 
 GENDERS = queryset_to_dict(Gender.objects.all())
@@ -69,9 +70,10 @@ EXAMINATION_RESULTS = queryset_to_dict(ExaminationResult.objects.all())
 ADULT_EXAMINATION_COMMENT_PATTERN = r'^F(0|1)(0|1)[0-3]{1}(0|1)$'
 ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
-KIND_TERM_DICT = {1: [2, 3, 21, 22, 31, 32, 4],
-                  2: [1, 2, 3, 21, 22, 31, 32, 4],
-                  3: [1, 11, 12, 13, 4]}
+KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
+                  '2': ['1', '2', '3', '21', '22', '31', '32', '4'],
+                  '3': ['1', '11', '12', '13', '4']
+}
 
 NEW_EXAMINATION_CHILDREN_HARD_LIFE = (
     '119020', '119021', '119022', '119023', '119024',
@@ -157,6 +159,23 @@ class IsCorrespondsToRegistryType(rule.Rule):
             return False
 
         return True
+
+
+class IsServiceKindCorrespondsToTerm(rule.Rule):
+    def __init__(self, term, **kwargs):
+        if not kwargs.get('error', None):
+            kwargs['error'] = "???"
+        super(IsServiceKindCorrespondsToTerm, self).__init__(
+            kwargs.get('error', None), kwargs.get('pass_on_blank', False))
+        self.term = term
+
+    def run(self, field_value):
+        kinds = KIND_TERM_DICT.get(self.term, [])
+
+        if field_value in kinds:
+            return True
+
+        return False
 
 
 class IsResultedExaminationComment(rule.Rule):
@@ -377,6 +396,11 @@ def get_record_validation(item):
 
 
 def get_event_validation(item, registry_type=1):
+    division = (item['PODR'] or '')[:3]
+    if division:
+        if len(division) < 3:
+            division = ('0'*(3-len(division))) + division
+
     event = MyCollection().append([
         Field('IDCASE', item['IDCASE'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
@@ -386,6 +410,7 @@ def get_event_validation(item, registry_type=1):
         Field('VIDPOM', item['VIDPOM'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(list(KINDS), error=ERROR_MESSAGES['wrong value']),
+            IsServiceKindCorrespondsToTerm(item['USL_OK'], error=ERROR_MESSAGES['kind term mismatch'])
         ]),
         Field('LPU', item['LPU'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
@@ -442,7 +467,7 @@ def get_event_validation(item, registry_type=1):
                          error=ERROR_MESSAGES['wrong value'],
                          pass_on_blank=True),
             ]),
-            Field('PODR', item['PODR'] or '').append([
+            Field('PODR', division).append([
                 IsInList(list(DIVISIONS), error=ERROR_MESSAGES['wrong value'],
                          pass_on_blank=True),
             ]),
@@ -455,7 +480,7 @@ def get_event_validation(item, registry_type=1):
                 IsInList(list(['0', '1']), error=ERROR_MESSAGES['wrong value']),
             ]),
             Field('DS0', item['DS0'] or '').append([
-                IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
+                IsInList(DISEASES, error=ERROR_MESSAGES['wrong value'], pass_on_blank=True),
                 DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
                                     pass_on_blank=True),
             ]),
@@ -586,6 +611,11 @@ def get_event_special_validation(item, registry_type=1):
 
 
 def get_service_validation(item, registry_type=1, event={}):
+    division = (item['PODR'] or '')[:3]
+    if division:
+        if len(division) < 3:
+            division = ('0'*(3-len(division))) + division
+
     service = MyCollection().append([
         Field('IDSERV', item['IDSERV'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
@@ -639,7 +669,7 @@ def get_service_validation(item, registry_type=1, event={}):
 
     if registry_type in (1, 2):
         service.append([
-            Field('PODR', item['PODR'] or '').append([
+            Field('PODR', division).append([
                 IsInList(list(DIVISIONS), error=ERROR_MESSAGES['wrong value'],
                          pass_on_blank=True),
             ]),

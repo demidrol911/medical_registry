@@ -1791,7 +1791,7 @@ def sanctions_on_invalid_hitech_service_diseases(register_element):
         query2, [register_element['year'], register_element['period'],
                  register_element['organization_code']])
 
-    return get_sanction_tuple(services1, 77) + get_sanction_tuple(services2, 78)
+    return get_sanction_tuple(services2, 78) #get_sanction_tuple(services1, 77) +
 
 
 def sanctions_on_wrong_age_adult_examination(register_element):
@@ -2415,9 +2415,9 @@ def main():
                 elif service.service_code in ('098968', '098969'):
                     nkd = 30
 
-
-                if service.service_code == '098964':
-                    print service.service_code, nkd
+                ### Неонатология 11 - я группа
+                if service.service_group == 20 and service.vmp_group == 11:
+                    nkd = 70
 
                 '''
                 if service.service_tariff_profile == 11 and service.organization_code == '280043':
@@ -2444,7 +2444,7 @@ def main():
                                 '098967', '098968', '098969'):
                             duration_coefficient = 50
 
-                        if is_endovideosurgery or service.service_code in ('098913', ):
+                        if is_endovideosurgery or service.service_code in ('098913', '098940'):
                             duration_coefficient = 0
                         if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
                             duration_coefficient = 0
@@ -2452,9 +2452,6 @@ def main():
                         duration_coefficient = 90
                         if is_endovideosurgery:
                             duration_coefficient = 50
-
-                    if service.service_code == '098964':
-                        print service.service_code, duration_coefficient, nkd
 
                     '''
                     if service.service_code == '098901':
@@ -2522,7 +2519,7 @@ def main():
                                 and COMMENT_COEFFICIENT_CURATION.match(service.comment):
                             accepted_payment += round(accepted_payment * 0.25, 2)
                             provided_tariff += round(provided_tariff * 0.25, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=7)
 
                         # Коэффициенты КПГ
@@ -2530,34 +2527,34 @@ def main():
                                 (service.level == 1 or service.organization_code in ('280027', '280075')):
                             accepted_payment += round(accepted_payment * 0.38, 2)
                             provided_tariff += round(provided_tariff * 0.38, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=8)
 
                         if service.service_tariff_profile == 10:
                             accepted_payment += round(accepted_payment * 0.34, 2)
                             provided_tariff += round(provided_tariff * 0.34, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=9)
 
                         if service.service_tariff_profile == 28 and \
                                 service.organization_code == "280064":
                             accepted_payment += round(accepted_payment * 0.65, 2)
                             provided_tariff += round(provided_tariff * 0.65, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=10)
 
                         if service.service_tariff_profile == 37 and \
                                 service.organization_code == "280064":
                             accepted_payment += round(accepted_payment * 0.8, 2)
                             provided_tariff += round(provided_tariff * 0.8, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=11)
 
                         if service.service_tariff_profile == 38 and \
                                 service.organization_code == "280064":
                             accepted_payment += round(accepted_payment * 0.47, 2)
                             provided_tariff += round(provided_tariff * 0.47, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=12)
 
                     '''
@@ -2594,13 +2591,13 @@ def main():
                     if is_mobile_brigade and service.service_group in (7, 25, 26,  11, 15, 16,  12, 13,  4):
                         accepted_payment += round(accepted_payment * 0.07, 2)
                         provided_tariff += round(provided_tariff * 0.07, 2)
-                        ProvidedServiceCoefficient.objects.create(
+                        ProvidedServiceCoefficient.objects.get_or_create(
                             service=service, coefficient_id=5)
 
                     if service.coefficient_4:
                         accepted_payment += round(accepted_payment * 0.2, 2)
                         provided_tariff += round(provided_tariff * 0.2, 2)
-                        ProvidedServiceCoefficient.objects.create(
+                        ProvidedServiceCoefficient.objects.get_or_create(
                             service=service, coefficient_id=4)
 
                 elif service.event.term_id == 4:
@@ -2644,9 +2641,7 @@ def main():
             sanctions_on_ill_formed_adult_examination(register_element)
             drop_duplicate_examination_in_current_register(register_element)
 
-
         """
-
         errors_pk = [rec[0] for rec in errors]
         ProvidedService.objects.filter(pk__in=errors_pk).update(
             accepted_payment=0, payment_type_id=3)

@@ -257,6 +257,12 @@ def get_records_objects(records_list):
 def get_events_objects(events_list):
     objects = []
     for rec in events_list:
+
+        division = (rec.get('PODR') or '')[:3]
+        if division:
+            if len(division) < 3:
+                division = ('0'*(3-len(division))) + division
+
         event = ProvidedEvent(
             id=rec.get('IDCASE', ''),
             id_pk=rec['pk'],
@@ -278,7 +284,7 @@ def get_events_objects(events_list):
             payment_method=METHODS.get(rec.get('IDSP', ''), None),
             payment_units_number=safe_float(rec.get('ED_COL', 0)),
             comment=rec.get('COMENTSL', ''),
-            division=DIVISIONS.get(rec.get('PODR', ''), None),
+            division=DIVISIONS.get(division, None),
             treatment_result=RESULTS.get(rec.get('RSLT'), None),
             treatment_outcome=OUTCOMES.get(rec.get('ISHOD'), None),
             worker_speciality=SPECIALITIES_NEW.get(rec.get('PRVS'), None),
@@ -348,16 +354,20 @@ def get_services_objects(services_list):
     objects = []
     for rec in services_list:
         code = rec['CODE_USL']
-
         if code:
             code = '0'*(6-len(code))+code
+
+        division = (rec.get('PODR') or '')[:3]
+        if division:
+            if len(division) < 3:
+                division = ('0'*(3-len(division))) + division
 
         service = ProvidedService(
             id_pk=rec['pk'],
             id=rec.get('IDSERV', ''),
             organization=ORGANIZATIONS.get(rec.get('LPU'), None),
             department=DEPARTMENTS.get(rec.get('LPU_1'), None),
-            division=DIVISIONS.get((rec.get('PODR') or '')[:3], None),
+            division=DIVISIONS.get(division, None),
             profile=PROFILES.get(rec.get('PROFIL'), None),
             is_children_profile=True if rec.get('DET', '') == '1' else False,
             start_date=safe_date(rec.get('DATE_IN', '')),
@@ -392,7 +402,7 @@ def main():
 
     for organization in registries:
         if not is_files_completeness(registries[organization]):
-            #send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
+            send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
 
         registry_list = registries[organization]
@@ -677,8 +687,6 @@ def main():
                         else:
                             services = [event['USL']]
 
-
-
                         for service in services:
                             if service_pk_list:
                                 service_pk = service_pk_list.pop()
@@ -704,7 +712,6 @@ def main():
                                 service_uid=new_service['IDSERV']
                             )
 
-            """
             if not has_surgery and has_hospitalization:
                 services_errors.append(set_error(
                     '902', field='', parent='',
@@ -712,7 +719,6 @@ def main():
                     comment=u'Нет сведений об операциях (услуги класса А) в круглосуточном стационаре'
                 ))
                 print u'Нет операции'
-            """
 
             if services_errors:
                 registry_has_errors = True
@@ -784,6 +790,7 @@ def main():
 
             else:
                 print u'ФЛК пройден. Вставка данных...'
+
                 MedicalRegister.objects.filter(
                     is_active=True, year=current_year, period=current_period,
                     organization_code=organization_code).update(is_active=False)
