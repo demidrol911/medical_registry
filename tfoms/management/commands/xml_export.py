@@ -31,7 +31,7 @@ def safe_int(val):
 
 
 def get_patients(period):
-    attachment_date = '2014-%s-01' % str(int(period)+1)
+    attachment_date = '2015-%s-01' % str(int(period)+1)
     query = """
         select p1.*, medOrg.code as attachment_code_custom
             , person_id_type.code as id_type
@@ -57,7 +57,7 @@ def get_patients(period):
                     where
                         person_fk = person.version_id_pk
                         and status_fk = 1
-                        and date <= '2014-12-15'
+                        and date <= %s
                         and attachment.is_active)
             LEFT join medical_organization medOrg
                 on (
@@ -82,12 +82,12 @@ def get_patients(period):
                 on provided_service.event_fk = provided_event.id_pk
             where
                 medical_register.is_active
-                and medical_register.year = '2014'
+                and medical_register.year = '2015'
                 and medical_register.period = %s
                 --and medical_register.organization_code in ('280036')
             )
         """
-    return Patient.objects.raw(query, [period])
+    return Patient.objects.raw(query, [attachment_date, period])
 
 
 def get_records(register_pk):
@@ -378,8 +378,8 @@ def get_records(register_pk):
 
 
 def main():
-    period = '12'
-    year = '2014'
+    period = '01'
+    year = '2015'
     print datetime.datetime.now()
     registers = MedicalRegister.objects.filter(
         is_active=True, period=period, year=year,
@@ -387,15 +387,15 @@ def main():
     ).order_by('organization_code')
     print u'Регистры: ', registers
 
-    file_regular = 'HS28002T28_14%s1' % period
-    file_patients = 'LS28002T28_14%s1' % period
+    file_regular = 'HS28002T28_15%s1' % period
+    file_patients = 'LS28002T28_15%s1' % period
 
     lm_xml = writer.Xml('%s.xml' % file_patients)
     lm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
     lm_xml.start('PERS_LIST')
     lm_xml.start('ZGLV')
     lm_xml.put('VERSION', '2.1')
-    lm_xml.put('DATA', '18.%s.2014' % period)
+    lm_xml.put('DATA', '18.%s.2015' % period)
     lm_xml.put('FILENAME', file_patients)
     lm_xml.put('FILENAME1', file_regular)
     lm_xml.end('ZGLV')
@@ -442,7 +442,7 @@ def main():
         if register_type == 0:
             continue
         print register_type
-        name = '%sS28002T28_14%s1' % (XML_TYPES[register_type].upper(),
+        name = '%sS28002T28_15%s1' % (XML_TYPES[register_type].upper(),
                                       period)
         hm_xml = writer.Xml('%s.XML' % name)
 
@@ -451,7 +451,7 @@ def main():
 
         hm_xml.start('ZGLV')
         hm_xml.put('VERSION', '2.1')
-        hm_xml.put('DATA', '18.%s.2014' % period)
+        hm_xml.put('DATA', '18.%s.2015' % period)
         hm_xml.put('FILENAME', name)
         hm_xml.end('ZGLV')
 

@@ -141,16 +141,16 @@ def get_department_services(year, period, department_code):
                                                     department_code]))
 
 def main():
-    year = '2014'
-    period = '12'
-    path = 'd:/work/expertiza_export/%s/_%s' % (year, period)
+    year = '2015'
+    period = '01'
+    path = 'd:/work/expertiza_export/%s/%s' % (year, period)
 
     departments = ProvidedService.objects.filter(
         #event__record__register__organization_code='280015',
         event__record__register__year=year,
         event__record__register__period=period,
         event__record__register__is_active=True,
-        event__record__register__organization_code='280001',
+        #event__record__register__organization_code='280001',
         payment_type_id__in=(2, 4),
     ).exclude(code__code__startswith='A').values_list(
         'department__old_code', flat=True).distinct('department__old_code')
