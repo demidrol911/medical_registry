@@ -2644,9 +2644,7 @@ def main():
             sanctions_on_ill_formed_adult_examination(register_element)
             drop_duplicate_examination_in_current_register(register_element)
 
-
         """
-
         errors_pk = [rec[0] for rec in errors]
         ProvidedService.objects.filter(pk__in=errors_pk).update(
             accepted_payment=0, payment_type_id=3)

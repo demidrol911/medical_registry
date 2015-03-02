@@ -24,7 +24,7 @@ from medical_service_register.path import BASE_DIR, REESTR_PSE
 
 from helpers.correct import date_correct
 
-from pandas import DataFrame
+#from pandas import DataFrame
 
 
 ### Значение даты следующей за отчётным периодом
@@ -631,7 +631,7 @@ def pse_export(year, period, mo_code, register_status, data, handbooks):
             s_rec['SN_POL'] = police.encode('cp866')
             s_rec['C_I'] = service['anamnesis_number'].encode('cp866')
             s_rec['OTD'] = service['division_code'] or ''
-            s_rec['COD'] = float(service['code'])
+            s_rec['COD'] = float(service['code'] or 0)
             #s_rec['TIP'] = ''
             s_rec['D_BEG'] = date_correct(service['start_date'], service['id'], 'start_date')
             s_rec['D_U'] = date_correct(service['end_date'], service['id'], 'end_date')

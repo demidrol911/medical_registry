@@ -4,11 +4,11 @@ import os
 import re
 import shutil
 
-#OUTBOX_DIR = 'd:/work/test/outbox/'
-OUTBOX_DIR = u'//alpha/vipnet/medical_registry/outbox/'
-ACTS_DIR = u'x:/reestr/g2014/period12/доплаты'
+#OUTBOX_DIR = u'd:/work/outbox/'
+OUTBOX_DIR = u'//s01-2800-fs01/vipnet/medical_registry/outbox/'
+ACTS_DIR = u'x:/reestr/g2015/period01/подушевое/'
 
-AGMA_DIR = u'x:/reestr/g2014/period12/АГМА'
+AGMA_DIR = u'x:/reestr/g2015/period01/подушевое/АГМА/'
 custom_file = ''#u'X:/REESTR/G2014/Period10/Больницам октябрь.jpg'
 
 act_name_pattern = re.compile(r'_+\d*$')
@@ -21,6 +21,7 @@ def get_outbox_dict(dir):
     for d in dirs:
         t = d#.encode('cp1251')
         code, name = t[:6], t[7:]
+
         outbox_dict[name] = t
 
     return outbox_dict
@@ -30,17 +31,29 @@ outbox_dict = get_outbox_dict(OUTBOX_DIR)
 acts = os.listdir(ACTS_DIR)
 
 for act in acts:
-    encoded_act = act.decode('cp1251')
+    if act.startswith('~'):
+        continue
+
+    encoded_act = act#.decode('cp1251')
     name, ext = os.path.splitext(encoded_act)
     parsed_name = act_name_pattern.sub('', name)
-
     copy_to_dir = outbox_dict.get(parsed_name, None)
 
     if encoded_act.startswith('~') or encoded_act == u'АГМА' or not copy_to_dir:
+        print encoded_act, u'странный акт'
         continue
 
+    #print repr(ACTS_DIR), repr(encoded_act)#.decode('cp1251'))
     src_path = os.path.join(ACTS_DIR, encoded_act)
-    dst_path = os.path.join(OUTBOX_DIR, outbox_dict[parsed_name])
+    #print repr(src_path)
+
+    outbox_dir = outbox_dict.get(parsed_name, None)
+    if outbox_dir:
+        dst_path = os.path.join(OUTBOX_DIR, copy_to_dir)
+        #print dst_path
+    else:
+        print parsed_name, u'Не нашёл'
+        continue
 
     try:
         shutil.copy2(src_path, dst_path)
