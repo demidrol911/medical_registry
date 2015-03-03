@@ -1670,7 +1670,7 @@ def drop_outpatient_event(register_element):
     """
         Санкции на случаи поликлиники по заболеваниям со снятыми услугами
     """
-    query = """
+    old_query = """
         select T.error_code, provided_service.id_pk
         from provided_service
             join medical_organization department
@@ -1717,8 +1717,53 @@ def drop_outpatient_event(register_element):
                      and error_fk = T.error_code) is NULL
     """
 
+    new_query = """
+    select T.error_code, provided_service.id_pk
+    from provided_service
+        join medical_organization department
+            on provided_service.department_fk = department.id_pk
+        JOIN medical_service ms ON ms.id_pk = provided_service.code_fk
+        join
+            (
+                select provided_event.id_pk as event_id,
+                    min(provided_service_sanction.error_fk) as error_code
+                from provided_service ps1
+                    join medical_service
+                        on medical_service.id_pk = ps1.code_fk
+                    join provided_event
+                        on ps1.event_fk = provided_event.id_pk
+                    join medical_register_record
+                        on provided_event.record_fk = medical_register_record.id_pk
+                    join medical_register mr1
+                        on medical_register_record.register_fk = mr1.id_pk
+                    JOIN patient p1
+                        on medical_register_record.patient_fk = p1.id_pk
+                    join provided_service_sanction
+                        on ps1.id_pk = provided_service_sanction.service_fk
+                    join medical_error
+                        on provided_service_sanction.error_fk = medical_error.id_pk
+                            and medical_error.weight = (select max(weight) from medical_error where id_pk in (select error_fk from provided_service_sanction where service_fk = ps1.id_pk))
+                where mr1.is_active
+                    and mr1.year = %s
+                    and mr1.period = %s
+                    and mr1.organization_code = %s
+                    AND (
+                           ((medical_service.group_fk != 19 or medical_service.group_fk is NULL) AND ps1.tariff > 0)
+                           or
+                           (medical_service.group_fk = 19 AND medical_service.subgroup_fk is NOT NULL)
+                           )
+                    and ps1.payment_type_fk = 3
+                    group BY provided_event.id_pk
+            ) as T
+            on provided_service.event_fk = T.event_id
+        LEFT JOIN provided_service_sanction pss
+            on pss.service_fk = provided_service.id_pk and pss.error_fk = T.error_code
+    where (ms.group_fk != 27 or ms.group_fk is NULL)
+        AND pss.id_pk is NULL
+    """
+
     services = ProvidedService.objects.raw(
-        query, [register_element['year'], register_element['period'],
+        new_query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
     errors = [(rec.pk, 1, rec.accepted_payment, rec.error_code) for rec in list(services)]
