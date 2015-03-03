@@ -1621,7 +1621,7 @@ def sanctions_on_invalid_outpatient_event(register_element):
                 and medical_register.year = %s
                 and medical_register.period = %s
                 and medical_register.organization_code = %s
-                and department.level <> 3
+                --and department.level <> 3
                 and ((
                         select count(1)
                         from provided_service
@@ -1711,7 +1711,7 @@ def drop_outpatient_event(register_element):
                 ) as T
                 on provided_service.event_fk = T.event_id
         where provided_service.payment_type_fk <> 3
-            and department.level <> 3
+            --and department.level <> 3
             and (select id_pk from provided_service_sanction
                  where service_fk = provided_service.id_pk
                      and error_fk = T.error_code) is NULL
@@ -2448,6 +2448,11 @@ def main():
                             duration_coefficient = 0
                         if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
                             duration_coefficient = 0
+
+                        if (service.organization_code == '280013' and service.service_tariff_profile in (24, 30)) or \
+                                (service.organization_code == '280005' and service.service_tariff_profile == 23):
+                            duration_coefficient = 50
+
                     elif term == 2:
                         duration_coefficient = 90
                         if is_endovideosurgery:
@@ -2559,6 +2564,33 @@ def main():
                             provided_tariff += round(provided_tariff * 0.47, 2)
                             ProvidedServiceCoefficient.objects.create(
                                 service=service, coefficient_id=12)
+
+                        if service.service_group == 2 and \
+                                len(service.comment == 8) and \
+                                service.comment[8] == '1' :
+                            accepted_payment -= round(accepted_payment * 0.4, 2)
+                            provided_tariff -= round(provided_tariff * 0.4, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=13)
+
+                        if service.service_code in ('098901', '198901', '098912', '198912') and \
+                                service.organization_code in ('280084', '280027') and \
+                                len(service.comment == 8) and \
+                                service.comment[8] == '1':
+                            accepted_payment += round(accepted_payment * 0.3, 2)
+                            provided_tariff += round(provided_tariff * 0.3, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=14)
+
+                        if service.service_code in ('098901', '198901', '098912', '198912') and \
+                                service.organization_code in ('280084', '280027') and \
+                                len(service.comment == 9) and \
+                                service.comment[9] == '1':
+                            accepted_payment += round(accepted_payment * 1, 2)
+                            provided_tariff += round(provided_tariff * 1, 2)
+                            ProvidedServiceCoefficient.objects.create(
+                                service=service, coefficient_id=15)
+
 
                     '''
                     if service.is_agma_cathedra and term == 1:
