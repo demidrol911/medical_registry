@@ -516,7 +516,7 @@ class MedicalOrganization(models.Model):
     '''
 
     def get_attachment_count(self, date):
-        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date, group__isnull=False)
+        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date)
         result = {
             1: {'men': 0, 'fem': 0},
             2: {'men': 0, 'fem': 0},

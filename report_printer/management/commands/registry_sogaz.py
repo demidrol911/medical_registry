@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Sum, Count, Q
 from medical_service_register.path import REESTR_DIR, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
-from tfoms.func import get_mo_info, get_mo_register, get_errors, get_failure_causes
+from tfoms import func
 from tfoms.models import ProvidedService, Sanction
 
 
@@ -17,8 +17,21 @@ def get_services(year, period, mo_code):
     )
 
 
-def calculated_money(services, condition, field):
-    return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value']
+def calculated_money(services, condition, field, is_calculate_capitation=False):
+    if is_calculate_capitation:
+        mo_code = services[0].event.record.register.organization_code
+        capitation_policlinic = func.calculate_capitation_tariff(3, mo_code=mo_code)
+        capitation_ambulance = func.calculate_capitation_tariff(4, mo_code=mo_code)
+        sum_capitation = 0
+        for group in capitation_policlinic[1]:
+
+            sum_capitation += group[22] + group[23]
+        for group in capitation_ambulance[1]:
+            sum_capitation += group[22] + group[23]
+        print sum_capitation
+        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] + sum_capitation
+    else:
+        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value']
 
 
 def calculated_invoice(services, condition):
@@ -101,11 +114,27 @@ def calculated_sum_accepted(services):
         condition=Q(payment_type__in=[2, 4]),
         field='tariff'
     )
+
+    ### Подушевое
+    sum_dict['sum_policlinic_tariff_capitation'] = calculated_money(
+        services,
+        condition=Q(payment_type__in=[2, 4]) & Q(event__term__pk=3)
+        & Q(payment_kind=2),
+        field='tariff'
+    )
+
+    sum_dict['sum_ambulance_tariff_capitation'] = calculated_money(
+        services,
+        condition=Q(payment_type__in=[2, 4]) & Q(event__term__pk=4),
+        field='tariff'
+    )
+
     sum_dict['sum_tariff_other_mo'] = 0
     sum_dict['sum_tariff_mo'] = calculated_money(
         services,
-        condition=Q(payment_type__in=[2, 4]),
-        field='accepted_payment'
+        condition=Q(payment_type__in=[2, 4]) & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        field='accepted_payment',
+        is_calculate_capitation=True
     )
     sum_dict['count_all'] = calculated_invoice(
         services,
@@ -113,8 +142,9 @@ def calculated_sum_accepted(services):
     )
     sum_dict['sum_tariff_all'] = calculated_money(
         services,
-        condition=Q(payment_type__in=[2, 4]),
-        field='accepted_payment'
+        condition=Q(payment_type__in=[2, 4]) & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        field='accepted_payment',
+        is_calculate_capitation=True
     )
 
     # Принятые реестры счетов за стационар
@@ -158,7 +188,7 @@ def calculated_sum_sanction(services):
     sum_dict = dict()
     sum_dict['sum_tariff'] = calculated_money(
         services,
-        condition=Q(payment_type__in=[3, 4]),
+        condition=Q(payment_type__in=[3, 4]) & Q(payment_kind=1),
         field='provided_tariff'
     )
 
@@ -230,7 +260,7 @@ def calculated_sum_sanction(services):
     )
     sum_dict['sum_tariff_all'] = calculated_money(
         services,
-        condition=Q(payment_type=3),
+        condition=Q(payment_type=3) & Q(payment_kind=1) & ~Q(event__term__pk=4),
         field='provided_tariff'
     )
 
@@ -240,6 +270,7 @@ def calculated_sum_sanction(services):
 def get_sanction_info(services, condition):
     services_data = services.filter(condition).values(
         'pk',
+        'event__pk',
         'organization__old_code',
         'event__record__id',
         'event__record__register__period',
@@ -259,7 +290,7 @@ def get_sanction_info(services, condition):
 
     sum_tariff = calculated_money(
         services,
-        condition=condition,
+        condition=condition & Q(payment_kind=1) & ~Q(event__term__pk=4),
         field='provided_tariff'
     )
     count = calculated_invoice(
@@ -274,7 +305,7 @@ def get_sanction_info(services, condition):
     }
 
 
-def print_sanction(act_book, data, title, handbooks):
+def print_sanction(act_book, data, capitation_events, title, handbooks):
     act_book.set_style()
     act_book.write_cell('', 'r')
     if title:
@@ -328,7 +359,8 @@ def print_sanction(act_book, data, title, handbooks):
                             else service['event__record__patient__insurance_policy_number'], 'c')
         act_book.write_cell(handbooks['failure_cause'][handbooks['errors'][error_id]['failure_cause']]['number'], 'c')
         act_book.write_cell(handbooks['errors'][error_id]['code'], 'c')
-        act_book.write_cell(service['provided_tariff'], 'c')
+        act_book.write_cell(u'Подуш.' if service['event__pk'] in capitation_events or service['event__term__id_pk'] == 4
+                            else service['provided_tariff'], 'c')
         act_book.write_cell(1, 'c')
         act_book.write_cell('', 'c')
         act_book.write_cell('', 'r')
@@ -337,20 +369,20 @@ def print_sanction(act_book, data, title, handbooks):
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        year = args[0]
-        period = args[1]
-        status = args[2]
+        #year = args[0]
+        #period = args[1]
+        status = args[0]
         handbooks = {
-            'errors': get_errors(),
-            'failure_cause': get_failure_causes()
+            'errors': func.ERRORS,
+            'failure_cause': func.FAILURE_CAUSES
         }
-        organizations = get_mo_register(year, period, status=status)
+        organizations = func.get_mo_register(status=status)
         for mo in organizations:
-            mo_name = get_mo_info(mo)['name']
+            mo_name = func.get_mo_info(mo)['name']
             template = BASE_DIR + r'\templates\excel_pattern\registry_sogaz.xls'
-            target = REESTR_DIR % (year, period) + r'\%s' % \
+            target = REESTR_DIR % (func.YEAR, func.PERIOD) + ur'\%s_согаз' % \
                 mo_name.replace('"', '').strip()
-            services = get_services(year, period, mo)
+            services = get_services(func.YEAR, func.PERIOD, mo)
             invoiced = calculated_sum_invoiced(services)
             accepted = calculated_sum_accepted(services)
             sanction = calculated_sum_sanction(services)
@@ -375,6 +407,8 @@ class Command(BaseCommand):
                 condition=Q(payment_type=4)
             )
 
+            capitation_events = func.get_capitation_events(mo_code=mo)
+
             with ExcelWriter(template=template, target=target) as act_book:
                 act_book.write_cella(9, 0, mo_name)
                 act_book.write_cella(10, 1, mo)
@@ -394,52 +428,60 @@ class Command(BaseCommand):
 
                 # Принятые к оплате реестры счетов
                 act_book.write_cella(29, 2, accepted['sum_tariff'])             # принято по тарифу
-                act_book.write_cella(30, 3, accepted['sum_tariff_other_mo'])    # заказано в другой мо
-                act_book.write_cella(31, 2, accepted['sum_tariff_mo'])          # принято к оплате
-                act_book.write_cella(32, 1, accepted['count_all'])              # всего принято к оплате
-                act_book.write_cella(32, 4, accepted['sum_tariff_all'])
-                act_book.write_cella(34, 5, accepted['sum_tariff_hosp'])        # принято по стационару
-                act_book.write_cella(34, 7, accepted['count_hosp'])
-                act_book.write_cella(35, 5, accepted['sum_tariff_day_hosp'])    # принято по дневному стационару
-                act_book.write_cella(35, 7, accepted['count_day_hosp'])
-                act_book.write_cella(36, 5, accepted['sum_tariff_policlinic'])  # принято по поликлинике
-                act_book.write_cella(36, 7, accepted['count_policlinic'])
+                # Подушевое
+                act_book.write_cella(30, 2, accepted['sum_policlinic_tariff_capitation'])
+                act_book.write_cella(31, 2, accepted['sum_ambulance_tariff_capitation'])
+
+                act_book.write_cella(32, 3, accepted['sum_tariff_other_mo'])    # заказано в другой мо
+                act_book.write_cella(33, 2, accepted['sum_tariff_mo'])          # принято к оплате
+                act_book.write_cella(34, 1, accepted['count_all'])              # всего принято к оплате
+                act_book.write_cella(34, 4, accepted['sum_tariff_all'])
+                act_book.write_cella(36, 5, accepted['sum_tariff_hosp'])        # принято по стационару
+                act_book.write_cella(36, 7, accepted['count_hosp'])
+                act_book.write_cella(37, 5, accepted['sum_tariff_day_hosp'])    # принято по дневному стационару
+                act_book.write_cella(37, 7, accepted['count_day_hosp'])
+                act_book.write_cella(38, 5, accepted['sum_tariff_policlinic'])  # принято по поликлинике
+                act_book.write_cella(38, 7, accepted['count_policlinic'])
 
                 # Не принятые к оплате реестры счетов
-                act_book.write_cella(37, 5, sanction['sum_tariff'])             # не принято к оплате
-                act_book.write_cella(38, 5, sanction['sum_tariff_hosp'])        # не принято по стационару
-                act_book.write_cella(38, 7, sanction['count_hosp'])
-                act_book.write_cella(39, 5, sanction['sum_tariff_day_hosp'])    # не принято по дневному стационару
-                act_book.write_cella(39, 7, sanction['count_day_hosp'])
-                act_book.write_cella(40, 5, sanction['sum_tariff_policlinic'])  # не принято по поликлинике
-                act_book.write_cella(40, 7, sanction['count_policlinic'])
-                act_book.write_cella(41, 5, sanction['sum_tariff_pa'])          # не принято сверх объема
-                act_book.write_cella(42, 3, sanction['count_all'])              # не подлежит оплате
-                act_book.write_cella(42, 5, sanction['sum_tariff_all'])
+                act_book.write_cella(39, 5, sanction['sum_tariff'])             # не принято к оплате
+                act_book.write_cella(40, 5, sanction['sum_tariff_hosp'])        # не принято по стационару
+                act_book.write_cella(40, 7, sanction['count_hosp'])
+                act_book.write_cella(41, 5, sanction['sum_tariff_day_hosp'])    # не принято по дневному стационару
+                act_book.write_cella(41, 7, sanction['count_day_hosp'])
+                act_book.write_cella(42, 5, sanction['sum_tariff_policlinic'])  # не принято по поликлинике
+                act_book.write_cella(42, 7, sanction['count_policlinic'])
+                act_book.write_cella(43, 5, sanction['sum_tariff_pa'])          # не принято сверх объема
+                act_book.write_cella(44, 3, sanction['count_all'])              # не подлежит оплате
+                act_book.write_cella(44, 5, sanction['sum_tariff_all'])
 
                 # Снятая с оплаты в стационаре
-                act_book.set_cursor(43, 0)
+                act_book.set_cursor(45, 0)
                 print_sanction(
                     act_book,
                     data=hospital_sanction_info,
+                    capitation_events=capitation_events,
                     title=u'2.1.1. за стационарную медицинскую помощь на сумму:',
                     handbooks=handbooks
                 )
                 print_sanction(
                     act_book,
                     data=day_hospital_sanction_info,
+                    capitation_events=capitation_events,
                     title=u'2.1.2. за мед. помощь в дневном стационаре  на сумму:',
                     handbooks=handbooks
                 )
                 print_sanction(
                     act_book,
                     data=policlinic_sanction_info,
+                    capitation_events=capitation_events,
                     title=u'2.1.3. за амбулаторно-поликлиническую помощь  на сумму:',
                     handbooks=handbooks
                 )
                 print_sanction(
                     act_book,
                     data=ambulance_sanction_info,
+                    capitation_events=capitation_events,
                     title=u'2.1.4. за скорую медицинскую помощь  на сумму:',
                     handbooks=handbooks
                 )
@@ -460,6 +502,7 @@ class Command(BaseCommand):
                 print_sanction(
                     act_book,
                     data=pa_sanction_info,
+                    capitation_events=capitation_events,
                     title='',
                     handbooks=handbooks
                 )
