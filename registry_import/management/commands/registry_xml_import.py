@@ -712,6 +712,7 @@ def main():
                                 service_uid=new_service['IDSERV']
                             )
 
+            """
             if not has_surgery and has_hospitalization:
                 services_errors.append(set_error(
                     '902', field='', parent='',
@@ -719,6 +720,7 @@ def main():
                     comment=u'Нет сведений об операциях (услуги класса А) в круглосуточном стационаре'
                 ))
                 print u'Нет операции'
+            """
 
             if services_errors:
                 registry_has_errors = True
