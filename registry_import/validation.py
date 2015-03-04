@@ -173,6 +173,9 @@ class IsServiceKindCorrespondsToTerm(rule.Rule):
     def run(self, field_value):
         kinds = KIND_TERM_DICT.get(self.term, [])
 
+        if not kinds or not self.term:
+            return True
+
         if field_value in kinds:
             return True
 
