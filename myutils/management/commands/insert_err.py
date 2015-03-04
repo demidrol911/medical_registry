@@ -10,7 +10,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         failure_cause = args[0]
-        file_service = file('d:/work/medical_service_register/service.csv')
+        file_service = file('service.csv')
         for id_service_str in file_service:
             id_service = int(id_service_str.replace('\n', ''))
             service = ProvidedService.objects.get(id_pk=id_service)

@@ -2612,7 +2612,7 @@ def main():
                                 service.comment[8] == '1' :
                             accepted_payment -= round(accepted_payment * 0.4, 2)
                             provided_tariff -= round(provided_tariff * 0.4, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=13)
 
                         if service.service_code in ('098901', '198901', '098912', '198912') and \
@@ -2621,7 +2621,7 @@ def main():
                                 service.comment[8] == '1':
                             accepted_payment += round(accepted_payment * 0.3, 2)
                             provided_tariff += round(provided_tariff * 0.3, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=14)
 
                         if service.service_code in ('098901', '198901', '098912', '198912') and \
@@ -2630,7 +2630,7 @@ def main():
                                 service.comment[9] == '1':
                             accepted_payment += round(accepted_payment * 1, 2)
                             provided_tariff += round(provided_tariff * 1, 2)
-                            ProvidedServiceCoefficient.objects.create(
+                            ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=15)
 
 
