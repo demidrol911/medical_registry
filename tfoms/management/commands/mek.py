@@ -248,7 +248,7 @@ def identify_patient(register_element):
     query1 = """
         update patient set insurance_policy_fk = T.policy_id from (
         select DISTINCT p1.id_pk as patient_id, (
-            select version_id_pk
+            select max(version_id_pk)
             from insurance_policy
             where id = (
                 select insurance_policy.id
@@ -1748,7 +1748,7 @@ def drop_outpatient_event(register_element):
                     and mr1.period = %s
                     and mr1.organization_code = %s
                     AND (
-                           ((medical_service.group_fk != 19 or medical_service.group_fk is NULL) AND ps1.tariff > 0)
+                           ((medical_service.group_fk not in (19, 27) or medical_service.group_fk is NULL))
                            or
                            (medical_service.group_fk = 19 AND medical_service.subgroup_fk is NOT NULL)
                            )
@@ -2325,6 +2325,57 @@ def sanctions_on_service_term_mismatch(register_element):
     return get_sanction_tuple(services, 76)
 
 
+def drop_second_phase_examination(register_element):
+    query = """
+        select ps.id_pk
+        from medical_register mr JOIN medical_register_record mrr ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms ON ms.id_pk = ps.code_fk
+            join patient pt ON pt.id_pk = mrr.patient_fk
+            JOIN insurance_policy ip ON ip.version_id_pk = pt.insurance_policy_fk
+            join
+                (
+                    select distinct mr1.id_pk as mr_id, ip1.id as ip_id
+
+                    from provided_service ps1
+                        join medical_service
+                            on medical_service.id_pk = ps1.code_fk
+                        join provided_event
+                            on ps1.event_fk = provided_event.id_pk
+                        join medical_register_record
+                            on provided_event.record_fk = medical_register_record.id_pk
+                        join medical_register mr1
+                            on medical_register_record.register_fk = mr1.id_pk
+                        JOIN patient p1
+                            on medical_register_record.patient_fk = p1.id_pk
+                        JOIN insurance_policy ip1 ON ip1.version_id_pk = p1.insurance_policy_fk
+
+                        where
+                             mr1.year = %(year)s
+                             and mr1.period = %(period)s
+                             and mr1.organization_code = %(organization)s
+                             and ps1.payment_type_fk = 3
+                             AND medical_service.group_fk = 7
+                        group BY mr_id, ip_id
+                ) as T
+                on ip.id = T.ip_id and mr.id_pk = T.mr_id
+        where
+            ms.group_fk in (25, 26)
+            and ps.payment_type_fk = 2
+            and (select id_pk from provided_service_sanction
+                 where service_fk = ps.id_pk and error_fk = 34) is null
+    """
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    #print len(services) #, type(services)
+
+    return get_sanction_tuple(services, 34)
+
+
 def main():
     COMMENT_COEFFICIENT_CURATION = re.compile(r'[0-1]{6}1')
     min_date_for_stopped_policy = datetime.strptime('2011-01-01', '%Y-%m-%d').date()
@@ -2398,6 +2449,9 @@ def main():
             #sanctions_on_incorrect_examination(register_element)
             sanctions_on_service_term_mismatch(register_element)
             sanctions_on_service_term_kind_mismatch(register_element)
+
+            print u'drop_second_phase_examination'
+            drop_second_phase_examination(register_element)
 
         print 'iterate tariff', register_element
         with transaction.atomic():
@@ -2495,7 +2549,7 @@ def main():
                             duration_coefficient = 0
 
                         if (service.organization_code == '280013' and service.service_tariff_profile in (24, 30)) or \
-                                (service.organization_code == '280005' and service.service_tariff_profile == 23):
+                                (service.organization_code == '280005' and service.service_tariff_profile in (24, 67)):
                             duration_coefficient = 50
 
                     elif term == 2:
@@ -2608,8 +2662,8 @@ def main():
                                 service=service, coefficient_id=12)
 
                         if service.service_group == 2 and \
-                                len(service.comment == 8) and \
-                                service.comment[8] == '1' :
+                                len(service.comment) == 8 and \
+                                service.comment[7] == '1':
                             accepted_payment -= round(accepted_payment * 0.4, 2)
                             provided_tariff -= round(provided_tariff * 0.4, 2)
                             ProvidedServiceCoefficient.objects.get_or_create(
@@ -2617,8 +2671,8 @@ def main():
 
                         if service.service_code in ('098901', '198901', '098912', '198912') and \
                                 service.organization_code in ('280084', '280027') and \
-                                len(service.comment == 8) and \
-                                service.comment[8] == '1':
+                                len(service.comment) == 8 and \
+                                service.comment[7] == '1':
                             accepted_payment += round(accepted_payment * 0.3, 2)
                             provided_tariff += round(provided_tariff * 0.3, 2)
                             ProvidedServiceCoefficient.objects.get_or_create(
@@ -2626,8 +2680,8 @@ def main():
 
                         if service.service_code in ('098901', '198901', '098912', '198912') and \
                                 service.organization_code in ('280084', '280027') and \
-                                len(service.comment == 9) and \
-                                service.comment[9] == '1':
+                                len(service.comment) == 9 and \
+                                service.comment[8] == '1':
                             accepted_payment += round(accepted_payment * 1, 2)
                             provided_tariff += round(provided_tariff * 1, 2)
                             ProvidedServiceCoefficient.objects.get_or_create(

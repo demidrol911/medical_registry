@@ -785,10 +785,8 @@ def main():
 
                 shutil.copy2(zipname, FLC_DIR)
 
-                '''
                 if os.path.exists(copy_path):
                     shutil.copy2(zipname, copy_path)
-                '''
 
                 os.remove(zipname)
 

@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.db import connection
 from tfoms.models import (
     MedicalError, ProvidedService, MedicalRegister,
+    ProvidedEvent,
     TariffFap, PaymentFailureCause,
     MedicalRegisterRecord, Sanction,
     MedicalOrganization, TariffCapitation,
@@ -24,7 +25,7 @@ cur_date = datetime.now()
 
 YEAR = str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
-PERIOD = '01' #('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+PERIOD = '02' #('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -363,7 +364,7 @@ def get_capitation_events(mo_code):
 def get_treatment_events(mo_code):
     query = """
     select
-    distinct pe.id_pk
+    distinct pe.id_pk as event_id
     from medical_register mr
             JOIN medical_register_record mrr
                 ON mr.id_pk=mrr.register_fk
@@ -379,8 +380,10 @@ def get_treatment_events(mo_code):
                 ON pt.id_pk = mrr.patient_fk
             left join medical_division msd
                 on msd.id_pk = pe.division_fk
-            where mr.is_active and mr.year='{year}' and mr.period='{period}'
-                  and mo.code = '{mo}'
+            where mr.is_active
+                  and mr.year=%(year)s
+                  and mr.period=%(period)s
+                  and mo.code=%(mo)s
                   AND ((ms.group_fk = 19 and ms.subgroup_fk = 12)
                          or (pe.term_fk = 3 and ms.reason_fk = 1 and
                                 (ms.group_fk is NULL or ms.group_fk = 24)
@@ -391,7 +394,7 @@ def get_treatment_events(mo_code):
                               )
     """
     cursor = connection.cursor()
-    cursor.execute(query.format(year=YEAR, period=PERIOD, mo=mo_code))
+    cursor.execute(query, dict(year=YEAR, period=PERIOD, mo=mo_code))
     return [row[0] for row in cursor.fetchall()]
 
     '''
@@ -417,23 +420,23 @@ def calculate_capitation_tariff(term, mo_code):
         is_children_profile=True
     )
     result = [
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0]
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0]
     ]
 
-    if tariff:
+    if tariff and mo_code not in ('280070', ):
         if term == 3:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
                 get_attachment_count(DATE_ATTACHMENT)
@@ -497,8 +500,8 @@ def calculate_capitation_tariff(term, mo_code):
                 result[idx][17] = Decimal(round(float(result[idx][9])*float(coeff-1), 2))
 
     for idx in xrange(0, 10):
-        result[idx][22] = Decimal(round(result[idx][8] + result[idx][16], 2))
-        result[idx][23] = Decimal(round(result[idx][9] + result[idx][17], 2))
+        result[idx][26] = Decimal(round(result[idx][8] + result[idx][16], 2))
+        result[idx][27] = Decimal(round(result[idx][9] + result[idx][17], 2))
 
     return True, result
 
