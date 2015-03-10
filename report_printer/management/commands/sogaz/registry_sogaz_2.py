@@ -28,9 +28,9 @@ def calculated_money(services, condition, field, is_calculate_capitation=False):
         for group in capitation_ambulance[1]:
             sum_capitation += group[27] + group[26]
         print sum_capitation
-        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] + sum_capitation
+        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] or 0 + sum_capitation
     else:
-        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value']
+        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] or 0
 
 
 def calculated_services(services, condition):
@@ -74,8 +74,13 @@ def print_registry_sogaz_3(act_book, mo):
     )
     sum_invoiced = calculated_money(
         services,
-        condition=Q(),
-        field='calculated_payment'
+        condition=Q(payment_type=2) & Q(payment_kind=1) & ~Q(event__term=4),
+        field='accepted_payment',
+        is_calculate_capitation=True
+    ) + calculated_money(
+        services,
+        condition=Q(payment_type__in=[3, 4]) & Q(payment_kind=1) & ~Q(event__term=4),
+        field='provided_tariff'
     )
 
     has_su = has_error(services, ['SU'], handbooks)

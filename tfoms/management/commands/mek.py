@@ -1092,6 +1092,8 @@ def sanctions_on_cross_dates_services(register_element):
         FROM provided_service ps
             join provided_event pe
                 on ps.event_fk = pe.id_pk
+            join medical_service ms
+                on ms.id_pk = ps.code_fk
             join medical_register_record mrr
                 on pe.record_fk = mrr.id_pk
             join medical_register mr
@@ -1124,6 +1126,7 @@ def sanctions_on_cross_dates_services(register_element):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and pe.term_fk = 3
+            and (ms.group_fk not in (27) and ms.group_fk is NULL)
             and (select count(1) from provided_service_sanction
                  where service_fk = ps.id_pk and error_fk = 73) = 0
         order by ps.id_pk
@@ -1134,6 +1137,8 @@ def sanctions_on_cross_dates_services(register_element):
         FROM provided_service ps
             join provided_event pe
                 on ps.event_fk = pe.id_pk
+            join medical_service ms
+                on ms.id_pk = ps.code_fk
             join medical_register_record mrr
                 on pe.record_fk = mrr.id_pk
             join medical_register mr
@@ -1165,6 +1170,7 @@ def sanctions_on_cross_dates_services(register_element):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and pe.term_fk in (1, 2)
+            and (ms.group_fk not in (27) and ms.group_fk is NULL)
             and (select count(1) from provided_service_sanction
                  where service_fk = ps.id_pk and error_fk = 73) = 0
         order by ps.id_pk
@@ -2548,6 +2554,11 @@ def main():
                         if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
                             duration_coefficient = 0
 
+                        if service.service_group == 2 and \
+                                len(service.comment) == 8 and \
+                                service.comment[7] == '1':
+                            duration_coefficient = 0
+
                         if (service.organization_code == '280013' and service.service_tariff_profile in (24, 30)) or \
                                 (service.organization_code == '280005' and service.service_tariff_profile in (24, 67)):
                             duration_coefficient = 50
@@ -2605,6 +2616,9 @@ def main():
                                                     7130, 7131, 7132, ):
                         nkd = 70
                     '''
+
+                    if service.code == '098961':
+                        print duration_coefficient
 
                     duration = (days / float(nkd)) * 100
 

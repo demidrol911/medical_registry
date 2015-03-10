@@ -105,7 +105,7 @@ def print_registry_sogaz_2(act_book, mo):
             act_book.set_style({'bold': True, 'font_color': 'blue', 'font_size': 11})
             act_book.write_cell(func.ERRORS[error_id]['code'] + ' ' +
                                 func.ERRORS[error_id]['name'], 'r')
-            act_book.set_style({'bold': True, 'border': 1, 'align': 'center', 'font_size': 11})
+            act_book.set_style({'bold': True, 'border': 1, 'align': 'center', 'font_size': 11, 'text_wrap': True})
 
             # Распечатка загловков таблицы с информацией о снятых услугах
             for title in title_table:
