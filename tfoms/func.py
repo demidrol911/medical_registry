@@ -446,7 +446,7 @@ def calculate_capitation_tariff(term, mo_code):
     else:
         return False, result
 
-    print '*', population
+    #print '*', population
     # Чмсленность
 
     result[0][1] = population[1]['men']
@@ -463,6 +463,41 @@ def calculate_capitation_tariff(term, mo_code):
 
     result[8][0] = population[5]['men']
     result[9][0] = population[5]['fem']
+
+
+    '''
+    result[0][1] = 620
+    result[1][1] = 632
+
+    result[2][1] = 5704
+    result[3][1] = 5531
+
+    result[4][1] = 16523
+    result[5][1] = 15578
+
+    result[6][0] = 62781
+    result[7][0] = 71024
+
+    result[8][0] = 13633
+    result[9][0] = 33852
+    '''
+
+    '''
+    result[0][1] = 616
+    result[1][1] = 643
+
+    result[2][1] = 5746
+    result[3][1] = 5574
+
+    result[4][1] = 16519
+    result[5][1] = 15605
+
+    result[6][0] = 62449
+    result[7][0] = 70721
+
+    result[8][0] = 13587
+    result[9][0] = 33746
+    '''
 
     # Тариф основной
 

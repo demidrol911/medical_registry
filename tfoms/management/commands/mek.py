@@ -413,8 +413,8 @@ def identify_patient(register_element):
                                     on person.version_id_pk = person_id.person_fk
                                 join insurance_policy
                                     on insurance_policy.person_fk = person.version_id_pk
-                            where replace(upper(regexp_replace(person_id.series, '[ -/\\_]', '')), 'I', '1') = replace(upper(regexp_replace(p2.person_id_series, '[ -/\\_]', '')), 'I', '1')
-                                and replace(upper(regexp_replace(person_id.number, '[ -/\\_]', '')), 'I', '1') = replace(upper(regexp_replace(p2.person_id_number, '[ -/\\_]', '')), 'I', '1')
+                            where translate(upper(regexp_replace(person_id.series, '[ -/\\_]', '', 'g')), 'IOT', '1ОТ') = translate(upper(regexp_replace(p2.person_id_series, '[ -/\\_]', '', 'g')), 'IOT ', '1ОТ')
+                                  and upper(regexp_replace(person_id.number, '[ -/\\_]', '')) = upper(regexp_replace(p2.person_id_number, '[ -/\\_]', ''))
                             order by insurance_policy.stop_date desc nulls first
                             limit 1
                         ) as T
@@ -2616,9 +2616,6 @@ def main():
                                                     7130, 7131, 7132, ):
                         nkd = 70
                     '''
-
-                    if service.code == '098961':
-                        print duration_coefficient
 
                     duration = (days / float(nkd)) * 100
 

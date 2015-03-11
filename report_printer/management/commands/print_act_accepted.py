@@ -2498,9 +2498,12 @@ class Command(BaseCommand):
                 print_error_fund(act_book, mo, data, handbooks)
 
                 ### Согазовские отчёты
-                registry_sogaz.print_registry_sogaz_1(act_book=act_book, mo=mo)
+
                 registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo)
-                registry_sogaz_2.print_registry_sogaz_3(act_book=act_book, mo=mo)
+
+                if status == 8:
+                    registry_sogaz.print_registry_sogaz_1(act_book=act_book, mo=mo)
+                    registry_sogaz_2.print_registry_sogaz_3(act_book=act_book, mo=mo)
 
                 if status == 8:
                     PseExporter().handle(*[mo, 6])
@@ -2560,6 +2563,8 @@ class Command(BaseCommand):
                             sum_capitation_amb=sum_capitation_ambulance,
                             department=department
                         )
+
+                        registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo, department=department)
 
                         print_errors_page(
                             act_book, mo,

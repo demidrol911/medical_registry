@@ -1,12 +1,7 @@
 #! -*- coding: utf-8 -*-
 from copy import deepcopy
-from decimal import Decimal
-from django.core.management.base import BaseCommand
 from tfoms import func
-from medical_service_register.path import REESTR_DIR, BASE_DIR
-from report_printer.excel_writer import ExcelWriter
 from report_printer.excel_style import VALUE_STYLE
-from tfoms.func import get_services, get_patients, get_sanctions
 from helpers.correct import date_correct
 
 
@@ -27,6 +22,7 @@ def print_total_sum_error(act_book, title, total_sum):
     act_book.write_cell('', 'c')
     act_book.write_cell('', 'c')
     act_book.write_cell(total_sum['sum_day'], 'c')
+    act_book.write_cell(total_sum['sum_hosp'], 'c')
     act_book.write_cell(total_sum['sum_uet'], 'c')
     act_book.write_cell('', 'c')
     act_book.write_cell('', 'c')
@@ -42,7 +38,7 @@ def print_total_sum_error(act_book, title, total_sum):
     act_book.row_inc()
 
 
-def print_registry_sogaz_2(act_book, mo):
+def print_registry_sogaz_2(act_book, mo, department=None):
     handbooks = {
         'errors': func.ERRORS,
         'failure_cause': func.FAILURE_CAUSES
@@ -52,11 +48,13 @@ def print_registry_sogaz_2(act_book, mo):
     data = {
         'patients': func.get_patients(mo),
         'sanctions': func.get_sanctions(mo),
-        'discontinued_services': func.get_services(mo, payment_type=[3, 4])
+        'discontinued_services': func.get_services(mo, payment_type=[3, 4], department_code=department)
+        if department else func.get_services(mo, payment_type=[3, 4])
     }
     capitation_events = func.get_capitation_events(mo_code=mo)
     init_sum = {
         'sum_day': 0,                      # Сумма дней
+        'sum_hosp': 0,
         'sum_uet': 0,                      # Сумма УЕТ
         'sum_tariff': 0,                   # Сумма основного тарифа
         'sum_calculated_payment': 0,       # Рассчётная сумма
@@ -89,7 +87,7 @@ def print_registry_sogaz_2(act_book, mo):
     act_book.set_cursor(9, 0)
     title_table = [
         u'№ n/n в реестре счетов', u'№ документа ОМС',
-        u'ФИО', u'Дата рождения', u'Номер карты', u'Дата лечения', u'Кол-во дней лечения',
+        u'ФИО', u'Дата рождения', u'Номер карты', u'Дата лечения', u'Кол-во дней лечения', u'Пос/госп',
         u'УЕТ', u'Код услуги', u'Код по МКБ-10', u'Отд.', u'Профиль отделения', u'№ случая',
         u'ID_SERV', u'ID_PAC', u'Представлено к оплате', u'Расчетная сумма',
         u'Отказано в оплате'
@@ -137,6 +135,8 @@ def print_registry_sogaz_2(act_book, mo):
 
                 act_book.write_cell(service['quantity'], 'c')                         # Количество дней
 
+                act_book.write_cell(1, 'c')
+
                 act_book.write_cell(service['uet'], 'c')                              # Количество УЕТ
 
                 act_book.write_cell(service['code'], 'c')                             # Код услуги
@@ -166,6 +166,7 @@ def print_registry_sogaz_2(act_book, mo):
                 # Рассчёт итоговой суммы по ошибке
                 total_sum_error['sum_day'] += service['quantity']
                 total_sum_error['sum_uet'] += service['uet']
+                total_sum_error['sum_hosp'] += 1
                 total_sum_error['sum_tariff'] += service['tariff']
                 total_sum_error['sum_calculated_payment'] += service['calculated_payment']
                 total_sum_error['sum_discontinued_payment'] += 0 \
@@ -179,7 +180,7 @@ def print_registry_sogaz_2(act_book, mo):
     # Печать итоговой суммы по всем ошибкам
     print_total_sum_error(act_book, u'Итого по всем ошибкам', total_sum)
 
-    act_book.hide_column('M:O')
+    act_book.hide_column('N:P')
     act_book.set_style({'bold': True})
     act_book.write_cell(' ', 'r')
 

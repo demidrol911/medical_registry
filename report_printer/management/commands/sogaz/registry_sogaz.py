@@ -1,284 +1,261 @@
 #! -*- coding: utf-8 -*-
 
-from django.db.models import Sum, Count, Q
+from django.db.models import Q
 from tfoms import func
-from tfoms.models import ProvidedService, Sanction
+from func_sogaz import (
+    calculated_money, calculated_capitation,
+    get_services, calculated_services,
+    get_service_pa,
+
+    ACCEPTED_CRITERIA, SANCTION_CRITERIA,
+    CAPITATION_CRITERIA,
+    HOSPITAL_CRITERIA,
+    DAY_HOSPITAL_CRITERIA,
+    POLICLINIC_CRITERIA,
+    AMBULANCE_CRITERIA
+)
+from tfoms.models import Sanction
 
 
-def get_services(year, period, mo_code):
-    return ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
-        event__record__register__is_active=True,
-        event__record__register__organization_code=mo_code
-    )
-
-
-def calculated_capitation(services, term):
-    mo_code = services[0].event.record.register.organization_code
-    sum_capitation = 0
-    if term == 3:
-        capitation_policlinic = func.calculate_capitation_tariff(3, mo_code=mo_code)
-        for group in capitation_policlinic[1]:
-            sum_capitation += group[27] + group[26]
-    if term == 4:
-        capitation_ambulance = func.calculate_capitation_tariff(4, mo_code=mo_code)
-        for group in capitation_ambulance[1]:
-            sum_capitation += group[27] + group[26]
-    return sum_capitation
-
-
-def calculated_money(services, condition, field, is_calculate_capitation=False):
-    if is_calculate_capitation:
-        mo_code = services[0].event.record.register.organization_code
-        capitation_policlinic = func.calculate_capitation_tariff(3, mo_code=mo_code)
-        capitation_ambulance = func.calculate_capitation_tariff(4, mo_code=mo_code)
-        sum_capitation = 0
-        for group in capitation_policlinic[1]:
-            sum_capitation += group[27] + group[26]
-        for group in capitation_ambulance[1]:
-            sum_capitation += group[27] + group[26]
-        print sum_capitation, services.filter(condition).aggregate(sum_value=Sum(field))['sum_value']
-        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] or 0 + sum_capitation
-    else:
-        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] or 0
-
-
-def calculated_invoice(services, condition):
-    return services.filter(condition).aggregate(
-        count_value=Count('id_pk')
-    )['count_value']
-
-
+### Предъявленные реестры счетов
 def calculated_sum_invoiced(services):
-    ### Предъявленные реестры счетов
     sum_dict = dict()
+
+    # Сумма предъявленная по основному тарифу
     sum_dict['sum_tariff'] = calculated_money(
         services,
         condition=Q(),
         field='tariff'
     )
     sum_dict['sum_tariff_other_mo'] = 0
+
+    # Сумма предъявленная рассчётная
     sum_dict['sum_tariff_mo'] = calculated_money(
         services,
-        condition=Q(payment_type=2) & Q(payment_kind=1) & ~Q(event__term=4),
+        condition=ACCEPTED_CRITERIA & CAPITATION_CRITERIA,
         field='accepted_payment',
         is_calculate_capitation=True
     ) + calculated_money(
         services,
-        condition=Q(payment_type__in=[3, 4]) & Q(payment_kind=1) & ~Q(event__term=4),
+        condition=SANCTION_CRITERIA & CAPITATION_CRITERIA,
         field='provided_tariff'
     )
 
-    sum_dict['sum_tariff_all'] = calculated_money(
-        services,
-        condition=Q(payment_type=2) & Q(payment_kind=1) & ~Q(event__term=4),
-        field='accepted_payment',
-        is_calculate_capitation=True
-    ) + calculated_money(
-        services,
-        condition=Q(payment_type__in=[3, 4]) & Q(payment_kind=1) & ~Q(event__term=4),
-        field='provided_tariff'
-    )
+    sum_dict['sum_tariff_all'] = sum_dict['sum_tariff_mo']
 
     # Предъявленные реестры счетов за стационар
-    sum_dict['count_hosp'] = calculated_invoice(
+    sum_dict['count_hosp'] = calculated_services(
         services,
-        condition=Q(event__term=1)
+        condition=HOSPITAL_CRITERIA
     )
     sum_dict['sum_tariff_hosp'] = calculated_money(
         services,
-        condition=Q(event__term=1),
+        condition=HOSPITAL_CRITERIA,
         field='tariff'
     )
 
     # Предъяыленные реестры счетов за дневной стационар
-    sum_dict['count_day_hosp'] = calculated_invoice(
+    sum_dict['count_day_hosp'] = calculated_services(
         services,
-        condition=Q(event__term=2)
+        condition=DAY_HOSPITAL_CRITERIA
     )
     sum_dict['sum_tariff_day_hosp'] = calculated_money(
         services,
-        condition=Q(event__term=2),
+        condition=DAY_HOSPITAL_CRITERIA,
         field='tariff'
     )
 
     # Предъявленные реестры счетов за поликлинику
-    sum_dict['count_policlinic'] = calculated_invoice(
+    sum_dict['count_policlinic'] = calculated_services(
         services,
-        condition=Q(event__term=3) | Q(event__term__isnull=True)
+        condition=ACCEPTED_CRITERIA & POLICLINIC_CRITERIA & ~((Q(code__group=19) & Q(code__subgroup__isnull=True))
+           | (Q(code__group=7) & Q(code__subgroup=5)))
+    ) + calculated_services(
+        services,
+        condition=SANCTION_CRITERIA & POLICLINIC_CRITERIA
     )
     sum_dict['sum_tariff_policlinic'] = calculated_money(
         services,
-        condition=Q(event__term=3) | Q(event__term__isnull=True),
+        condition=POLICLINIC_CRITERIA,
         field='tariff'
     )
 
     # Предъявленные реестры счетов по скорой помощи
-    sum_dict['count_ambulance'] = calculated_invoice(
+    sum_dict['count_ambulance'] = calculated_services(
         services,
-        condition=Q(event__term=4)
+        condition=AMBULANCE_CRITERIA
     )
     sum_dict['sum_tariff_ambulance'] = calculated_money(
         services,
-        condition=Q(event__term=4),
+        condition=AMBULANCE_CRITERIA,
         field='tariff'
     )
     return sum_dict
 
 
+### Принятые реестры счетов
 def calculated_sum_accepted(services):
     sum_dict = dict()
-    ### Принятые реестры счетов
+
+    # Сумма принятая к оплате (без подушевого)
     sum_dict['sum_tariff'] = calculated_money(
         services,
-        condition=Q(payment_type=2) & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        condition=ACCEPTED_CRITERIA & CAPITATION_CRITERIA,
         field='accepted_payment'
     )
 
-    ### Подушевое
+    # Подушевое по поликлинике
     sum_dict['sum_policlinic_tariff_capitation'] = calculated_capitation(services, 3)
 
+    # Подушевое по скорой
     sum_dict['sum_ambulance_tariff_capitation'] = calculated_capitation(services, 4)
 
     sum_dict['sum_tariff_other_mo'] = 0
+
+    # Сумма принятая к оплате (с подушевым)
     sum_dict['sum_tariff_mo'] = calculated_money(
         services,
-        condition=Q(payment_type=2) & Q(payment_kind=1) & ~Q(event__term__pk=4),
-        field='accepted_payment',
-        is_calculate_capitation=True
-    )
-    sum_dict['count_all'] = calculated_invoice(
-        services,
-        condition=Q(payment_type=2) & ~((Q(code__group=19) & Q(code__subgroup__isnull=True)) | (Q(code__group=7) & Q(code__subgroup=5)))
-    )
-    sum_dict['sum_tariff_all'] = calculated_money(
-        services,
-        condition=Q(payment_type=2) & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        condition=ACCEPTED_CRITERIA & CAPITATION_CRITERIA,
         field='accepted_payment',
         is_calculate_capitation=True
     )
 
-    # Принятые реестры счетов за стационар
-    sum_dict['count_hosp'] = calculated_invoice(
+    # Количество принятых услуг (в акте)
+    sum_dict['count_all'] = calculated_services(
         services,
-        condition=Q(payment_type__in=[2, 4]) & Q(event__term=1)
+        condition=ACCEPTED_CRITERIA & ~(
+            (Q(code__group=19) & Q(code__subgroup__isnull=True))
+            | (Q(code__group=7) & Q(code__subgroup=5))
+        )
+    )
+    sum_dict['sum_tariff_all'] = sum_dict['sum_tariff_mo']
+
+    # Принятые реестры счетов за стационар
+    sum_dict['count_hosp'] = calculated_services(
+        services,
+        condition=ACCEPTED_CRITERIA & HOSPITAL_CRITERIA
     )
     sum_dict['sum_tariff_hosp'] = calculated_money(
         services,
-        condition=Q(payment_type__in=[2, 4]) & Q(event__term=1),
+        condition=ACCEPTED_CRITERIA & HOSPITAL_CRITERIA,
         field='accepted_payment'
     )
 
     # Принятые реестры отчётов за дневной стационар
-    sum_dict['count_day_hosp'] = calculated_invoice(
+    sum_dict['count_day_hosp'] = calculated_services(
         services,
-        condition=Q(payment_type__in=[2, 4]) & Q(event__term=2)
+        condition=ACCEPTED_CRITERIA & DAY_HOSPITAL_CRITERIA
     )
     sum_dict['sum_tariff_day_hosp'] = calculated_money(
         services,
-        condition=Q(payment_type__in=[2, 4]) & Q(event__term=2),
+        condition=ACCEPTED_CRITERIA & DAY_HOSPITAL_CRITERIA,
         field='accepted_payment'
     )
 
     # Принятые реестры отчётов за поликлинику
-    sum_dict['count_policlinic'] = calculated_invoice(
+    sum_dict['count_policlinic'] = calculated_services(
         services,
-        condition=Q(payment_type=2) & (Q(event__term=3) | Q(event__term__isnull=True))
+        condition=ACCEPTED_CRITERIA & POLICLINIC_CRITERIA & ~((Q(code__group=19) & Q(code__subgroup__isnull=True))
+           | (Q(code__group=7) & Q(code__subgroup=5)))
     )
     sum_dict['sum_tariff_policlinic'] = calculated_money(
         services,
-        condition=Q(payment_type=2) & (Q(event__term=3) | Q(event__term__isnull=True)) & Q(payment_kind=1),
+        condition=ACCEPTED_CRITERIA & POLICLINIC_CRITERIA & CAPITATION_CRITERIA,
         field='accepted_payment'
     ) + calculated_capitation(services, 3)
 
     return sum_dict
 
 
+ ### Не принятые к оплате
 def calculated_sum_sanction(services):
-    ### Не принятые к оплате
     sum_dict = dict()
+    pa_list = get_service_pa(services)
+    PA_CRITERIA = Q(pk__in=pa_list)
+
+    # Непринятые к оплате (без подушевого)
     sum_dict['sum_tariff'] = calculated_money(
         services,
-        condition=Q(payment_type=3) & Q(payment_kind=1),
+        condition=SANCTION_CRITERIA & CAPITATION_CRITERIA,
         field='provided_tariff'
     )
 
     # Не принятые реестры счетов за стационар
-    sum_dict['count_hosp'] = calculated_invoice(
+    sum_dict['count_hosp'] = calculated_services(
         services,
-        condition=Q(payment_type=3) & Q(event__term=1)
+        condition=SANCTION_CRITERIA & ~PA_CRITERIA & HOSPITAL_CRITERIA
     )
     sum_dict['sum_tariff_hosp'] = calculated_money(
         services,
-        condition=Q(payment_type=3) & Q(event__term=1),
+        condition=SANCTION_CRITERIA & ~PA_CRITERIA & HOSPITAL_CRITERIA,
         field='provided_tariff'
     )
 
     # Не принятые реестры за дневной стационар
-    sum_dict['count_day_hosp'] = calculated_invoice(
+    sum_dict['count_day_hosp'] = calculated_services(
         services,
-        condition=Q(payment_type=3) & Q(event__term=2)
+        condition=SANCTION_CRITERIA & ~PA_CRITERIA & DAY_HOSPITAL_CRITERIA
     )
     sum_dict['sum_tariff_day_hosp'] = calculated_money(
         services,
-        condition=Q(payment_type=3) & Q(event__term=2),
+        condition=SANCTION_CRITERIA & ~PA_CRITERIA & DAY_HOSPITAL_CRITERIA,
         field='provided_tariff'
     )
 
     # Не принятые реестры за поликлинику
-    sum_dict['count_policlinic'] = calculated_invoice(
+    sum_dict['count_policlinic'] = calculated_services(
         services,
-        condition=Q(payment_type=3) & (Q(event__term=3) | Q(event__term__isnull=True))
+        condition=SANCTION_CRITERIA & POLICLINIC_CRITERIA
     )
     sum_dict['sum_tariff_policlinic'] = calculated_money(
         services,
-        condition=Q(payment_type=3) & (Q(event__term=3) | Q(event__term__isnull=True)) & Q(payment_kind=1),
+        condition=SANCTION_CRITERIA & POLICLINIC_CRITERIA & CAPITATION_CRITERIA,
         field='provided_tariff'
     )
 
     # Не принятые услуги сверх объема
     sum_dict['sum_tariff_pa'] = calculated_money(
         services,
-        condition=Q(payment_type=4),
+        condition=PA_CRITERIA,
         field='provided_tariff'
     )
 
     # Не принятые услуги сверх объёма за стационар
     sum_dict['sum_tariff_hosp_pa'] = calculated_money(
         services,
-        condition=Q(payment_type=4) & Q(event__term=1),
+        condition=PA_CRITERIA & HOSPITAL_CRITERIA,
         field='provided_tariff'
     )
 
     # Не принятые услуги сверх объёма за дневной стационар
     sum_dict['sum_tariff_day_hosp_pa'] = calculated_money(
         services,
-        condition=Q(payment_type=4) & Q(event__term=2),
+        condition=PA_CRITERIA & DAY_HOSPITAL_CRITERIA,
         field='provided_tariff'
     )
 
     # Не принятые услуги сверх объёма за поликлинику
     sum_dict['sum_tariff_policlinic_pa'] = calculated_money(
         services,
-        condition=Q(payment_type=4) & (Q(event__term=3) | Q(event__term__isnull=True)),
+        condition=PA_CRITERIA & POLICLINIC_CRITERIA,
         field='provided_tariff'
     )
 
     # Не подлежит оплате
-    sum_dict['count_all'] = calculated_invoice(
+    sum_dict['count_all'] = calculated_services(
         services,
-        condition=Q(payment_type=3)
+        condition=SANCTION_CRITERIA
     )
     sum_dict['sum_tariff_all'] = calculated_money(
         services,
-        condition=Q(payment_type=3) & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        condition=SANCTION_CRITERIA & CAPITATION_CRITERIA,
         field='provided_tariff'
     )
 
     return sum_dict
 
 
+### Услуги снятые с оплаты
 def get_sanction_info(services, condition):
     services_data = services.filter(condition).values(
         'pk',
@@ -293,8 +270,8 @@ def get_sanction_info(services, condition):
         'division__code',
         'profile__code'
     ).order_by('event__record__id')
-    services_pk = services.filter(condition).values_list('pk', flat=True)
-    sanctions = Sanction.objects.filter(service__in=services_pk).exclude(error=75).order_by('-service__pk', '-error__weight')
+    services_pk = services.filter(SANCTION_CRITERIA & condition).values_list('pk', flat=True)
+    sanctions = Sanction.objects.filter(service__in=services_pk).order_by('-service__pk', '-error__weight')
     sanctions_data = dict()
     for sanction in sanctions:
         if sanction.service.pk not in sanctions_data:
@@ -302,12 +279,12 @@ def get_sanction_info(services, condition):
 
     sum_tariff = calculated_money(
         services,
-        condition=condition & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        condition=Q(payment_type=3) & condition & CAPITATION_CRITERIA,
         field='provided_tariff'
     )
-    count = calculated_invoice(
+    count = calculated_services(
         services,
-        condition=condition,
+        condition=Q(payment_type=3) & condition,
     )
     return {
         'services': services_data,
@@ -317,6 +294,7 @@ def get_sanction_info(services, condition):
     }
 
 
+### Распечатка услуг снятых с оплаты
 def print_sanction(act_book, data, capitation_events, title, handbooks):
     act_book.set_style()
     act_book.write_cell('', 'r')
@@ -387,28 +365,31 @@ def print_registry_sogaz_1(act_book, mo):
 
     mo_name = func.get_mo_info(mo)['name']
     services = get_services(func.YEAR, func.PERIOD, mo)
+    pa_list = get_service_pa(services)
+    PA_CRITERIA = Q(pk__in=pa_list)
     invoiced = calculated_sum_invoiced(services)
     accepted = calculated_sum_accepted(services)
     sanction = calculated_sum_sanction(services)
     hospital_sanction_info = get_sanction_info(
         services,
-        condition=Q(payment_type=3) & Q(event__term=1)
+        condition=HOSPITAL_CRITERIA & ~PA_CRITERIA
     )
     day_hospital_sanction_info = get_sanction_info(
         services,
-        condition=Q(payment_type=3) & Q(event__term=2)
+        condition=DAY_HOSPITAL_CRITERIA & ~PA_CRITERIA
     )
     policlinic_sanction_info = get_sanction_info(
         services,
-        condition=Q(payment_type=3) & (Q(event__term=3) | Q(event__term__isnull=True))
+        condition=POLICLINIC_CRITERIA & ~PA_CRITERIA
     )
     ambulance_sanction_info = get_sanction_info(
         services,
-        condition=Q(payment_type=3) & Q(event__term=4)
+        condition=AMBULANCE_CRITERIA & ~PA_CRITERIA
     )
+
     pa_sanction_info = get_sanction_info(
         services,
-        condition=Q(payment_type=4)
+        condition=PA_CRITERIA
     )
 
     capitation_events = func.get_capitation_events(mo_code=mo)

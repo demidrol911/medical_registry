@@ -1,46 +1,19 @@
 #! -*- coding: utf-8 -*-
-from django.core.management.base import BaseCommand
 from report_printer.const import MONTH_NAME
 from tfoms import func
-from medical_service_register.path import REESTR_DIR, BASE_DIR
-from report_printer.excel_writer import ExcelWriter
-from tfoms.models import ProvidedService, Sanction
-from django.db.models import Sum, Count, Q
+from tfoms.models import Sanction
+from django.db.models import Q
+from func_sogaz import (
+    calculated_money, get_services, calculated_services,
 
-
-def get_services(year, period, mo_code):
-    return ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
-        event__record__register__is_active=True,
-        event__record__register__organization_code=mo_code
-    )
-
-
-def calculated_money(services, condition, field, is_calculate_capitation=False):
-    if is_calculate_capitation:
-        mo_code = services[0].event.record.register.organization_code
-        capitation_policlinic = func.calculate_capitation_tariff(3, mo_code=mo_code)
-        capitation_ambulance = func.calculate_capitation_tariff(4, mo_code=mo_code)
-        sum_capitation = 0
-        for group in capitation_policlinic[1]:
-            sum_capitation += group[27] + group[26]
-        for group in capitation_ambulance[1]:
-            sum_capitation += group[27] + group[26]
-        print sum_capitation
-        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] or 0 + sum_capitation
-    else:
-        return services.filter(condition).aggregate(sum_value=Sum(field))['sum_value'] or 0
-
-
-def calculated_services(services, condition):
-    return services.filter(condition).aggregate(
-        count_value=Count('id_pk')
-    )['count_value']
+    SANCTION_CRITERIA,
+    ACCEPTED_CRITERIA,
+    CAPITATION_CRITERIA
+)
 
 
 def get_sanctions_error(services):
-    services_pk = services.filter(payment_type__in=[3, 4]).values_list('pk', flat=True)
+    services_pk = services.filter(SANCTION_CRITERIA).values_list('pk', flat=True)
     sanctions = Sanction.objects.filter(service__in=services_pk).order_by('-service__pk', '-error__weight')
     sanctions_data = dict()
     sanctions_error = []
@@ -52,6 +25,7 @@ def get_sanctions_error(services):
     return sanctions_error
 
 
+### Проверяет наличие указанных ошибок в реестре
 def has_error(services, error_list, handbooks):
     sanction_error = get_sanctions_error(services)
     for error in sanction_error:
@@ -68,43 +42,52 @@ def print_registry_sogaz_3(act_book, mo):
     mo_name = func.get_mo_info(mo)['name']
 
     services = get_services(func.YEAR, func.PERIOD, mo)
+
+    # Количество поданных услуг
     count_invoiced = calculated_services(
         services,
-        condition=Q()
+        condition=ACCEPTED_CRITERIA & ~((Q(code__group=19) & Q(code__subgroup__isnull=True))
+           | (Q(code__group=7) & Q(code__subgroup=5)))
+    ) + calculated_services(
+        services,
+        condition=SANCTION_CRITERIA
     )
+
+    # Cумма поданная к оплате (расчётная)
     sum_invoiced = calculated_money(
         services,
-        condition=Q(payment_type=2) & Q(payment_kind=1) & ~Q(event__term=4),
+        condition=ACCEPTED_CRITERIA & CAPITATION_CRITERIA,
         field='accepted_payment',
         is_calculate_capitation=True
     ) + calculated_money(
         services,
-        condition=Q(payment_type__in=[3, 4]) & Q(payment_kind=1) & ~Q(event__term=4),
+        condition=SANCTION_CRITERIA & CAPITATION_CRITERIA,
         field='provided_tariff'
     )
 
     has_su = has_error(services, ['SU'], handbooks)
     has_nl = has_error(services, ['NL', 'TP', 'L1', 'L2'], handbooks)
 
+    # Количество услуг снятых с оплаты
     count_sanction = calculated_services(
         services,
-        condition=Q(payment_type__in=[3, 4])
+        condition=SANCTION_CRITERIA
     )
+
+    # Сумма снятая с оплаты
     sum_sanction = calculated_money(
         services,
-        condition=Q(payment_type__in=[3, 4]) & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        condition=SANCTION_CRITERIA & CAPITATION_CRITERIA,
         field='provided_tariff'
     )
-    sum_sanction_total = calculated_money(
-        services,
-        condition=Q(payment_type__in=[3, 4]) & Q(payment_kind=1) & ~Q(event__term__pk=4),
-        field='provided_tariff'
-    )
+    sum_sanction_total = sum_sanction
     sum_sanction_other_mo = 0
     sum_sanction_repeat_mek = 0
+
+    # Сумма принятая к оплате
     sum_accepted = calculated_money(
         services,
-        condition=Q(payment_type__in=[2, 4]) & Q(payment_kind=1) & ~Q(event__term__pk=4),
+        condition=ACCEPTED_CRITERIA & CAPITATION_CRITERIA,
         field='accepted_payment',
         is_calculate_capitation=True
     )
