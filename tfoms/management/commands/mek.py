@@ -154,7 +154,7 @@ def get_services(register_element):
                 END
         ) else 0 end as alternate_tariff,
         medical_organization.is_agma_cathedra,
-        medical_organization.level as level,
+        department.level as level,
         patient.insurance_policy_fk as patient_policy,
         patient.birthdate as patient_birthdate,
         person.deathdate as person_deathdate,
@@ -2216,6 +2216,40 @@ def sanctions_on_wrong_age_examination_children_difficult(register_element):
     return get_sanction_tuple(services, 35)
 
 
+def sanctions_on_wrong_gender_examination(register_element):
+    query = """
+            select
+            distinct ps.id_pk
+            from medical_register mr
+            JOIN medical_register_record mrr
+                 ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                 ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                 ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms
+                 ON ms.id_pk = ps.code_fk
+            JOIN patient pt
+                 ON mrr.patient_fk = pt.id_pk
+            where mr.is_active
+                 and mr.year = %(year)s
+                 and mr.period = %(period)s
+                 and mr.organization_code = %(organization)s
+                 and ms.group_fk in (11, 12, 13, 9, 7)
+                 and (ms.examination_primary or ms.examination_final)
+                 and ms.is_cost
+                 and pt.gender_fk != ms.gender_fk
+                 and ps.payment_type_fk = 2
+            """
+
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    return get_sanction_tuple(services, 41)
+
+
 def drop_duplicate_examination_in_current_register(register_element):
     query = """
         select ps.id_pk
@@ -2450,6 +2484,8 @@ def main():
             sanctions_on_wrong_age_examination_children_adopted(register_element)
             print u'sanctions_on_wrong_age_examination_children_difficult'
             sanctions_on_wrong_age_examination_children_difficult(register_element)
+            print u'sanctions_on_wrong_gender_examination'
+            sanctions_on_wrong_gender_examination(register_element)
             #print u'wrong_examination_attachment'
             #sanctions_on_wrong_examination_attachment(register_element)
             #sanctions_on_incorrect_examination(register_element)
@@ -2717,8 +2753,11 @@ def main():
 
                     single_visit_exception_group = (7, 8, 25, 26, 9, 10, 11, 12,
                                                     13, 14, 15, 16)
-                    accepted_payment = tariff * float(quantity)
-                    tariff *= float(quantity)
+                    if service.service_group in (29, ):
+                        accepted_payment = tariff
+                    else:
+                        accepted_payment = tariff * float(quantity)
+                        tariff *= float(quantity)
 
                     '''
                     if (is_single_visit or service.reason_code == 3) and not \
