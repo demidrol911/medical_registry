@@ -54,7 +54,7 @@ class Command(BaseCommand):
                 total_sum['sum_accepted'] += mo_data['sum_accepted']
 
             # Распечатка итоговой суммы
-            act_book.set_cursor(101, 2)
+            act_book.set_cursor(102, 2)
             act_book.write_cell(total_sum['sum_tariff'], 'c')
             act_book.write_cell(total_sum['sum_invoiced'], 'c')
             act_book.write_cell(total_sum['sum_accepted'])

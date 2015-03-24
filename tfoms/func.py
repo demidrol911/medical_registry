@@ -25,7 +25,7 @@ cur_date = datetime.now()
 
 YEAR = str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
-PERIOD = '02' #('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+PERIOD = '02'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -464,41 +464,6 @@ def calculate_capitation_tariff(term, mo_code):
     result[8][0] = population[5]['men']
     result[9][0] = population[5]['fem']
 
-
-    '''
-    result[0][1] = 620
-    result[1][1] = 632
-
-    result[2][1] = 5704
-    result[3][1] = 5531
-
-    result[4][1] = 16523
-    result[5][1] = 15578
-
-    result[6][0] = 62781
-    result[7][0] = 71024
-
-    result[8][0] = 13633
-    result[9][0] = 33852
-    '''
-
-    '''
-    result[0][1] = 616
-    result[1][1] = 643
-
-    result[2][1] = 5746
-    result[3][1] = 5574
-
-    result[4][1] = 16519
-    result[5][1] = 15605
-
-    result[6][0] = 62449
-    result[7][0] = 70721
-
-    result[8][0] = 13587
-    result[9][0] = 33746
-    '''
-
     # Тариф основной
 
     result[0][5] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
@@ -520,9 +485,12 @@ def calculate_capitation_tariff(term, mo_code):
         result[idx][8] = Decimal(round(result[idx][0]*result[idx][4], 2))
         result[idx][9] = Decimal(round(result[idx][1]*result[idx][5], 2))
         # Повышающий коэффициент для Магдагачей
-        if mo_code == '280029' and term == 4:
+        if mo_code == '280029':
             result[idx][8] *= 2
             result[idx][9] *= 2
+        if mo_code == '280064' and term == 3 and idx in (4, 5):
+            result[idx][8] *= Decimal(1.5)
+            result[idx][9] *= Decimal(1.5)
 
     if term == 3:
         fap = TariffFap.objects.filter(organization__code=mo_code,

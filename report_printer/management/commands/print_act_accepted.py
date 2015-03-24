@@ -15,6 +15,7 @@ from tfoms import func
 from pse_exporter import Command as PseExporter
 from tfoms.models import MedicalService
 from report_printer.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
+import registry_sogaz_new
 from report_printer.management.commands.sogaz import (
     registry_sogaz,
     registry_sogaz_1,
@@ -144,7 +145,8 @@ def print_first_page(act_book, mo, data, data_coefficient,
                 division_title = get_title(func.MEDICAL_SERVICES, division)
                 if group == 20:
                     tariff_profile = MedicalService.objects.get(pk=division).tariff_profile.name
-                    division_title = ' (' + tariff_profile + ')' + division_title
+                    group_code = MedicalService.objects.get(pk=division).vmp_group
+                    division_title = str(group_code) + ' (' + tariff_profile + ')' + division_title
         else:
             division_title = ''
             if term == 1:
@@ -297,7 +299,7 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             -- Подушевое
             case when pe.term_fk = 3 THEN (
                  CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                      WHEN ps.payment_kind_fk = 1 THEN 1
+                      WHEN ps.payment_kind_fk in (1, 3) THEN 1
                  END
                  )
                  WHEN pe.term_fk = 4 THEN 0
@@ -659,7 +661,7 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             -- Подушевое
             case when pe.term_fk = 3 THEN (
                  CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                      WHEN ps.payment_kind_fk = 1 THEN 1
+                      WHEN ps.payment_kind_fk in (1, 3) THEN 1
                  END
                  )
                  WHEN pe.term_fk = 4 THEN 0
@@ -816,6 +818,541 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             order by term, capitation, sub_term, "group", subgroup, division, gender
             """
 
+    query_1 = """
+            --- Все нормальные услуги ---
+            select
+            -- Вид помощи
+            case when pe.term_fk is null then 4
+                 WHEN pe.term_fk = 4 then 5
+                 ELSE pe.term_fk
+                 end as term,
+
+            -- Подушевое
+            case when pe.term_fk = 3 THEN (
+                 CASE WHEN ps.payment_kind_fk = 2 THEN 0
+                      WHEN ps.payment_kind_fk = 1 THEN 1
+                 END
+                 )
+                 WHEN pe.term_fk = 4 THEN 0
+                 ELSE 1
+                 END AS capitation,
+
+            case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+                 CASE when pe.term_fk = 3 THEN (
+                           CASE WHEN ms.reason_fk = 1 and
+                           (ms.group_fk = 24 or ms.group_fk is NULL) and
+                           (select count(ps1.id_pk) from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
+                           ) = 1 then 99
+                           else ms.reason_fk END
+                      )
+                      when pe.term_fk = 2 then msd.term_fk
+                      ELSE 0
+                      END
+                 )
+                 WHEN ms.group_fk in (25, 26) THEN 23
+                 ELSE 0
+                 END AS sub_term,
+
+            -- Группы услуг
+            case when ms.group_fk is NULL THEN 0
+                 WHEN ms.group_fk = 24 THEN 0
+                 ELSE ms.group_fk
+                 END as "group",
+
+            -- Подгруппы
+            CASE when ms.subgroup_fk IS NULL THEN 0
+                 ELSE 1
+                 END AS subgroup,
+
+            -- Отделения
+            case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+                 case WHEn pe.term_fk = 3 THEN ms.division_fk
+                      when pe.term_fk = 4 then ms.division_fk
+                      when pe.term_fk = 2 then ms.tariff_profile_fk
+                      when pe.term_fk = 1 then ms.tariff_profile_fk
+                      end
+                )
+                ELSE (
+                   case when ms.subgroup_fk is null THEN ms.id_pk
+                        else ms.subgroup_fk
+                        END
+                )
+                END AS division,
+
+            -- Пол
+            CASE WHEN ms.subgroup_fk in (8, 16, 9, 10, 24, 25) THEN pt.gender_fk
+                 ELSE 0
+                 END AS gender,
+
+
+            -- Рассчёт --
+            count(distinct CASE WHEN ms.code ilike '0%' THEN pt.id_pk END) AS patient_adult,
+            count(distinct CASE WHEN ms.code ilike '1%' THEN pt.id_pk END) AS patient_child,
+
+            count(distinct CASE WHEN ms.code ilike '0%' and ms.reason_fk = 1 THEN pe.id_pk END) AS treatment_adult,
+            count(distinct CASE WHEN ms.code ilike '1%' and ms.reason_fk = 1 THEN pe.id_pk END) AS treatment_child,
+
+            count(CASE WHEN ms.code ilike '0%' THEN ps.id_pk END) AS service_adult,
+            count(CASE WHEN ms.code ilike '1%' THEN ps.id_pk END) AS service_child,
+
+            sum(CASE WHEN ms.code ilike '0%' THEN ps.quantity ELSE 0 END) AS quantity_adult,
+            sum(CASE WHEN ms.code ilike '1%' THEN ps.quantity ELSE 0 END) AS quantity_child,
+
+            sum(CASE WHEN ms.code ilike '0%' THEN ps.tariff ELSE 0 END) AS tariff_adult,
+            sum(CASE WHEN ms.code ilike '1%' THEN ps.tariff ELSE 0 END) AS tariff_child,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            sum(round(CASE WHEN ms.code ilike '0%'
+                     THEN (CASE when ps.payment_kind_fk = 2 or pe.term_fk = 4 THEN 0
+                           ELSE (
+                                 CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
+                                      WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
+                                      WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
+                                 END)
+                           END
+                     )
+                     ELSE 0 END, 2)) AS accepted_payment_adult,
+            sum(round(CASE WHEN ms.code ilike '1%'
+                     THEN (CASE when ps.payment_kind_fk = 2 or pe.term_fk = 4 THEN 0
+                           ELSE (
+                                 CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
+                                      WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
+                                      WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
+                                 END)
+                           END
+                     )
+                     ELSE 0 END, 2)) AS accepted_payment_children
+
+            from medical_register mr
+            JOIN medical_register_record mrr
+                ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                ON ps.event_fk=pe.id_pk
+            JOIN medical_organization mo
+                ON ps.organization_fk=mo.id_pk
+            JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+            JOIN patient pt
+                ON pt.id_pk = mrr.patient_fk
+            left join medical_division msd
+                on msd.id_pk = pe.division_fk
+            where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                  and mo.code = '{mo}'
+                  and (ms.group_fk not in (7, 19, 27) or ms.group_fk is null)
+                  and ps.payment_type_fk = 3
+            group by term, capitation,  sub_term, "group", subgroup, division, gender
+
+            --- Диспансеризация взрослых ---
+            union
+             select
+                -- Вид помощи
+                4 as term,
+
+                -- Подушевое
+                1 AS capitation,
+
+                -- Место или причина
+                (select ms1.subgroup_fk from
+                       provided_service ps1
+                       JOIN medical_service ms1 on ps1.code_fk = ms1.id_pk
+                       WHERE ps1.event_fk = ps.event_fk
+                             and ps1.payment_type_fk = 2
+                             and ms1.code in ('019021',
+                                              '019023',
+                                              '019022',
+                                              '019024'))
+                       as sub_term,
+
+                -- Группы услуг
+                23 as "group",
+
+                -- Подгруппы
+                0 AS subgroup,
+
+                -- Отделения
+                ms.id_pk AS division,
+
+                -- Пол
+                0 AS gender,
+
+
+                 -- Рассчёт --
+                count(distinct CASE WHEN ms.code ilike '0%' THEN mrr.patient_fk END) AS patinet_adult,
+                0,
+
+                0,
+                0,
+
+                count(CASE WHEN ms.code ilike '0%' THEN ps.id_pk END) AS service_adult,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%' THEN ps.quantity ELSE 0 END) AS quantity_adult,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%' THEN ps.tariff ELSE 0 END) AS tariff_adult,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                sum(CASE WHEN ms.code like '0%' and psc.coefficient_fk = 5 THEN 0.07*ps.tariff ELSE 0 END),
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%'
+                     THEN (
+                         CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
+                              WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
+                              WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
+                         END
+                     )
+                     ELSE 0 END) AS accepted_payment_adult,
+                0
+
+                 from medical_register mr
+                 JOIN medical_register_record mrr
+                    ON mr.id_pk=mrr.register_fk
+                 JOIN provided_event pe
+                    ON mrr.id_pk=pe.record_fk
+                 JOIN provided_service ps
+                    ON ps.event_fk=pe.id_pk
+                 JOIN medical_organization mo
+                    ON ps.organization_fk=mo.id_pk
+                 JOIN medical_service ms
+                    ON ms.id_pk = ps.code_fk
+                 left join provided_service_coefficient psc
+                    on psc.service_fk = ps.id_pk
+                 where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                      and mo.code = '{mo}'
+                 AND ms.group_fk = 7 and ms.code in (
+                        '019021', '019023', '019022', '019024',
+                        '019001', '019020'
+                 )
+                 and ps.payment_type_fk = 3
+
+            group by term, capitation,  sub_term, "group", subgroup, division, gender
+            union
+
+            --- Стоматология ---
+            select
+                -- Вид помощи
+                7 as term,
+
+                -- Подушевое
+                1 AS capitation,
+
+                -- Место или причина
+                0 as sub_term,
+
+                -- Группы услуг
+                19 as "group",
+
+                -- Подгруппы
+                1 AS subgroup,
+
+                -- Отделения
+                999 AS division,
+
+                -- Пол
+                0 AS gender,
+
+                -- Рассчёт --
+                count(distinct CASE WHEN ms.code ilike '0%' THEN mrr.patient_fk END) AS patinet_adult,
+                count(distinct CASE WHEN ms.code ilike '1%' THEN mrr.patient_fk END) AS patinet_child,
+
+                count(distinct CASE WHEN ms.code ilike '0%' and ms.subgroup_fk = 12 THEN ps.event_fk END) AS treatment_adult,
+                count(distinct CASE WHEN ms.code ilike '1%' and ms.subgroup_fk = 12 THEN ps.event_fk END) AS treatment_child,
+
+                count(CASE WHEN ms.code ilike '0%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_adult,
+                count(CASE WHEN ms.code ilike '1%' and ms.subgroup_fk is not null THEN ps.id_pk END) AS service_child,
+
+                sum(CASE WHEN ms.code ilike '0%' THEN ps.quantity*ms.uet
+                    ELSE 0 END) as quantity_adult,
+                sum(CASE WHEN ms.code ilike '1%' THEN ps.quantity*ms.uet
+                    ELSE 0 END) as quantity_children,
+
+                sum(round(CASE WHEN ms.code ilike '0%' THEN ps.tariff ELSE 0 END, 2)) as tariff_adult,
+                sum(round(CASE WHEN ms.code ilike '1%' THEN ps.tariff ELSE 0 END, 2)) as tariff_children,
+
+                0,
+                0,
+
+                sum(CASE WHEN ms.code ilike '0%' and ms.subgroup_fk = 17
+                          THEN (SELECT sum(ps1.tariff*0.2)
+                          from provided_service ps1
+                               join provided_service_coefficient psc
+                                   on ps1.id_pk = psc.service_fk and psc.coefficient_fk = 4
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END),
+                sum(CASE WHEN ms.code ilike '1%' and ms.subgroup_fk = 17
+                          THEN (SELECT sum(ps1.tariff*0.2)
+                          from provided_service ps1
+                               join provided_service_coefficient psc
+                                   on ps1.id_pk = psc.service_fk and psc.coefficient_fk = 4
+                               where ps1.event_fk = ps.event_fk
+                                     and ps1.start_date = ps.start_date
+                                     and ps1.end_date = ps.end_date)
+                          ELSE 0 END),
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                0,
+                0,
+
+                sum(round(CASE WHEN ms.code ilike '0%' THEN ps.provided_tariff
+                          ELSE 0 END, 2)) as accepted_payment_adult,
+                sum(round(CASE WHEN ms.code ilike '1%' THEN ps.provided_tariff
+                          ELSE 0 END, 2)) as accepted_payment_children
+
+                 from medical_register mr
+                 JOIN medical_register_record mrr
+                    ON mr.id_pk=mrr.register_fk
+                 JOIN provided_event pe
+                    ON mrr.id_pk=pe.record_fk
+                 JOIN provided_service ps
+                    ON ps.event_fk=pe.id_pk
+                 JOIN medical_organization mo
+                    ON ps.organization_fk=mo.id_pk
+                 JOIN medical_service ms
+                    ON ms.id_pk = ps.code_fk
+                 where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                      and mo.code = '{mo}'
+                 AND ms.group_fk = 19
+                 and ps.payment_type_fk = 3
+
+                 group by term, capitation,  sub_term, "group", subgroup, division, gender
+
+            order by term, capitation, sub_term, "group", subgroup, division, gender
+            """
+
+    query_coefficient_1 = """
+            select
+            -- Вид помощи
+            case when pe.term_fk is null then 4
+                 WHEN pe.term_fk = 4 then 5
+                 ELSE pe.term_fk
+                 end as term,
+
+            -- Подушевое
+            case when pe.term_fk = 3 THEN (
+                 CASE WHEN ps.payment_kind_fk = 2 THEN 0
+                      WHEN ps.payment_kind_fk = 1 THEN 1
+                 END
+                 )
+                 WHEN pe.term_fk = 4 THEN 0
+                 ELSE 1
+                 END AS capitation,
+
+            -- Место или причина
+            case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+             CASE when pe.term_fk = 3 THEN (
+                       CASE WHEN ms.reason_fk = 1 and
+                       (ms.group_fk = 24 or ms.group_fk is NULL) and
+                       (select count(ps1.id_pk) from provided_service ps1
+                       join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                       where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
+                       ) = 1 then 99
+                       else ms.reason_fk END
+                  )
+                  when pe.term_fk = 2 then msd.term_fk
+                  ELSE 0
+                  END
+             )
+             WHEN ms.group_fk in (25, 26) THEN 23
+             ELSE 0
+             END AS sub_term,
+
+            -- Группы услуг
+            case when ms.group_fk is NULL THEN 0
+                 WHEN ms.group_fk = 24 THEN 0
+                 ELSE ms.group_fk
+                 END as "group",
+
+            -- Подгруппы
+            CASE when ms.subgroup_fk IS NULL THEN 0
+                 ELSE 1
+                 END AS subgroup,
+
+            -- Отделения
+            case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
+                 case WHEn pe.term_fk = 3 THEN ms.division_fk
+                      when pe.term_fk = 4 then ms.division_fk
+                      when pe.term_fk = 2 then ms.tariff_profile_fk
+                      when pe.term_fk = 1 then ms.tariff_profile_fk
+                      end
+                )
+                ELSE (
+                   case when ms.subgroup_fk is null THEN ms.id_pk
+                        else ms.subgroup_fk
+                        END
+                )
+                END AS division,
+
+            -- Пол
+            CASE WHEN ms.subgroup_fk in (8, 16, 9, 10, 24, 25) THEN pt.gender_fk
+                 ELSE 0
+                 END AS gender,
+
+
+            -- Рассчёт --
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+
+            0,
+            0,
+            ---
+
+            sum(round(CASE WHEN  ms.code like '0%' and psc.coefficient_fk = 7
+                     AND ((select count(distinct psc1.id_pk) from provided_service_coefficient psc1
+                                JOIN tariff_coefficient tc1 ON tc1.id_pk = psc1.coefficient_fk
+                                where psc1.service_fk = ps.id_pk AND tc1.id_pk in (8, 9, 10, 11, 12)) >= 1)
+                                THEN round(0.25*ps.tariff, 2) * (
+                    select   tc1.value from provided_service_coefficient psc1
+                                JOIN tariff_coefficient tc1 ON tc1.id_pk = psc1.coefficient_fk
+                                where psc1.service_fk = ps.id_pk AND tc1.id_pk in (8, 9, 10, 11, 12)
+                     ) ELSE 0 END, 2)) +
+
+            sum(round(CASE WHEN  ms.code like '0%' and psc.coefficient_fk = 7
+
+                                THEN  round(0.25*ps.tariff, 2)
+                     ELSE 0  END, 2)),
+
+             sum(round(CASE WHEN  ms.code like '1%' and psc.coefficient_fk = 7
+                     AND ((select count(distinct psc1.id_pk) from provided_service_coefficient psc1
+                                JOIN tariff_coefficient tc1 ON tc1.id_pk = psc1.coefficient_fk
+                                where psc1.service_fk = ps.id_pk AND tc1.id_pk in (8, 9, 10, 11, 12)) >= 1)
+                                THEN  round(0.25*ps.tariff, 2) * (
+                    select   tc1.value from provided_service_coefficient psc1
+                                JOIN tariff_coefficient tc1 ON tc1.id_pk = psc1.coefficient_fk
+                                where psc1.service_fk = ps.id_pk AND tc1.id_pk in (8, 9, 10, 11, 12)
+                     ) ELSE 0 END, 2)) +
+
+            sum(round(CASE WHEN  ms.code like '1%' and psc.coefficient_fk = 7
+
+                                THEN  round(0.25*ps.tariff, 2)
+                     ELSE 0  END, 2)),
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 4 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 4 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 5 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 5 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+
+            0,
+            0,
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 14 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 14 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 15 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 15 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk in (8, 9, 10, 11, 12) THEN round(tc.value*ps.tariff, 2) ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk in (8, 9, 10, 11, 12) THEN round(tc.value*ps.tariff, 2) ELSE 0 END),
+
+            ---
+            0,
+            0
+
+            from medical_register mr
+            JOIN medical_register_record mrr
+                ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                ON ps.event_fk=pe.id_pk
+            JOIN medical_organization mo
+                ON ps.organization_fk=mo.id_pk
+            JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+            JOIN medical_organization dep ON ps.department_fk = dep.id_pk
+            join patient pt on pt.id_pk = mrr.patient_fk
+            left join medical_division msd
+                on msd.id_pk = pe.division_fk
+            join provided_service_coefficient psc
+                ON psc.service_fk = ps.id_pk
+            join tariff_coefficient tc
+                on tc.id_pk = psc.coefficient_fk
+            where mr.is_active and mr.year='{year}' and mr.period='{period}'
+                  and mo.code = '{mo}'
+                  and (ms.group_fk not in (27, 19, 7) or ms.group_fk is null)
+                  and ps.payment_type_fk = 3
+            group by term, capitation,  sub_term, "group", subgroup, division, gender
+            order by term, capitation, sub_term, "group", subgroup, division, gender
+            """
+
     print u'='*10, u'Рассчёт сумм по отделениям', u'='*10
     data = run(query.format(
         year=func.YEAR,
@@ -850,7 +1387,7 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
             -- Подушевое
             case when pe.term_fk = 3 THEN (
                  CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                      WHEN ps.payment_kind_fk = 1 THEN 1
+                      WHEN ps.payment_kind_fk in (1, 3) THEN 1
                  END
                  )
                  WHEN pe.term_fk = 4 THEN 0
@@ -1249,7 +1786,7 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
         -- Подушевое
         case when pe.term_fk = 3 THEN (
              CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                  WHEN ps.payment_kind_fk = 1 THEN 1
+                  WHEN ps.payment_kind_fk in (1, 3) THEN 1
              END
              )
              WHEN pe.term_fk = 4 THEN 0
@@ -1663,8 +2200,10 @@ def print_errors_page(act_book, mo, capitation_events, treatment_events, data):
 
             for index, is_capitation in failure_causes_group[failure_cause_id][error_id]:
                 service = services_mek[index]
-                if failure_cause_id == 65 and service['event_id'] in treatment_events:
-                    print service['event_id']
+                if failure_cause_id == 127: ##--and service['event_id'] in treatment_events and service['event_id'] not in unique_event:
+                    print service['id'], service['code'], service['name'], service['event_id']
+                    print unique_event
+                    #print service['event_id'], service['id']
                 # Словарь, в котором описываются условия разбивки услуг (по стационару, поликлинике и т. д.)
                 # и переопределяются значения рассчёта по умолчанию
                 rules_dict = [
@@ -1739,8 +2278,12 @@ def print_errors_page(act_book, mo, capitation_events, treatment_events, data):
                             value = value_default[column_key]
                         total_sum_failure[term][column_key] += value
 
-                if service['event_id'] not in unique_event:
-                    unique_event.append(service['event_id'])
+                if service['event_id'] in treatment_events and service['subgroup'] == 12 and service['term'] == 3 and service['group'] == 19:
+                    if service['event_id'] not in unique_event:
+                        unique_event.append(service['event_id'])
+                elif service['event_id'] in treatment_events and (service['term'] == 3 and not service['group'] == 19):
+                    if service['event_id'] not in unique_event:
+                        unique_event.append(service['event_id'])
 
         # Рассчёт колонки с итоговой суммой
         for term in total_sum_failure:
@@ -2501,9 +3044,9 @@ class Command(BaseCommand):
 
                 registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo)
 
-                if status == 8:
-                    registry_sogaz.print_registry_sogaz_1(act_book=act_book, mo=mo)
-                    registry_sogaz_2.print_registry_sogaz_3(act_book=act_book, mo=mo)
+                #if status == 8:
+                registry_sogaz_new.print_registry_sogaz_1(act_book=act_book, mo=mo)
+                registry_sogaz_2.print_registry_sogaz_3(act_book=act_book, mo=mo)
 
                 if status == 8:
                     PseExporter().handle(*[mo, 6])
