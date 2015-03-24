@@ -154,7 +154,7 @@ def get_services(register_element):
                 END
         ) else 0 end as alternate_tariff,
         medical_organization.is_agma_cathedra,
-        department.level as level,
+        medical_organization.level as level,
         patient.insurance_policy_fk as patient_policy,
         patient.birthdate as patient_birthdate,
         person.deathdate as person_deathdate,
@@ -2733,6 +2733,28 @@ def main():
                             provided_tariff += round(provided_tariff * 1, 2)
                             ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=15)
+                    # Новые коффициенты по медицинской реабилитации в дневном стационаре
+                    if term == 2:
+                        if service.service_tariff_profile == 50 and \
+                                service.organization_code in ("280064", "280003"):
+                            accepted_payment += round(accepted_payment * 0.2, 2)
+                            provided_tariff += round(provided_tariff * 0.2, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=16)
+
+                        if service.service_tariff_profile == 2 and \
+                                service.organization_code in ("280064", "280003"):
+                            accepted_payment += round(accepted_payment * 0.1, 2)
+                            provided_tariff += round(provided_tariff * 0.1, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=17)
+
+                        if service.service_tariff_profile == 41 and \
+                                service.organization_code in ("280064", "280003"):
+                            accepted_payment += round(accepted_payment * 0.4, 2)
+                            provided_tariff += round(provided_tariff * 0.4, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=18)
 
 
                     '''
