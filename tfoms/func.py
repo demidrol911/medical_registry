@@ -314,6 +314,7 @@ def get_sanctions(mo_code):
         service__event__record__register__period=PERIOD,
         service__event__record__register__is_active=True,
         service__event__record__register__organization_code=mo_code,
+        is_active=True,
         service__payment_type__in=[3, 4],
         type_id=1,
     )
@@ -366,32 +367,37 @@ def get_treatment_events(mo_code):
     select
     distinct pe.id_pk as event_id
     from medical_register mr
-            JOIN medical_register_record mrr
-                ON mr.id_pk=mrr.register_fk
-            JOIN provided_event pe
-                ON mrr.id_pk=pe.record_fk
-            JOIN provided_service ps
-                ON ps.event_fk=pe.id_pk
-            JOIN medical_organization mo
-                ON ps.organization_fk=mo.id_pk
-            JOIN medical_service ms
-                ON ms.id_pk = ps.code_fk
-            JOIN patient pt
-                ON pt.id_pk = mrr.patient_fk
-            left join medical_division msd
-                on msd.id_pk = pe.division_fk
-            where mr.is_active
-                  and mr.year=%(year)s
-                  and mr.period=%(period)s
-                  and mo.code=%(mo)s
-                  AND ((ms.group_fk = 19 and ms.subgroup_fk = 12)
-                         or (pe.term_fk = 3 and ms.reason_fk = 1 and
-                                (ms.group_fk is NULL or ms.group_fk = 24)
-                                and (select count(ps1.id_pk) FROM provided_service ps1
-                                         join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                                         WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24))>1
-                                )
-                              )
+        JOIN medical_register_record mrr
+            ON mr.id_pk=mrr.register_fk
+        JOIN provided_event pe
+            ON mrr.id_pk=pe.record_fk
+        JOIN provided_service ps
+            ON ps.event_fk=pe.id_pk
+        JOIN medical_organization mo
+            ON ps.organization_fk=mo.id_pk
+        JOIN medical_service ms
+            ON ms.id_pk = ps.code_fk
+        JOIN patient pt
+            ON pt.id_pk = mrr.patient_fk
+        left join medical_division msd
+            on msd.id_pk = pe.division_fk
+        where mr.is_active
+           and mr.year=%(year)s
+           and mr.period=%(period)s
+           and mo.code=%(mo)s
+           AND (
+             (ms.group_fk = 19 and ms.subgroup_fk = 12)
+              or (pe.term_fk = 3 and ms.reason_fk = 1 and
+                  (ms.group_fk is NULL or ms.group_fk = 24)
+                    and (
+                      select count(ps1.id_pk)
+                      FROM provided_service ps1
+                      join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                      WHERE ps1.event_fk  = ps.event_fk
+                            and (ms1.group_fk is NULL or ms1.group_fk = 24)
+                      )>1
+                    )
+                  )
     """
     cursor = connection.cursor()
     cursor.execute(query, dict(year=YEAR, period=PERIOD, mo=mo_code))
@@ -446,7 +452,6 @@ def calculate_capitation_tariff(term, mo_code):
     else:
         return False, result
 
-    #print '*', population
     # Чмсленность
 
     result[0][1] = population[1]['men']

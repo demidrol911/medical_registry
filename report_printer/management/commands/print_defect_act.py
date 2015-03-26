@@ -15,53 +15,55 @@ def get_mo_statistics(mo):
             select
             mo.id_pk,
             case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2,20, 32)) then 'hospital'
-                      when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
-                      when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
-                      when T.term = 2 and (T.service_group is null or T.service_group in (17, 28)) then 'day_hospital'
-                      when T.is_policlinic_treatment THEN 'policlinic_disease'
-                      when ((T.service_group IS NULL or T.service_group = 24)
-                           and ((T.term = 3 and T.service_reason in (2, 3, 8))
-                                or (T.term = 3 and  T.service_reason = 1
-                                       and not T.is_policlinic_treatment))) or T.service_group = 4 THEN 'policlinic_priventive'
-                      when T.term = 3 and T.service_reason = 5 or T.service_group = 31 THEN 'policlinic_ambulance'
-                      when T.service_group = 9 and T.service_code in ('019214', '019215', '019216' ,'019217',
-                                                                      '019212', '019201'
-                                                                      ) then 'adult_exam'
-                      when T.term = 4 THEN 'ambulance'
-                      WHEN T.service_group = 29 THEN 'mrt'
-                      WHEN T.service_code in ('049021', '149021') THEN 'gemodialis_policlinic'
-                      WHEN T.service_code in ('049022', '149022') THEN 'peritondialis_policlinic'
-                      WHEN T.service_group = 11
-                           and T.service_code in ('119057', '119058', '119059',
-                                                  '119060', '119061', '119062',
-                                                  '119064', '119065', '119066',
-                                                  '119080', '119081', '119082',
-                                                  '119083', '119084', '119085',
-                                                  '119086', '119087', '119088',
-                                                  '119089', '119090', '119091') THEN 'children_exam'
-                      WHEN T.service_group = 15
-                           and T.service_code in ('119111', '119110', '119109',
-                                                  '119107', '119106', '119105',
-                                                  '119104', '119103', '119102',
-                                                  '119101', '119119', '119120') THEN 'prelim_children_exam'
-                      WHEN T.service_group = 16 and T.service_code = '119151' THEN 'period_children_exam'
-                      when T.service_group in (7, 25, 26, 12, 13) and T.service_code in (
-                                                  '019001', '019021', '019023', '019022', '019024', '019020',
-                                                  '019114', '019113', '019112', '019111', '019110',
-                                                  '019109', '019108', '019107', '019106', '019105',
-                                                  '019104', '019103', '019102', '119003', '119004',
-                                                  '119002', '119005', '119006', '119007', '119008',
-                                                  '119009', '119010', '119020', '119021', '119022',
-                                                  '119023', '119024', '119025', '119026', '119027',
-                                                  '119028', '119029', '119030', '119031', '119202',
-                                                  '119203', '119204', '119205', '119206', '119207',
-                                                  '119208', '119209', '119210', '119220', '119221',
-                                                  '119222', '119223', '119224', '119225', '119226',
-                                                  '119227', '119228', '119229', '119230', '119231'
-                                                                                    ) then 'clinical_exam'
-                      when T.service_group = 19 and T.stomatology_reason = 12 then 'stom_disease'
-                      when T.service_group = 19 AND (T.stomatology_reason in (13, 14, 17) or T.stomatology_reason is NULL) then 'stom_ambulance'
-                      ELSE T.service_code end as division_term,
+                  when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
+                  when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
+                  when T.term = 2 and (T.service_group is null or T.service_group in (17, 28)) then 'day_hospital'
+                  when T.is_policlinic_treatment THEN 'policlinic_disease'
+                  when ((T.service_group IS NULL or T.service_group = 24)
+                       and ((T.term = 3 and T.service_reason in (2, 3, 8))
+                            or (T.term = 3 and  T.service_reason = 1
+                                   and not T.is_policlinic_treatment)))
+                       or T.service_group = 4 THEN 'policlinic_priventive'
+                  when T.term = 3 and T.service_reason = 5 or T.service_group = 31 THEN 'policlinic_ambulance'
+                  when T.service_group = 9 and T.service_code in ('019214', '019215', '019216' ,'019217',
+                                                                  '019212', '019201'
+                                                                  ) then 'adult_exam'
+                  when T.term = 4 THEN 'ambulance'
+                  WHEN T.service_group = 29 THEN 'mrt'
+                  WHEN T.service_code in ('049021', '149021') THEN 'gemodialis_policlinic'
+                  WHEN T.service_code in ('049022', '149022') THEN 'peritondialis_policlinic'
+                  WHEN T.service_group = 11
+                       and T.service_code in ('119057', '119058', '119059',
+                                              '119060', '119061', '119062',
+                                              '119064', '119065', '119066',
+                                              '119080', '119081', '119082',
+                                              '119083', '119084', '119085',
+                                              '119086', '119087', '119088',
+                                              '119089', '119090', '119091') THEN 'children_exam'
+                  WHEN T.service_group = 15
+                       and T.service_code in ('119111', '119110', '119109',
+                                              '119107', '119106', '119105',
+                                              '119104', '119103', '119102',
+                                              '119101', '119119', '119120') THEN 'prelim_children_exam'
+                  WHEN T.service_group = 16 and T.service_code = '119151' THEN 'period_children_exam'
+                  when T.service_group in (7, 25, 26, 12, 13) and T.service_code in (
+                                              '019001', '019021', '019023', '019022', '019024', '019020',
+                                              '019114', '019113', '019112', '019111', '019110',
+                                              '019109', '019108', '019107', '019106', '019105',
+                                              '019104', '019103', '019102', '119003', '119004',
+                                              '119002', '119005', '119006', '119007', '119008',
+                                              '119009', '119010', '119020', '119021', '119022',
+                                              '119023', '119024', '119025', '119026', '119027',
+                                              '119028', '119029', '119030', '119031', '119202',
+                                              '119203', '119204', '119205', '119206', '119207',
+                                              '119208', '119209', '119210', '119220', '119221',
+                                              '119222', '119223', '119224', '119225', '119226',
+                                              '119227', '119228', '119229', '119230', '119231'
+                                                                                ) then 'clinical_exam'
+                  when T.service_group = 19 and T.stomatology_reason = 12 then 'stom_disease'
+                  when T.service_group = 19 AND (T.stomatology_reason in (13, 14, 17)
+                       or T.stomatology_reason is NULL) then 'stom_ambulance'
+                  ELSE T.service_code end as division_term,
 
             -- заявлено
             count(distinct CASE WHEN not T.is_children THEN  T.service_id END) as visit_all_adult,
@@ -111,38 +113,51 @@ def get_mo_statistics(mo):
 
             from (
                 select ms.code like '1%%' as is_children, ps.id_pk as service_id,
-                             pe.id_pk as event_id, ps.quantity as count_days, ps.quantity*ms.uet as uet,
-                             ps.payment_type_fk = 2 as is_accepted,
-                             ps.payment_type_fk = 3 as is_excluded,
-                             pe.term_fk as term, ms.group_fk as service_group,
-                             ms.code as service_code,
-                             ms.reason_fk as service_reason,
-                             ms.subgroup_fk as service_subgroup,
-                             mo.id_pk as organization_id,
-                     (pe.term_fk = 3 and ms.reason_fk = 1 and
-                        (ms.group_fk is NULL or ms.group_fk = 24)
-                        and (select count(ps1.id_pk) FROM provided_service ps1
-                             join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                             WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24))>1
-                        ) as is_policlinic_treatment,
-                     (select distinct ms1.subgroup_fk from medical_service ms1 where ms1.id_pk in (
-                                     select ps1.code_fk FROM provided_service ps1
-                                     where ps1.event_fk = ps.event_fk and ps1.start_date=ps.start_date and ps1.end_date=ps.end_date
-                                     and ps.payment_type_fk = ps1.payment_type_fk)
-                                                 AND ms1.subgroup_fk is NOT NULL
-                                                 AND ms1.group_fk =19
-
-                        ) AS stomatology_reason
+                         pe.id_pk as event_id, ps.quantity as count_days, ps.quantity*ms.uet as uet,
+                         ps.payment_type_fk = 2 as is_accepted,
+                         ps.payment_type_fk = 3 as is_excluded,
+                         pe.term_fk as term, ms.group_fk as service_group,
+                         ms.code as service_code,
+                         ms.reason_fk as service_reason,
+                         ms.subgroup_fk as service_subgroup,
+                         mo.id_pk as organization_id,
+                 (pe.term_fk = 3 and ms.reason_fk = 1 and
+                    (ms.group_fk is NULL or ms.group_fk = 24)
+                    and (select count(ps1.id_pk) FROM provided_service ps1
+                         join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                         WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24))>1
+                    ) as is_policlinic_treatment,
+                 (select distinct ms1.subgroup_fk
+                    from medical_service ms1
+                    where ms1.id_pk in (
+                         select ps1.code_fk FROM provided_service ps1
+                         where ps1.event_fk = ps.event_fk
+                               and ps1.start_date=ps.start_date
+                               and ps1.end_date=ps.end_date
+                         and ps.payment_type_fk = ps1.payment_type_fk
+                       )
+                       AND ms1.subgroup_fk is NOT NULL
+                       AND ms1.group_fk =19
+                    ) AS stomatology_reason
                 from
-                    medical_register mr JOIN medical_register_record mrr ON mr.id_pk=mrr.register_fk
-                    JOIN provided_event pe ON mrr.id_pk=pe.record_fk
-                    JOIN provided_service ps ON ps.event_fk=pe.id_pk
-                    JOIN medical_organization mo ON ps.organization_fk=mo.id_pk
-                    JOIN medical_service ms ON ms.id_pk = ps.code_fk
-                    join patient pt ON pt.id_pk = mrr.patient_fk
-                        where mr.is_active AND mr.period= %(period)s and mr.year= %(year)s
-                        and mr.organization_code = %(organization)s
-                        and (ms.group_fk != 27 or ms.group_fk is null)
+                    medical_register mr
+                    JOIN medical_register_record mrr
+                         ON mr.id_pk=mrr.register_fk
+                    JOIN provided_event pe
+                         ON mrr.id_pk=pe.record_fk
+                    JOIN provided_service ps
+                         ON ps.event_fk=pe.id_pk
+                    JOIN medical_organization mo
+                         ON ps.organization_fk=mo.id_pk
+                    JOIN medical_service ms
+                         ON ms.id_pk = ps.code_fk
+                    join patient pt
+                        ON pt.id_pk = mrr.patient_fk
+                    where mr.is_active
+                          AND mr.period= %(period)s
+                          and mr.year= %(year)s
+                          and mr.organization_code = %(organization)s
+                          and (ms.group_fk != 27 or ms.group_fk is null)
             ) AS T
             join medical_organization mo on mo.id_pk = T.organization_id
             group by mo.id_pk, division_term
@@ -156,53 +171,55 @@ def get_mo_error_statistics(mo):
             select
             mo.id_pk,
             case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2, 20, 32)) then 'hospital'
-                      when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
-                      when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
-                      when T.term = 2 and (T.service_group is null or T.service_group in (17, 28)) then 'day_hospital'
-                      when T.is_policlinic_treatment THEN 'policlinic_disease'
-                      when ((T.service_group IS NULL or T.service_group = 24)
-                           and ((T.term = 3 and T.service_reason in (2, 3, 8))
-                                or (T.term = 3 and  T.service_reason = 1
-                                       and not T.is_policlinic_treatment))) or T.service_group = 4 THEN 'policlinic_priventive'
-                      when T.term = 3 and T.service_reason = 5 or T.service_group = 31 THEN 'policlinic_ambulance'
-                      when T.service_group = 9 and T.service_code in ('019214', '019215', '019216' ,'019217',
-                                                                      '019212', '019201'
-                                                                      ) then 'adult_exam'
-                      when T.term = 4 THEN 'ambulance'
-                      WHEN T.service_group = 29 THEN 'mrt'
-                      WHEN T.service_code in ('049021', '149021') THEN 'gemodialis_policlinic'
-                      WHEN T.service_code in ('049022', '149022') THEN 'peritondialis_policlinic'
-                      WHEN T.service_group = 11
-                           and T.service_code in ('119057', '119058', '119059',
-                                                  '119060', '119061', '119062',
-                                                  '119064', '119065', '119066',
-                                                  '119080', '119081', '119082',
-                                                  '119083', '119084', '119085',
-                                                  '119086', '119087', '119088',
-                                                  '119089', '119090', '119091') THEN 'children_exam'
-                      WHEN T.service_group = 15
-                           and T.service_code in ('119111', '119110', '119109',
-                                                  '119107', '119106', '119105',
-                                                  '119104', '119103', '119102',
-                                                  '119101', '119119', '119120') THEN 'prelim_children_exam'
-                      WHEN T.service_group = 16 and T.service_code = '119151' THEN 'period_children_exam'
-                      when T.service_group in (7, 25, 26, 12, 13) and T.service_code in (
-                                                  '019001', '019021', '019023', '019022', '019024', '019020',
-                                                  '019114', '019113', '019112', '019111', '019110',
-                                                  '019109', '019108', '019107', '019106', '019105',
-                                                  '019104', '019103', '019102', '119003', '119004',
-                                                  '119002', '119005', '119006', '119007', '119008',
-                                                  '119009', '119010', '119020', '119021', '119022',
-                                                  '119023', '119024', '119025', '119026', '119027',
-                                                  '119028', '119029', '119030', '119031', '119202',
-                                                  '119203', '119204', '119205', '119206', '119207',
-                                                  '119208', '119209', '119210', '119220', '119221',
-                                                  '119222', '119223', '119224', '119225', '119226',
-                                                  '119227', '119228', '119229', '119230', '119231'
-                                                                                    ) then 'clinical_exam'
-                      when T.service_group = 19 and T.stomatology_reason = 12 then 'stom_disease'
-                      when T.service_group = 19 AND (T.stomatology_reason in (13, 14, 17) or T.stomatology_reason is NULL) then 'stom_ambulance'
-                      ELSE T.service_code end as division_term,
+                  when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
+                  when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
+                  when T.term = 2 and (T.service_group is null or T.service_group in (17, 28)) then 'day_hospital'
+                  when T.is_policlinic_treatment THEN 'policlinic_disease'
+                  when ((T.service_group IS NULL or T.service_group = 24)
+                       and ((T.term = 3 and T.service_reason in (2, 3, 8))
+                            or (T.term = 3 and  T.service_reason = 1
+                                   and not T.is_policlinic_treatment)))
+                       or T.service_group = 4 THEN 'policlinic_priventive'
+                  when T.term = 3 and T.service_reason = 5 or T.service_group = 31 THEN 'policlinic_ambulance'
+                  when T.service_group = 9 and T.service_code in ('019214', '019215', '019216' ,'019217',
+                                                                  '019212', '019201'
+                                                                  ) then 'adult_exam'
+                  when T.term = 4 THEN 'ambulance'
+                  WHEN T.service_group = 29 THEN 'mrt'
+                  WHEN T.service_code in ('049021', '149021') THEN 'gemodialis_policlinic'
+                  WHEN T.service_code in ('049022', '149022') THEN 'peritondialis_policlinic'
+                  WHEN T.service_group = 11
+                       and T.service_code in ('119057', '119058', '119059',
+                                              '119060', '119061', '119062',
+                                              '119064', '119065', '119066',
+                                              '119080', '119081', '119082',
+                                              '119083', '119084', '119085',
+                                              '119086', '119087', '119088',
+                                              '119089', '119090', '119091') THEN 'children_exam'
+                  WHEN T.service_group = 15
+                       and T.service_code in ('119111', '119110', '119109',
+                                              '119107', '119106', '119105',
+                                              '119104', '119103', '119102',
+                                              '119101', '119119', '119120') THEN 'prelim_children_exam'
+                  WHEN T.service_group = 16 and T.service_code = '119151' THEN 'period_children_exam'
+                  when T.service_group in (7, 25, 26, 12, 13) and T.service_code in (
+                                              '019001', '019021', '019023', '019022', '019024', '019020',
+                                              '019114', '019113', '019112', '019111', '019110',
+                                              '019109', '019108', '019107', '019106', '019105',
+                                              '019104', '019103', '019102', '119003', '119004',
+                                              '119002', '119005', '119006', '119007', '119008',
+                                              '119009', '119010', '119020', '119021', '119022',
+                                              '119023', '119024', '119025', '119026', '119027',
+                                              '119028', '119029', '119030', '119031', '119202',
+                                              '119203', '119204', '119205', '119206', '119207',
+                                              '119208', '119209', '119210', '119220', '119221',
+                                              '119222', '119223', '119224', '119225', '119226',
+                                              '119227', '119228', '119229', '119230', '119231'
+                                                                                ) then 'clinical_exam'
+                  when T.service_group = 19 and T.stomatology_reason = 12 then 'stom_disease'
+                  when T.service_group = 19 AND (T.stomatology_reason in (13, 14, 17)
+                       or T.stomatology_reason is NULL) then 'stom_ambulance'
+                  ELSE T.service_code end as division_term,
 
             CASE WHEN T.error in (145, 128) THEN 55
                  WHEN T.error = 127 THEN 133
@@ -219,59 +236,81 @@ def get_mo_error_statistics(mo):
 
             from (
                 select ms.code like '1%%' as is_children, ps.id_pk as service_id,
-                             pe.id_pk as event_id, ps.quantity as count_days, ps.quantity*ms.uet as uet,
-                             ps.payment_type_fk = 2 as is_accepted,
-                             ps.payment_type_fk = 3 as is_excluded,
-                             pe.term_fk as term, ms.group_fk as service_group,
-                             ms.code as service_code,
-                             ms.reason_fk as service_reason,
-                             ms.subgroup_fk as service_subgroup,
-                             mo.id_pk as organization_id,
-                             me.failure_cause_fk as error,
+                     pe.id_pk as event_id, ps.quantity as count_days, ps.quantity*ms.uet as uet,
+                     ps.payment_type_fk = 2 as is_accepted,
+                     ps.payment_type_fk = 3 as is_excluded,
+                     pe.term_fk as term, ms.group_fk as service_group,
+                     ms.code as service_code,
+                     ms.reason_fk as service_reason,
+                     ms.subgroup_fk as service_subgroup,
+                     mo.id_pk as organization_id,
+                     me.failure_cause_fk as error,
                      (pe.term_fk = 3 and ms.reason_fk = 1 and
                         (ms.group_fk is NULL or ms.group_fk = 24)
                         and (select count(ps1.id_pk) FROM provided_service ps1
                              join medical_service ms1 on ms1.id_pk = ps1.code_fk
                              WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24))>1
                         ) as is_policlinic_treatment,
-                     (select distinct ms1.subgroup_fk from medical_service ms1 where ms1.id_pk in (
-                                     select ps1.code_fk FROM provided_service ps1
-                                            join provided_service_sanction pss1
-                                                on ps1.id_pk = pss1.service_fk
-                                            join medical_error me1
-                                                    on pss1.error_fk = me1.id_pk
-                                                        and me1.weight = (select max(weight) from medical_error where id_pk
-                                                                            in (select error_fk from provided_service_sanction where service_fk = ps1.id_pk)
-                                                                         )
+                     (select distinct ms1.subgroup_fk from medical_service ms1
+                      where ms1.id_pk in (
+                             select ps1.code_fk FROM provided_service ps1
+                                    join provided_service_sanction pss1
+                                        on ps1.id_pk = pss1.service_fk
+                                    join medical_error me1
+                                        on pss1.error_fk = me1.id_pk
+                                           and me1.weight = (
+                                              select max(weight) from medical_error
+                                              where id_pk in (
+                                                 select pss2.error_fk from provided_service_sanction pss2
+                                                 where pss2.is_active and service_fk = ps1.id_pk)
+                                              )
 
-                                     where ps1.event_fk = ps.event_fk and ps1.start_date=ps.start_date and ps1.end_date=ps.end_date
-                                     and ps.payment_type_fk = ps1.payment_type_fk
-                                     and me1.failure_cause_fk = me.failure_cause_fk
-                                     )
-                                                 AND ms1.subgroup_fk is NOT NULL
-                                                 AND ms1.group_fk =19
+                             where
+                             ps1.event_fk = ps.event_fk
+                             and ps1.start_date=ps.start_date
+                             and ps1.end_date=ps.end_date
+                             and ps1.payment_type_fk = ps.payment_type_fk
+                             and pss1.is_active
+                             and me1.failure_cause_fk = me.failure_cause_fk
+                         )
+                         AND ms1.subgroup_fk is NOT NULL
+                         AND ms1.group_fk =19
                         ) AS stomatology_reason
-
-
-                from
-                    medical_register mr JOIN medical_register_record mrr ON mr.id_pk=mrr.register_fk
-                    JOIN provided_event pe ON mrr.id_pk=pe.record_fk
-                    JOIN provided_service ps ON ps.event_fk=pe.id_pk
-                    JOIN medical_organization mo ON ps.organization_fk=mo.id_pk
-                    JOIN medical_service ms ON ms.id_pk = ps.code_fk
-                    join patient pt ON pt.id_pk = mrr.patient_fk
-                    join provided_service_sanction
-                            on ps.id_pk = provided_service_sanction.service_fk
+                from medical_register mr
+                    JOIN medical_register_record mrr
+                         ON mr.id_pk=mrr.register_fk
+                    JOIN provided_event pe
+                         ON mrr.id_pk=pe.record_fk
+                    JOIN provided_service ps
+                         ON ps.event_fk=pe.id_pk
+                    JOIN medical_organization mo
+                         ON ps.organization_fk=mo.id_pk
+                    JOIN medical_service ms
+                         ON ms.id_pk = ps.code_fk
+                    join patient pt
+                         ON pt.id_pk = mrr.patient_fk
+                    join provided_service_sanction pss
+                         on ps.id_pk = pss.service_fk
                     join medical_error me
-                            on provided_service_sanction.error_fk = me.id_pk
-                                and me.weight = (select max(weight) from medical_error where id_pk in (select error_fk from provided_service_sanction where service_fk = ps.id_pk))
+                         on pss.error_fk = me.id_pk
+                            and me.weight = (
+                                select max(weight) from medical_error
+                                where id_pk in (
+                                    select pss1.error_fk from provided_service_sanction pss1
+                                    where pss1.is_active and pss1.service_fk = ps.id_pk
+                                )
+                            )
 
-                        where mr.is_active AND mr.period= %(period)s and mr.year= %(year)s
+                        where mr.is_active
+                        AND mr.period= %(period)s
+                        and mr.year= %(year)s
                         and mr.organization_code = %(organization)s
                         and ps.payment_type_fk = 3
+                        and pss.is_active
                         and (ms.group_fk != 27 or ms.group_fk is null)
             ) AS T
-            join medical_organization mo on mo.id_pk = T.organization_id
+            join medical_organization mo
+                on mo.id_pk = T.organization_id
             group by mo.id_pk, division_term, error
             order by mo.id_pk, division_term, error
             """
@@ -318,7 +357,7 @@ class Command(BaseCommand):
         ]
 
         mo_list = func.get_mo_register(status=status)
-        #mo_list = ['280043']
+        #mo_list = []
         for mo in mo_list:
             target = target_dir % (func.YEAR, func.PERIOD) + ur'\дефекты\%s_дефекты' % \
                 func.get_mo_info(mo)['name'].replace('"', '').strip()

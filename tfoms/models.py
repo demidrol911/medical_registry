@@ -4,7 +4,7 @@ from django.db import models
 from django.db import connection, transaction
 from django.db.models.query import QuerySet
 from django.db.models import Sum
-import datetime
+from datetime import datetime
 
 SERVICE_XML_TYPE_PERSON = 0
 SERVICE_XML_TYPE_REGULAR = 1
@@ -1706,3 +1706,11 @@ class PaymentKind(models.Model):
 
     class Meta:
         db_table = 'payment_kind'
+
+
+class SanctionStatus(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    sanction = models.ForeignKey(Sanction, db_column='sanction_fk')
+    created_at = models.DateTimeField(db_column='create_at', default=datetime.now)
+    who = models.IntegerField(db_column='type')
+    comment = models.CharField(db_column='comment', max_length=128)
