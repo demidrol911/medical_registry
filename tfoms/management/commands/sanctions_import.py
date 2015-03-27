@@ -17,8 +17,8 @@ S_POL, K_U, DS, TN1, SUM_USL, FFOMS, TFOMS, S_PPP, S_SNK, SNILS, SANK_TYPE,\
 DOC_NUMBER, STATUS, S_SNT, S_SNF, SANCTION_DATE,\
 ANAMNESIS_NUMBER, LPU_NUMBER = range(0, 28)
 
-sanction_start_date = '2014-12-01'
-sanction_end_date = '2014-12-31'
+sanction_start_date = '2015-01-01'
+sanction_end_date = '2015-01-31'
 z = csv.writer(open('d:/work/duplicates_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
 
 
@@ -66,7 +66,7 @@ def find(rec):
     """
 
     new_service_query = """
-        select DISTINCT ps.id_pk, ps.end_date, mr.year, mr.period
+        select DISTINCT ps.id_pk, ps.end_date
         from provided_service ps
             join medical_service ms
                 On ps.code_fk = ms.id_pk
@@ -82,27 +82,74 @@ def find(rec):
                 on department.id_pk = ps.department_fk
             LEFT JOIN idc
                 on idc.id_pk = ps.basic_disease_fk or idc.id_pk = pe.basic_disease_fk
-            LEFT JOIN idc idc1
-                on idc1.id_pk = pe.initial_disease_fk
-            LEFT JOIN idc idc2
-                on idc2.id_pk = pe.basic_disease_fk
         where mr.is_active
+            and format('%%s-%%s-01', mr.year, mr.period)::DATE between format('%%s-%%s-01', date_part('year', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)), date_part('month', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)))::DATE
+                and format('%%s-%%s-01', date_part('year', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)), date_part('month', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)))::DATE + interval '4 months'
             and (((REPLACE(coalesce(p.insurance_policy_series, ''), '99', '') || coalesce(p.insurance_policy_number, '') ) = %(policy)s)
-            or (upper(p.last_name || ' ' || p.first_name || ' ' || p.middle_name ) = upper(%(person)s)))
+                or (upper(format('%%s %%s %%s', p.last_name, p.first_name, p.middle_name)) = upper(%(person)s)))
             and ms.code = %(service)s
-            and (((ms.group_fk not in (7, 9, 11, 12, 13, 15, 16, 25, 26) or ms.group_fk is null)
-            and (idc.idc_code like %(disease)s or idc1.idc_code like %(disease)s or idc2.idc_code like %(disease)s))
-            or (ms.group_fk in (7, 9, 11, 12, 13, 15, 16, 25, 26)
-            and (ps.basic_disease_fk is null or
-            (idc.idc_code like %(disease)s or idc1.idc_code like %(disease)s or idc2.idc_code like %(disease)s))))
-            and (ps.end_date = %(end_date)s or ps.start_date = %(start_date)s)
-            -- %(start_date)s
-            --and (upper(pe.anamnesis_number) = upper(%(anamnesis)s) or upper(%(anamnesis)s) = '')
+            and least(ps.start_date, ps.end_date) = LEAST(%(start_date)s, %(end_date)s::DATE)
             and (department.old_code = %(department)s or mr.organization_code = %(organization_code)s)
+            and idc.idc_code like %(disease)s
             and ps.payment_type_fk in (2, 4)
-            --and
-        order by ps.end_date, mr.year, mr.period DESC
-        --limit 1
+    """
+
+    new_service_query_without_disease = """
+        select DISTINCT ps.id_pk, ps.end_date
+        from provided_service ps
+            join medical_service ms
+                On ps.code_fk = ms.id_pk
+            join provided_event pe
+                on ps.event_fk = pe.id_pk
+            join medical_register_record
+                on pe.record_fk = medical_register_record.id_pk
+            join medical_register mr
+                on medical_register_record.register_fk = mr.id_pk
+            JOIN patient p
+                on p.id_pk = medical_register_record.patient_fk
+            JOIN medical_organization department
+                on department.id_pk = ps.department_fk
+            LEFT JOIN idc
+                on idc.id_pk = ps.basic_disease_fk or idc.id_pk = pe.basic_disease_fk
+        where mr.is_active
+            and format('%%s-%%s-01', mr.year, mr.period)::DATE between format('%%s-%%s-01', date_part('year', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)), date_part('month', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)))::DATE
+                and format('%%s-%%s-01', date_part('year', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)), date_part('month', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)))::DATE + interval '4 months'
+            and (((REPLACE(coalesce(p.insurance_policy_series, ''), '99', '') || coalesce(p.insurance_policy_number, '') ) = %(policy)s)
+                or (upper(format('%%s %%s %%s', p.last_name, p.first_name, p.middle_name)) = upper(%(person)s)))
+            and ms.code = %(service)s
+            and least(ps.start_date, ps.end_date) = LEAST(%(start_date)s, %(end_date)s::DATE)
+            and (department.old_code = %(department)s or mr.organization_code = %(organization_code)s)
+            --and idc.idc_code like %(disease)s
+            and ps.payment_type_fk in (2, 4)
+    """
+
+    new_service_query_without_date = """
+        select DISTINCT ps.id_pk, ps.end_date
+        from provided_service ps
+            join medical_service ms
+                On ps.code_fk = ms.id_pk
+            join provided_event pe
+                on ps.event_fk = pe.id_pk
+            join medical_register_record
+                on pe.record_fk = medical_register_record.id_pk
+            join medical_register mr
+                on medical_register_record.register_fk = mr.id_pk
+            JOIN patient p
+                on p.id_pk = medical_register_record.patient_fk
+            JOIN medical_organization department
+                on department.id_pk = ps.department_fk
+            LEFT JOIN idc
+                on idc.id_pk = ps.basic_disease_fk or idc.id_pk = pe.basic_disease_fk
+        where mr.is_active
+            and format('%%s-%%s-01', mr.year, mr.period)::DATE between format('%%s-%%s-01', date_part('year', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)), date_part('month', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)))::DATE
+                and format('%%s-%%s-01', date_part('year', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)), date_part('month', LEAST(%(start_date)s::DATE, %(end_date)s::DATE)))::DATE + interval '4 months'
+            and (((REPLACE(coalesce(p.insurance_policy_series, ''), '99', '') || coalesce(p.insurance_policy_number, '') ) = %(policy)s)
+                or (upper(format('%%s %%s %%s', p.last_name, p.first_name, p.middle_name)) = upper(%(person)s)))
+            and ms.code = %(service)s
+            --and least(ps.start_date, ps.end_date) = LEAST(%(start_date)s, %(end_date)s::DATE)
+            and (department.old_code = %(department)s or mr.organization_code = %(organization_code)s)
+            and idc.idc_code like %(disease)s
+            and ps.payment_type_fk in (2, 4)
     """
 
     policy = rec[S_POL].split() if rec[S_POL] else None
@@ -129,13 +176,35 @@ def find(rec):
         query = new_service_query
 
     service = list(ProvidedService.objects.raw(
-        query, dict(policy=(series+number).replace(' ', ''),
+        new_service_query, dict(policy=(series+number).replace(' ', ''),
                     person=rec[FIO],
-                    service=service_code, disease=rec[DS][:3]+'%',
+                    service=service_code,
+                    disease=rec[DS][:3]+'%',
                     start_date=rec[STARTDATE], end_date=rec[ENDDATE],
-                    anamnesis=rec[ANAMNESIS_NUMBER] or '',
+                    #anamnesis=rec[ANAMNESIS_NUMBER] or '',
                     department=rec[LPU_NUMBER],
                     organization_code=rec[CODE_MO])))
+
+    if not service:
+        service = list(ProvidedService.objects.raw(
+            new_service_query_without_date, dict(policy=(series+number).replace(' ', ''),
+                        person=rec[FIO],
+                        service=service_code, disease=rec[DS][:3]+'%',
+                        start_date=rec[STARTDATE], end_date=rec[ENDDATE],
+                        anamnesis=rec[ANAMNESIS_NUMBER] or '',
+                        department=rec[LPU_NUMBER],
+                        organization_code=rec[CODE_MO])))
+
+    if not service:
+        service = list(ProvidedService.objects.raw(
+            new_service_query_without_disease, dict(policy=(series+number).replace(' ', ''),
+                        person=rec[FIO],
+                        service=service_code, disease=rec[DS][:3]+'%',
+                        start_date=rec[STARTDATE], end_date=rec[ENDDATE],
+                        anamnesis=rec[ANAMNESIS_NUMBER] or '',
+                        department=rec[LPU_NUMBER],
+                        organization_code=rec[CODE_MO])))
+
     if service:
         service = service[0]
     else:
@@ -172,6 +241,8 @@ def main():
 
     for i, rec in enumerate(data):
         if i % 1000 == 0:
+            print i
+        else:
             print i
 
         service = find(rec)
