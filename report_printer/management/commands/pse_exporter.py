@@ -23,7 +23,6 @@ class Command(BaseCommand):
         # Группировка услуг по прикреплённым больницам
         services_group = {}
         for index, service in enumerate(services):
-            #print service['department']
             if service['department'] not in services_group:
                 services_group[service['department']] = []
             if service['group'] != 27:

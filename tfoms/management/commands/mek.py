@@ -248,7 +248,7 @@ def identify_patient(register_element):
     query1 = """
         update patient set insurance_policy_fk = T.policy_id from (
         select DISTINCT p1.id_pk as patient_id, (
-            select version_id_pk
+            select max(version_id_pk)
             from insurance_policy
             where id = (
                 select insurance_policy.id
@@ -413,8 +413,8 @@ def identify_patient(register_element):
                                     on person.version_id_pk = person_id.person_fk
                                 join insurance_policy
                                     on insurance_policy.person_fk = person.version_id_pk
-                            where replace(upper(regexp_replace(person_id.series, '[ -/\\_]', '')), 'I', '1') = replace(upper(regexp_replace(p2.person_id_series, '[ -/\\_]', '')), 'I', '1')
-                                and replace(upper(regexp_replace(person_id.number, '[ -/\\_]', '')), 'I', '1') = replace(upper(regexp_replace(p2.person_id_number, '[ -/\\_]', '')), 'I', '1')
+                            where translate(upper(regexp_replace(person_id.series, '[ -/\\_]', '', 'g')), 'IOT', '1ОТ') = translate(upper(regexp_replace(p2.person_id_series, '[ -/\\_]', '', 'g')), 'IOT ', '1ОТ')
+                                  and upper(regexp_replace(person_id.number, '[ -/\\_]', '')) = upper(regexp_replace(p2.person_id_number, '[ -/\\_]', ''))
                             order by insurance_policy.stop_date desc nulls first
                             limit 1
                         ) as T
@@ -1092,6 +1092,8 @@ def sanctions_on_cross_dates_services(register_element):
         FROM provided_service ps
             join provided_event pe
                 on ps.event_fk = pe.id_pk
+            join medical_service ms
+                on ms.id_pk = ps.code_fk
             join medical_register_record mrr
                 on pe.record_fk = mrr.id_pk
             join medical_register mr
@@ -1124,6 +1126,7 @@ def sanctions_on_cross_dates_services(register_element):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and pe.term_fk = 3
+            and (ms.group_fk not in (27) and ms.group_fk is NULL)
             and (select count(1) from provided_service_sanction
                  where service_fk = ps.id_pk and error_fk = 73) = 0
         order by ps.id_pk
@@ -1134,6 +1137,8 @@ def sanctions_on_cross_dates_services(register_element):
         FROM provided_service ps
             join provided_event pe
                 on ps.event_fk = pe.id_pk
+            join medical_service ms
+                on ms.id_pk = ps.code_fk
             join medical_register_record mrr
                 on pe.record_fk = mrr.id_pk
             join medical_register mr
@@ -1165,6 +1170,7 @@ def sanctions_on_cross_dates_services(register_element):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and pe.term_fk in (1, 2)
+            and (ms.group_fk not in (27) and ms.group_fk is NULL)
             and (select count(1) from provided_service_sanction
                  where service_fk = ps.id_pk and error_fk = 73) = 0
         order by ps.id_pk
@@ -1621,7 +1627,7 @@ def sanctions_on_invalid_outpatient_event(register_element):
                 and medical_register.year = %s
                 and medical_register.period = %s
                 and medical_register.organization_code = %s
-                and department.level <> 3
+                --and department.level <> 3
                 and ((
                         select count(1)
                         from provided_service
@@ -1670,7 +1676,7 @@ def drop_outpatient_event(register_element):
     """
         Санкции на случаи поликлиники по заболеваниям со снятыми услугами
     """
-    query = """
+    old_query = """
         select T.error_code, provided_service.id_pk
         from provided_service
             join medical_organization department
@@ -1711,15 +1717,109 @@ def drop_outpatient_event(register_element):
                 ) as T
                 on provided_service.event_fk = T.event_id
         where provided_service.payment_type_fk <> 3
-            and department.level <> 3
+            --and department.level <> 3
             and (select id_pk from provided_service_sanction
                  where service_fk = provided_service.id_pk
                      and error_fk = T.error_code) is NULL
     """
 
+    new_query = """
+    select T.error_code, provided_service.id_pk
+    from provided_service
+        join medical_organization department
+            on provided_service.department_fk = department.id_pk
+        JOIN medical_service ms ON ms.id_pk = provided_service.code_fk
+        join
+            (
+                select provided_event.id_pk as event_id,
+                    min(provided_service_sanction.error_fk) as error_code
+                from provided_service ps1
+                    join medical_service
+                        on medical_service.id_pk = ps1.code_fk
+                    join provided_event
+                        on ps1.event_fk = provided_event.id_pk
+                    join medical_register_record
+                        on provided_event.record_fk = medical_register_record.id_pk
+                    join medical_register mr1
+                        on medical_register_record.register_fk = mr1.id_pk
+                    JOIN patient p1
+                        on medical_register_record.patient_fk = p1.id_pk
+                    join provided_service_sanction
+                        on ps1.id_pk = provided_service_sanction.service_fk
+                    join medical_error
+                        on provided_service_sanction.error_fk = medical_error.id_pk
+                            and medical_error.weight = (select max(weight) from medical_error where id_pk in (select error_fk from provided_service_sanction where service_fk = ps1.id_pk))
+                where mr1.is_active
+                    and mr1.year = %s
+                    and mr1.period = %s
+                    and mr1.organization_code = %s
+                    AND (
+                           ((medical_service.group_fk not in (19, 27) or medical_service.group_fk is NULL))
+                           or
+                           (medical_service.group_fk = 19 AND medical_service.subgroup_fk is NOT NULL)
+                           )
+                    and ps1.payment_type_fk = 3
+                    group BY provided_event.id_pk
+            ) as T
+            on provided_service.event_fk = T.event_id
+        LEFT JOIN provided_service_sanction pss
+            on pss.service_fk = provided_service.id_pk and pss.error_fk = T.error_code
+    where (ms.group_fk != 27 or ms.group_fk is NULL)
+        AND pss.id_pk is NULL
+    """
+
+    new_query_1 = """
+    select T.error_code, provided_service.id_pk
+    from provided_service
+    JOIN medical_service ms ON ms.id_pk = provided_service.code_fk
+    join
+        (
+            select DISTINCT provided_event.id_pk as event_id,
+                pss.error_fk as error_code
+            from provided_service ps1
+                join medical_service
+                    on medical_service.id_pk = ps1.code_fk
+                join provided_event
+                    on ps1.event_fk = provided_event.id_pk
+                join medical_register_record
+                    on provided_event.record_fk = medical_register_record.id_pk
+                join medical_register mr1
+                    on medical_register_record.register_fk = mr1.id_pk
+                JOIN patient p1
+                    on medical_register_record.patient_fk = p1.id_pk
+                join provided_service_sanction pss
+                    on pss.id_pk = (
+                        select pssi.id_pk
+                        from provided_service_sanction pssi
+                            join medical_error mei
+                                on mei.id_pk = pssi.error_fk
+                        WHERE pssi.service_fk = ps1.id_pk
+                        ORDER BY mei.weight DESC
+                        limit 1
+                    )
+            where mr1.is_active
+                and mr1.year = %s
+                and mr1.period = %s
+                and mr1.organization_code = %s
+                AND (
+                       ((medical_service.group_fk not in (19, 27) or medical_service.group_fk is NULL))
+                       or
+                       (medical_service.group_fk = 19 AND medical_service.subgroup_fk is NOT NULL)
+                       )
+                and ps1.payment_type_fk = 3
+        ) as T
+        on provided_service.event_fk = T.event_id
+    LEFT JOIN provided_service_sanction pss
+        on pss.service_fk = provided_service.id_pk
+            and error_fk = T.error_code
+    where (ms.group_fk != 27 or ms.group_fk is NULL)
+    and pss.id_pk is null
+    """
+
     services = ProvidedService.objects.raw(
-        query, [register_element['year'], register_element['period'],
-                register_element['organization_code']])
+        new_query_1, [
+            register_element['year'], register_element['period'],
+            register_element['organization_code']])
 
     errors = [(rec.pk, 1, rec.accepted_payment, rec.error_code) for rec in list(services)]
     errors_pk = [rec[0] for rec in errors]
@@ -2165,6 +2265,40 @@ def sanctions_on_wrong_age_examination_children_difficult(register_element):
     return get_sanction_tuple(services, 35)
 
 
+def sanctions_on_wrong_gender_examination(register_element):
+    query = """
+            select
+            distinct ps.id_pk
+            from medical_register mr
+            JOIN medical_register_record mrr
+                 ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                 ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                 ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms
+                 ON ms.id_pk = ps.code_fk
+            JOIN patient pt
+                 ON mrr.patient_fk = pt.id_pk
+            where mr.is_active
+                 and mr.year = %(year)s
+                 and mr.period = %(period)s
+                 and mr.organization_code = %(organization)s
+                 and ms.group_fk in (11, 12, 13, 9, 7)
+                 and (ms.examination_primary or ms.examination_final)
+                 and ms.is_cost
+                 and pt.gender_fk != ms.gender_fk
+                 and ps.payment_type_fk = 2
+            """
+
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    return get_sanction_tuple(services, 41)
+
+
 def drop_duplicate_examination_in_current_register(register_element):
     query = """
         select ps.id_pk
@@ -2280,6 +2414,57 @@ def sanctions_on_service_term_mismatch(register_element):
     return get_sanction_tuple(services, 76)
 
 
+def drop_second_phase_examination(register_element):
+    query = """
+        select ps.id_pk
+        from medical_register mr JOIN medical_register_record mrr ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms ON ms.id_pk = ps.code_fk
+            join patient pt ON pt.id_pk = mrr.patient_fk
+            JOIN insurance_policy ip ON ip.version_id_pk = pt.insurance_policy_fk
+            join
+                (
+                    select distinct mr1.id_pk as mr_id, ip1.id as ip_id
+
+                    from provided_service ps1
+                        join medical_service
+                            on medical_service.id_pk = ps1.code_fk
+                        join provided_event
+                            on ps1.event_fk = provided_event.id_pk
+                        join medical_register_record
+                            on provided_event.record_fk = medical_register_record.id_pk
+                        join medical_register mr1
+                            on medical_register_record.register_fk = mr1.id_pk
+                        JOIN patient p1
+                            on medical_register_record.patient_fk = p1.id_pk
+                        JOIN insurance_policy ip1 ON ip1.version_id_pk = p1.insurance_policy_fk
+
+                        where
+                             mr1.year = %(year)s
+                             and mr1.period = %(period)s
+                             and mr1.organization_code = %(organization)s
+                             and ps1.payment_type_fk = 3
+                             AND medical_service.group_fk = 7
+                        group BY mr_id, ip_id
+                ) as T
+                on ip.id = T.ip_id and mr.id_pk = T.mr_id
+        where
+            ms.group_fk in (25, 26)
+            and ps.payment_type_fk = 2
+            and (select id_pk from provided_service_sanction
+                 where service_fk = ps.id_pk and error_fk = 34) is null
+    """
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    #print len(services) #, type(services)
+
+    return get_sanction_tuple(services, 34)
+
+
 def main():
     COMMENT_COEFFICIENT_CURATION = re.compile(r'[0-1]{6}1')
     min_date_for_stopped_policy = datetime.strptime('2011-01-01', '%Y-%m-%d').date()
@@ -2348,11 +2533,16 @@ def main():
             sanctions_on_wrong_age_examination_children_adopted(register_element)
             print u'sanctions_on_wrong_age_examination_children_difficult'
             sanctions_on_wrong_age_examination_children_difficult(register_element)
+            print u'sanctions_on_wrong_gender_examination'
+            sanctions_on_wrong_gender_examination(register_element)
             #print u'wrong_examination_attachment'
             #sanctions_on_wrong_examination_attachment(register_element)
             #sanctions_on_incorrect_examination(register_element)
             sanctions_on_service_term_mismatch(register_element)
             sanctions_on_service_term_kind_mismatch(register_element)
+
+            print u'drop_second_phase_examination'
+            drop_second_phase_examination(register_element)
 
         print 'iterate tariff', register_element
         with transaction.atomic():
@@ -2448,6 +2638,16 @@ def main():
                             duration_coefficient = 0
                         if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
                             duration_coefficient = 0
+
+                        if service.service_group == 2 and \
+                                len(service.comment) == 8 and \
+                                service.comment[7] == '1':
+                            duration_coefficient = 0
+
+                        if (service.organization_code == '280013' and service.service_tariff_profile in (24, 30)) or \
+                                (service.organization_code == '280005' and service.service_tariff_profile in (24, 67)):
+                            duration_coefficient = 50
+
                     elif term == 2:
                         duration_coefficient = 90
                         if is_endovideosurgery:
@@ -2557,6 +2757,55 @@ def main():
                             ProvidedServiceCoefficient.objects.get_or_create(
                                 service=service, coefficient_id=12)
 
+                        if service.service_group == 2 and \
+                                len(service.comment) == 8 and \
+                                service.comment[7] == '1':
+                            accepted_payment -= round(accepted_payment * 0.4, 2)
+                            provided_tariff -= round(provided_tariff * 0.4, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=13)
+
+                        if service.service_code in ('098901', '198901', '098912', '198912') and \
+                                service.organization_code in ('280084', '280027') and \
+                                len(service.comment) == 8 and \
+                                service.comment[7] == '1':
+                            accepted_payment += round(accepted_payment * 0.3, 2)
+                            provided_tariff += round(provided_tariff * 0.3, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=14)
+
+                        if service.service_code in ('098901', '198901', '098912', '198912') and \
+                                service.organization_code in ('280084', '280027') and \
+                                len(service.comment) == 9 and \
+                                service.comment[8] == '1':
+                            accepted_payment += round(accepted_payment * 1, 2)
+                            provided_tariff += round(provided_tariff * 1, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=15)
+                    # Новые коффициенты по медицинской реабилитации в дневном стационаре
+                    if term == 2:
+                        if service.service_tariff_profile == 50 and \
+                                service.organization_code in ("280064", "280003"):
+                            accepted_payment += round(accepted_payment * 0.2, 2)
+                            provided_tariff += round(provided_tariff * 0.2, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=16)
+
+                        if service.service_tariff_profile == 2 and \
+                                service.organization_code in ("280064", "280003"):
+                            accepted_payment += round(accepted_payment * 0.1, 2)
+                            provided_tariff += round(provided_tariff * 0.1, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=17)
+
+                        if service.service_tariff_profile == 41 and \
+                                service.organization_code in ("280064", "280003"):
+                            accepted_payment += round(accepted_payment * 0.4, 2)
+                            provided_tariff += round(provided_tariff * 0.4, 2)
+                            ProvidedServiceCoefficient.objects.get_or_create(
+                                service=service, coefficient_id=18)
+
+
                     '''
                     if service.is_agma_cathedra and term == 1:
                         accepted_payment += round(accepted_payment * 0.015, 2)
@@ -2575,8 +2824,11 @@ def main():
 
                     single_visit_exception_group = (7, 8, 25, 26, 9, 10, 11, 12,
                                                     13, 14, 15, 16)
-                    accepted_payment = tariff * float(quantity)
-                    tariff *= float(quantity)
+                    if service.service_group in (29, ):
+                        accepted_payment = tariff
+                    else:
+                        accepted_payment = tariff * float(quantity)
+                        tariff *= float(quantity)
 
                     '''
                     if (is_single_visit or service.reason_code == 3) and not \

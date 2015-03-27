@@ -72,7 +72,8 @@ ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
 KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
                   '2': ['1', '2', '3', '21', '22', '31', '32', '4'],
-                  '3': ['1', '11', '12', '13', '4']
+                  '3': ['1', '11', '12', '13', '4'],
+                  '4': ['1', '2', '3', '4', '11', '12', '21', '22', '31', '32']
 }
 
 NEW_EXAMINATION_CHILDREN_HARD_LIFE = (
@@ -171,6 +172,9 @@ class IsServiceKindCorrespondsToTerm(rule.Rule):
 
     def run(self, field_value):
         kinds = KIND_TERM_DICT.get(self.term, [])
+
+        if not kinds or not self.term:
+            return True
 
         if field_value in kinds:
             return True

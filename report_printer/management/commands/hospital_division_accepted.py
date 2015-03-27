@@ -37,7 +37,7 @@ class Command(BaseCommand):
               AND medical_register.is_active
               AND provided_service.payment_type_fk in (2, 4)
               AND provided_event.term_fk = 1
-              AND (medical_service.group_fk IS NULL or medical_service.group_fk in (1, 2, 20))
+              AND (medical_service.group_fk IS NULL or medical_service.group_fk in (1, 2, 20, 32, 3))
         GROUP BY medical_division.id_pk, medical_division.code, medical_division.name
         ORDER BY medical_division.code
         """

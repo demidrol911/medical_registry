@@ -516,7 +516,7 @@ class MedicalOrganization(models.Model):
     '''
 
     def get_attachment_count(self, date):
-        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date, group__isnull=False)
+        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date)
         result = {
             1: {'men': 0, 'fem': 0},
             2: {'men': 0, 'fem': 0},
@@ -1706,3 +1706,32 @@ class PaymentKind(models.Model):
 
     class Meta:
         db_table = 'payment_kind'
+
+
+class SanctionStatus(models.Model):
+
+    SANCTION_TYPE_ADDED_BY_MEK = 1
+    SANCTION_TYPE_ADDED_BY_EXPERT = 2
+    SANCTION_TYPE_ADDED_BY_ECONOMIST = 3
+    SANCTION_TYPE_ADDED_BY_DEVELOPER = 4
+    SANCTION_TYPE_REMOVED_BY_EXPERT = 5
+    SANCTION_TYPE_REMOVED_BY_ECONOMIST = 6
+    SANCTION_TYPE_REMOVED_BY_DEVELOPER = 7
+    TYPES = (
+        (SANCTION_TYPE_ADDED_BY_MEK, u'Ошибка добавлена на первоначальном МЭК'),
+        (SANCTION_TYPE_ADDED_BY_EXPERT, u'Ошибка добавлена врачём-экспертом'),
+        (SANCTION_TYPE_ADDED_BY_ECONOMIST, u'Ошибка добавлена экономистом'),
+        (SANCTION_TYPE_ADDED_BY_DEVELOPER, u'Ошибка добавлена программистом'),
+        (SANCTION_TYPE_REMOVED_BY_EXPERT, u'Ошибка снята врачём-экспертом'),
+        (SANCTION_TYPE_REMOVED_BY_ECONOMIST, u'Ошибка снята экономистом'),
+        (SANCTION_TYPE_REMOVED_BY_DEVELOPER, u'Ошибка снята программистом'),
+    )
+
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    sanction = models.ForeignKey(Sanction, db_column='sanction_fk')
+    created_at = models.DateTimeField(default=datetime.datetime.utcnow())
+    type = models.SmallIntegerField(choices=TYPES)
+    comment = models.CharField(max_length=128)
+
+    class Meta:
+        db_table = 'provided_service_sanction_status'

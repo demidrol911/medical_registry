@@ -1,20 +1,34 @@
 #! -*- coding: utf-8 -*-
 
+from django.core.management.base import BaseCommand
+from django.db import connection
+from medical_service_register.path import (
+    REESTR_DIR,
+    REESTR_EXP,
+    BASE_DIR
+)
+from report_printer.excel_writer import ExcelWriter
+from report_printer.const import MONTH_NAME
+from report_printer.excel_style import (
+    VALUE_STYLE,
+    TITLE_STYLE,
+    TOTAL_STYLE,
+    WARNING_STYLE
+)
+from report_printer.management.commands.sogaz import (
+    registry_sogaz,
+    registry_sogaz_1,
+    registry_sogaz_2
+)
+from helpers.correct import date_correct
+from tfoms.models import MedicalService
+from tfoms import func
+from pse_exporter import Command as PseExporter
 from copy import deepcopy
 from decimal import Decimal
 import time
 
-from django.core.management.base import BaseCommand
-from django.db import connection
-
-from medical_service_register.path import REESTR_DIR, REESTR_EXP, BASE_DIR
-from report_printer.excel_writer import ExcelWriter
-from report_printer.const import MONTH_NAME
-from helpers.correct import date_correct
-from tfoms import func
-from pse_exporter import Command as PseExporter
-from tfoms.models import MedicalService
-from report_printer.excel_style import VALUE_STYLE, TITLE_STYLE, TOTAL_STYLE
+ACT_WIDTH = 27
 
 
 ### Вспомогательные функции
@@ -122,7 +136,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
                 break
 
         if group:
-            if group == 7:
+            if group == 23:
                 term_title = get_title(func.MEDICAL_SUBGROUPS, reason)
             elif group == 19:
                 term_title = u'Стоматология'
@@ -137,7 +151,8 @@ def print_first_page(act_book, mo, data, data_coefficient,
                 division_title = get_title(func.MEDICAL_SERVICES, division)
                 if group == 20:
                     tariff_profile = MedicalService.objects.get(pk=division).tariff_profile.name
-                    division_title = ' (' + tariff_profile + ')' + division_title
+                    group_code = MedicalService.objects.get(pk=division).vmp_group
+                    division_title = str(group_code) + ' (' + tariff_profile + ')' + division_title
         else:
             division_title = ''
             if term == 1:
@@ -170,7 +185,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
                     values[2] = 0
                     values[3] = 0
                 division_title = get_title(func.MEDICAL_DIVISIONS, division)
-            elif term == 4:
+            elif term == 5:
                 term_title = u'Скорая помощь'
                 division_title = get_title(func.MEDICAL_DIVISIONS, division)
             elif term == 7:
@@ -194,14 +209,14 @@ def print_first_page(act_book, mo, data, data_coefficient,
             if term == 3:
                 if capitation == 0 and is_print_capit:
                     act_book.set_style(TITLE_STYLE)
-                    act_book.write_cell(u'Поликлиника (подушевое)', 'r', 24)
+                    act_book.write_cell(u'Поликлиника (подушевое)', 'r', ACT_WIDTH+1)
                     print u'Поликлиника (подушевое)'
                     last_title_division = None
                     last_division_id = 0
                     is_print_capit = False
                 elif capitation == 1 and is_print_unit:
                     act_book.set_style(TITLE_STYLE)
-                    act_book.write_cell(u'Поликлиника (за единицу объёма)', 'r', 24)
+                    act_book.write_cell(u'Поликлиника (за единицу объёма)', 'r', ACT_WIDTH+1)
                     print u'Поликлиника (за единицу объёма)'
                     last_title_division = None
                     last_division_id = 0
@@ -209,7 +224,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
 
             print term_title
             act_book.set_style(TITLE_STYLE)
-            act_book.write_cell(term_title, 'r', 24)
+            act_book.write_cell(term_title, 'r', ACT_WIDTH+1)
             act_book.set_style(VALUE_STYLE)
             last_title_term = term_title
             last_capitation = capitation
@@ -218,6 +233,9 @@ def print_first_page(act_book, mo, data, data_coefficient,
         if division_title != last_title_division or last_division_id != division:
             last_title_division = division_title
             last_division_id = division
+            act_book.set_style(VALUE_STYLE)
+            if division_title == u'Неизвестно':
+                act_book.set_style(WARNING_STYLE)
             print_division(act_book, division_title, values)
         sum_term = calc_sum(sum_term, values)
     if data:
@@ -245,7 +263,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
     act_book.row_inc()
     if sum_capitation_policlinic[0]:
         act_book.set_style(TITLE_STYLE)
-        act_book.write_cell(u'Подушевой норматив по амбул. мед. помощи', 'r', 24)
+        act_book.write_cell(u'Подушевой норматив по амбул. мед. помощи', 'r', ACT_WIDTH+1)
         total_policlinic = None
         act_book.set_style(VALUE_STYLE)
         for idx, age_group in enumerate(sum_capitation_policlinic[1]):
@@ -259,7 +277,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
 
     if sum_capitation_amb[0]:
         act_book.set_style(TITLE_STYLE)
-        act_book.write_cell(u'Подушевой норматив по скорой мед. помощи', 'r', 24)
+        act_book.write_cell(u'Подушевой норматив по скорой мед. помощи', 'r', ACT_WIDTH+1)
         total_amb = None
         act_book.set_style(VALUE_STYLE)
         for idx, age_group in enumerate(sum_capitation_amb[1]):
@@ -282,14 +300,15 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             --- Все нормальные услуги ---
             select
             -- Вид помощи
-            case when pe.term_fk is null then 6
+            case when pe.term_fk is null then 4
+                 WHEN pe.term_fk = 4 then 5
                  ELSE pe.term_fk
                  end as term,
 
             -- Подушевое
             case when pe.term_fk = 3 THEN (
                  CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                      WHEN ps.payment_kind_fk = 1 THEN 1
+                      WHEN ps.payment_kind_fk in (1, 3) THEN 1
                  END
                  )
                  WHEN pe.term_fk = 4 THEN 0
@@ -310,6 +329,7 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
                       ELSE 0
                       END
                  )
+                 WHEN ms.group_fk in (25, 26) THEN 23
                  ELSE 0
                  END AS sub_term,
 
@@ -379,6 +399,12 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             0,
             0,
 
+            0,
+            0,
+
+            0,
+            0,
+
             sum(round(CASE WHEN ms.code ilike '0%'
                      THEN (CASE when ps.payment_kind_fk = 2 or pe.term_fk = 4 THEN 0
                            ELSE (
@@ -424,7 +450,7 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             union
              select
                 -- Вид помощи
-                6 as term,
+                4 as term,
 
                 -- Подушевое
                 1 AS capitation,
@@ -442,7 +468,7 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
                        as sub_term,
 
                 -- Группы услуг
-                7 as "group",
+                23 as "group",
 
                 -- Подгруппы
                 0 AS subgroup,
@@ -477,6 +503,12 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
                 0,
 
                 sum(CASE WHEN ms.code like '0%' and psc.coefficient_fk = 5 THEN 0.07*ps.tariff ELSE 0 END),
+                0,
+
+                0,
+                0,
+
+                0,
                 0,
 
                 0,
@@ -596,6 +628,12 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
                 0,
                 0,
 
+                0,
+                0,
+
+                0,
+                0,
+
                 sum(round(CASE WHEN ms.code ilike '0%' THEN ps.provided_tariff
                           ELSE 0 END, 2)) as accepted_payment_adult,
                 sum(round(CASE WHEN ms.code ilike '1%' THEN ps.provided_tariff
@@ -624,14 +662,15 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
     query_coefficient = """
             select
             -- Вид помощи
-            case when pe.term_fk is null then 6
+            case when pe.term_fk is null then 4
+                 WHEN pe.term_fk = 4 then 5
                  ELSE pe.term_fk
                  end as term,
 
             -- Подушевое
             case when pe.term_fk = 3 THEN (
                  CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                      WHEN ps.payment_kind_fk = 1 THEN 1
+                      WHEN ps.payment_kind_fk in (1, 3) THEN 1
                  END
                  )
                  WHEN pe.term_fk = 4 THEN 0
@@ -653,6 +692,7 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
                   ELSE 0
                   END
              )
+             WHEN ms.group_fk in (25, 26) THEN 23
              ELSE 0
              END AS sub_term,
 
@@ -745,8 +785,14 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             0,
             0,
 
-            0,
-            0,
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 14 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 14 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+            sum(CASE WHEN ms.code like '0%' and tc.id_pk = 15 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+            sum(CASE WHEN ms.code like '1%' and tc.id_pk = 15 THEN (tc.value-1)*ps.tariff ELSE 0 END),
 
             sum(CASE WHEN ms.code like '0%' and tc.id_pk in (8, 9, 10, 11, 12) THEN round(tc.value*ps.tariff, 2) ELSE 0 END),
             sum(CASE WHEN ms.code like '1%' and tc.id_pk in (8, 9, 10, 11, 12) THEN round(tc.value*ps.tariff, 2) ELSE 0 END),
@@ -807,14 +853,15 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
             --- Все нормальные услуги ---
             select
             -- Вид помощи
-            case when pe.term_fk is null then 6
+            case when pe.term_fk is null then 4
+                 WHEN pe.term_fk = 4 then 5
                  ELSE pe.term_fk
                  end as term,
 
             -- Подушевое
             case when pe.term_fk = 3 THEN (
                  CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                      WHEN ps.payment_kind_fk = 1 THEN 1
+                      WHEN ps.payment_kind_fk in (1, 3) THEN 1
                  END
                  )
                  WHEN pe.term_fk = 4 THEN 0
@@ -835,6 +882,7 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
                       ELSE 0
                       END
                  )
+                 WHEN ms.group_fk in (25, 26) THEN 23
                  ELSE 0
                  END AS sub_term,
 
@@ -904,6 +952,12 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
             0,
             0,
 
+            0,
+            0,
+
+            0,
+            0,
+
             sum(round(CASE WHEN ms.code ilike '0%' THEN (
                     CASE WHEN ps.payment_kind_fk = 2 THEN 0
                     ELSE ps.accepted_payment END
@@ -942,7 +996,7 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
             union
              select
                 -- Вид помощи
-                6 as term,
+                4 as term,
 
                 -- Подушевое
                 1 AS capitation,
@@ -960,7 +1014,7 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
                        as sub_term,
 
                 -- Группы услуг
-                7 as "group",
+                23 as "group",
 
                 -- Подгруппы
                 0 AS subgroup,
@@ -995,6 +1049,12 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
                 0,
 
                 sum(CASE WHEN ms.code like '0%' and psc.coefficient_fk = 5 THEN 0.07*ps.tariff ELSE 0 END),
+                0,
+
+                0,
+                0,
+
+                0,
                 0,
 
                 0,
@@ -1143,6 +1203,12 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
                 0,
                 0,
 
+                0,
+                0,
+
+                0,
+                0,
+
                  sum(CASE WHEN ms.code ilike '0%'
                           THEN (SELECT sum(ps1.accepted_payment)
                           from provided_service ps1
@@ -1186,14 +1252,15 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
     query_coefficient = """
         select
         -- Вид помощи
-        case when pe.term_fk is null then 6
+        case when pe.term_fk is null then 4
+             WHEN pe.term_fk = 4 then 5
              ELSE pe.term_fk
              end as term,
 
         -- Подушевое
         case when pe.term_fk = 3 THEN (
              CASE WHEN ps.payment_kind_fk = 2 THEN 0
-                  WHEN ps.payment_kind_fk = 1 THEN 1
+                  WHEN ps.payment_kind_fk in (1, 3) THEN 1
              END
              )
              WHEN pe.term_fk = 4 THEN 0
@@ -1215,6 +1282,7 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
               ELSE 0
               END
          )
+         WHEN ms.group_fk in (25, 26) THEN 23
          ELSE 0
          END AS sub_term,
 
@@ -1307,8 +1375,14 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
         0,
         0,
 
-        0,
-        0,
+        sum(CASE WHEN ms.code like '0%' and tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+        sum(CASE WHEN ms.code like '1%' and tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+        sum(CASE WHEN ms.code like '0%' and tc.id_pk = 14 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+        sum(CASE WHEN ms.code like '1%' and tc.id_pk = 14 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+
+        sum(CASE WHEN ms.code like '0%' and tc.id_pk = 15 THEN (tc.value-1)*ps.tariff ELSE 0 END),
+        sum(CASE WHEN ms.code like '1%' and tc.id_pk = 15 THEN (tc.value-1)*ps.tariff ELSE 0 END),
 
         sum(CASE WHEN ms.code like '0%' and tc.id_pk in (8, 9, 10, 11, 12) THEN round(tc.value*ps.tariff, 2) ELSE 0 END),
         sum(CASE WHEN ms.code like '1%' and tc.id_pk in (8, 9, 10, 11, 12) THEN round(tc.value*ps.tariff, 2) ELSE 0 END),
@@ -1368,7 +1442,6 @@ def print_errors_page(act_book, mo, capitation_events, treatment_events, data):
     print u'Список ошибок...'
     services_mek = data['discontinued_services']
     sanctions_mek = data['sanctions']
-    patients = data['patients']
 
     # Разбивка снятых с оплаты услуг на группы по коду ошибки и причине отказа
     failure_causes_group = {}
@@ -1385,169 +1458,6 @@ def print_errors_page(act_book, mo, capitation_events, treatment_events, data):
         failure_causes_group[failure_cause_id][active_error].\
             append((index, service['event_id'] in capitation_events or service['term'] == 4))
 
-    # Печать ошибок и рассчёт итоговых сумм по группам ошибок
-    init_sum = {
-        'sum_visited': 0,                  # Количество посещений
-        'sum_day': 0,                      # Сумма дней
-        'sum_uet': 0,                      # Сумма УЕТ
-        'sum_tariff': 0,                   # Сумма основного тарифа
-        'sum_calculated_payment': 0,       # Рассчётная сумма
-        'sum_discontinued_payment': 0      # Сумма снятая с оплаты
-    }
-
-    title_table = [
-        u'Полис', u'ФИО', u'Дата рожд', u'Номер карты',
-        u'Дата усл', u'Пос\госп', u'Кол дн', u'УЕТ', u'Код',
-        u'Диагн', u'Отд.', u'№ случая', u'ID_SERV', u'ID_PAC',
-        u'Предъявл', u'Расч.\Сумма', u'Снят.\Сумма'
-    ]
-
-    total_sum = deepcopy(init_sum)
-
-    act_book.set_sheet(1)
-    act_book.set_cursor(3, 0)
-    act_book.set_style({'align': 'center'})
-    act_book.write_cell(u'медико-экономического контроля счета: за %s' %
-                        MONTH_NAME[func.PERIOD])
-    act_book.set_cursor(5, 0)
-    act_book.write_cell(u'в медицинской организации: %s'
-                        % func.get_mo_info(mo)['name'])
-    act_book.set_cursor(7, 0)
-    for failure_cause_id in failure_causes_group:
-
-        # Распечатка наименования причины отказа
-        act_book.set_style({'bold': True, 'font_color': 'red', 'font_size': 11})
-        act_book.write_cell(func.FAILURE_CAUSES[failure_cause_id]['number'] + ' ' +
-                            func.FAILURE_CAUSES[failure_cause_id]['name'], 'r')
-
-        for error_id in failure_causes_group[failure_cause_id]:
-
-            # Распечатка наименования ошибки
-            act_book.set_style({'bold': True, 'font_color': 'blue', 'font_size': 11})
-            act_book.write_cell(func.ERRORS[error_id]['code'] + ' ' +
-                                func.ERRORS[error_id]['name'], 'r')
-            act_book.set_style({'bold': True, 'border': 1, 'align': 'center', 'font_size': 11})
-
-            # Распечатка загловков таблицы с информацией о снятых услугах
-            for title in title_table:
-                act_book.write_cell(title, 'c')
-            act_book.row_inc()
-
-            total_sum_error = deepcopy(init_sum)               # Итоговая сумма по ошибке
-            act_book.set_style(VALUE_STYLE)
-            for index, is_capitation in failure_causes_group[failure_cause_id][error_id]:
-                service = services_mek[index]
-                patient = patients[service['patient_id']]
-
-                act_book.write_cell(patient['policy_series'].replace('\n', '') + ' ' +
-                                    patient['policy_number']
-                                    if patient['policy_series']
-                                    else patient['policy_number'], 'c')               # Печать номера полиса
-
-                act_book.write_cell(('%s %s %s' %
-                                     (patient['last_name'] or '',
-                                      patient['first_name'] or '',
-                                      patient['middle_name'] or '')).upper(), 'c')    # Печать ФИО
-
-                act_book.write_cell(date_correct(patient['birthdate']).
-                                    strftime('%d.%m.%Y'), 'c')                        # Печать даты рождения
-
-                act_book.write_cell(service['anamnesis_number'], 'c')                 # Номер карты
-
-                act_book.write_cell(date_correct(service['end_date']).
-                                    strftime('%d.%m.%Y'), 'c')                        # Дата окончания услуги
-
-                act_book.write_cell(0 if service['group'] == 27 else 1, 'c')          # Посещения (госпитализация)
-
-                act_book.write_cell(service['quantity'], 'c')                         # Количество дней
-
-                act_book.write_cell(service['uet'], 'c')                              # Количество УЕТ
-
-                act_book.write_cell(service['code'], 'c')                             # Код услуги
-
-                act_book.write_cell(service['basic_disease'], 'c')                    # Код основного диагноза
-
-                act_book.write_cell(service['name'], 'c')                             # Название услуги
-
-                act_book.write_cell(service['event_id'], 'c')                         # Ид случая
-
-                act_book.write_cell(service['xml_id'], 'c')                           # Ид услуги в xml
-
-                act_book.write_cell(patient['xml_id'], 'c')                           # Ид патиента в xml
-
-                act_book.write_cell(service['tariff'], 'c')                           # Основной тариф
-
-                act_book.write_cell(service['calculated_payment'], 'c')               # Рассчётная сумма
-
-                act_book.write_cell(u'Подуш.'
-                                    if is_capitation
-                                    else service['provided_tariff'], 'r')             # Снятая сумма
-
-                # Рассчёт итоговой суммы по ошибке
-                total_sum_error['sum_visited'] += 0 if service['group'] == 27 else 1
-                total_sum_error['sum_day'] += service['quantity']
-                total_sum_error['sum_uet'] += service['uet']
-                total_sum_error['sum_tariff'] += service['tariff']
-                total_sum_error['sum_calculated_payment'] += service['calculated_payment']
-                total_sum_error['sum_discontinued_payment'] += 0 \
-                    if is_capitation else service['provided_tariff']
-
-            # Рассчёт итоговой суммы по всем ошибкам в MO
-            total_sum = calculate_total_sum(total_sum, total_sum_error)
-
-            # Печать итоговой суммы по ошибке
-            print_total_sum_error(act_book, u'Итого по ошибке', total_sum_error)
-
-    # Печать итоговой суммы по всем ошибкам
-    print_total_sum_error(act_book, u'Итого по всем ошибкам', total_sum)
-
-    # Печать места для подписей
-    signature_dict = [
-        {'title': u'Исполнитель',
-         'column': 0,
-         'name': u'()',
-         'row_space': 2,
-         'newline': False},
-        {'title': u'Исполнитель',
-         'column': 0,
-         'name': u'()',
-         'row_space': 1,
-         'newline': False},
-        {'title': u'Руководитель страховой медицинской организации',
-         'column': 6,
-         'name': u'(Е.Л.Дьячкова)',
-         'row_space': 1,
-         'newline': True}
-    ]
-    for signature in signature_dict:
-        act_book.set_style()
-        act_book.write_cell(signature['title'], 'c', signature['column'])
-        act_book.write_cell('', 'c')
-        act_book.write_cell('', 'c')
-        if signature['newline']:
-            act_book.row_inc()
-            act_book.row_inc()
-            act_book.write_cell('', 'c')
-            act_book.write_cell('', 'c')
-            act_book.write_cell('', 'c')
-        act_book.set_style({'bottom': 1})
-        act_book.write_cell('', 'c', 1)
-        act_book.set_style()
-        act_book.write_cell(u'подпись', 'c')
-        act_book.write_cell(signature['name'], 'r', 1)
-        for index in xrange(signature['row_space']):
-            act_book.row_inc()
-
-    act_book.write_cell(u'М. П.', 'r')
-    act_book.write_cell('', 'r')
-    act_book.write_cell(u'Должность, подпись руководителя медицинской организации, '
-                        u'ознакомившегося с Актом', 'r', 8)
-    act_book.set_style({'bottom': 1})
-    act_book.write_cell('', 'r', 5)
-    act_book.set_style()
-    act_book.write_cell(u'Дата'+'_'*30, size=8)
-
-    act_book.hide_column('M:N')
 
     # Сводная информация по причинам отказа
     value_keys = (
@@ -1597,7 +1507,9 @@ def print_errors_page(act_book, mo, capitation_events, treatment_events, data):
 
             for index, is_capitation in failure_causes_group[failure_cause_id][error_id]:
                 service = services_mek[index]
-
+                if failure_cause_id == 127:
+                    print service['id'], service['code'], service['name'], service['event_id']
+                    print unique_event
                 # Словарь, в котором описываются условия разбивки услуг (по стационару, поликлинике и т. д.)
                 # и переопределяются значения рассчёта по умолчанию
                 rules_dict = [
@@ -1672,8 +1584,12 @@ def print_errors_page(act_book, mo, capitation_events, treatment_events, data):
                             value = value_default[column_key]
                         total_sum_failure[term][column_key] += value
 
-                if service['event_id'] not in unique_event:
-                    unique_event.append(service['event_id'])
+                if service['event_id'] in treatment_events and service['subgroup'] == 12 and service['term'] == 3 and service['group'] == 19:
+                    if service['event_id'] not in unique_event:
+                        unique_event.append(service['event_id'])
+                elif service['event_id'] in treatment_events and (service['term'] == 3 and not service['group'] == 19):
+                    if service['event_id'] not in unique_event:
+                        unique_event.append(service['event_id'])
 
         # Рассчёт колонки с итоговой суммой
         for term in total_sum_failure:
@@ -1711,6 +1627,7 @@ def print_total_sum_error(act_book, title, total_sum):
     act_book.set_style()
     act_book.row_inc()
 
+
 ### Распечатка акта по 146-му приказу
 def print_order_146(act_book, mo, sum_capitation_policlinic,
                     sum_capitation_ambulance, department=None):
@@ -1731,22 +1648,18 @@ def print_order_146(act_book, mo, sum_capitation_policlinic,
                  WHEN (pe.term_fk = 3 AND ms.reason_fk in (2, 3, 8)        -- Профилактика (первич. )
                        and ms.division_fk in (443, 399, 401, 403, 444))
                        or  ms.group_fk = 4
-                       or ms.code in ('019201', '019212')
                        --Новые коды по профосмотру взрослых
                        or  ms.code in ('019214', '019215', '019216', '019217')
                        or  ms.code in ('019001', '019021', '019023', '019022', '019024')
                        or  ms.code  = '019107'
-                       or ms.code = '119001'
                        --Новые коды по диспансеризации детей сирот в стац. учреждениях
                        or ms.code in ('119020', '119021', '119022', '119023',
                              '119024', '119025', '119026', '119027',
                              '119028', '119029', '119030', '119031')
-                       or  ms.code = '119201'
                        --Новые коды по диспансеризации детей сирот без попечения родителей
                        or  ms.code in ('119220', '119221', '119222', '119223',
                              '119224', '119225', '119226', '119227',
                              '119228', '119229', '119230', '119231')
-                       or  ms.code in ('119051', '119052', '119053', '119054', '119055', '119056')
                        --Новые коды по профосмотрам несовершеннолетних
                        or ms.code in ('119080', '119081', '119082', '119083',
                              '119084', '119085', '119086', '119087',
@@ -1780,8 +1693,8 @@ def print_order_146(act_book, mo, sum_capitation_policlinic,
                               444
                  )   THEN 9
 
-                 when (pe.term_fk = 3
-                          and ms.group_fk is NULL
+                 when (pe.term_fk = 3                                      -- профилактика (спец. )
+                          and (ms.group_fk is NULL or ms.group_fk =24)
                           AND ms.reason_fk in (2, 3, 8)
                           AND ms.division_fk not in (443, 399, 401, 403, 444))
                           or   ms.code = '019020'
@@ -2023,23 +1936,23 @@ def print_order_146(act_book, mo, sum_capitation_policlinic,
     if sum_capitation_policlinic[0]:
         act_book.set_cursor(31, 15)
         for value in sum_capitation_policlinic[1]:
-            total[13] += value[22]
-            total[14] += value[23]
-            total[12] += value[22] + value[23]
-            act_book.write_cell(value[22], 'c')
-            act_book.write_cell(value[23], 'c')
-            act_book.write_cell(value[22] + value[23], 'c')
+            total[13] += value[ACT_WIDTH-1]
+            total[14] += value[ACT_WIDTH]
+            total[12] += value[ACT_WIDTH-1] + value[ACT_WIDTH]
+            act_book.write_cell(value[ACT_WIDTH-1], 'c')
+            act_book.write_cell(value[ACT_WIDTH], 'c')
+            act_book.write_cell(value[ACT_WIDTH-1] + value[ACT_WIDTH], 'c')
             act_book.cursor['row'] += 1
             act_book.cursor['column'] = 15
     if sum_capitation_ambulance[0]:
         act_book.set_cursor(42, 15)
         for value in sum_capitation_ambulance[1]:
-            total[13] += value[22]
-            total[14] += value[23]
-            total[12] += value[22] + value[23]
-            act_book.write_cell(value[22], 'c')
-            act_book.write_cell(value[23], 'c')
-            act_book.write_cell(value[22] + value[23], 'c')
+            total[13] += value[ACT_WIDTH-1]
+            total[14] += value[ACT_WIDTH]
+            total[12] += value[ACT_WIDTH-1] + value[ACT_WIDTH]
+            act_book.write_cell(value[ACT_WIDTH-1], 'c')
+            act_book.write_cell(value[ACT_WIDTH], 'c')
+            act_book.write_cell(value[ACT_WIDTH-1] + value[ACT_WIDTH], 'c')
             act_book.cursor['row'] += 1
             act_book.cursor['column'] = 15
     act_book.set_cursor(52, 3)
@@ -2404,7 +2317,7 @@ class Command(BaseCommand):
             sum_capitation_policlinic = func.calculate_capitation_tariff(3, mo)
             sum_capitation_ambulance = func.calculate_capitation_tariff(4, mo)
 
-            target = target_dir % (handbooks['year'], handbooks['period']) + r'\%s' % \
+            target = target_dir % (handbooks['year'], handbooks['period']) + ur'\согаз\%s' % \
                 handbooks['mo_info']['name'].replace('"', '').strip()
             print u'Печать акта: %s ...' % target
 
@@ -2419,6 +2332,7 @@ class Command(BaseCommand):
 
                 print_errors_page(act_book, mo, capitation_events,
                                   treatment_events, data)
+
                 print_error_pk(
                     act_book, mo,
                     capitation_events, treatment_events,
@@ -2431,6 +2345,12 @@ class Command(BaseCommand):
                 )
 
                 print_error_fund(act_book, mo, data, handbooks)
+
+                ### Согазовские отчёты
+                registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo)
+                registry_sogaz.print_registry_sogaz_1(act_book=act_book, mo=mo)
+                registry_sogaz_2.print_registry_sogaz_3(act_book=act_book, mo=mo)
+
                 if status == 8:
                     PseExporter().handle(*[mo, 6])
                 if status == 3:
@@ -2489,11 +2409,15 @@ class Command(BaseCommand):
                             sum_capitation_amb=sum_capitation_ambulance,
                             department=department
                         )
+
+                        registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo, department=department)
+
                         print_errors_page(
                             act_book, mo,
                             capitation_events, treatment_events,
                             data
                         )
+
                         print_error_pk(
                             act_book, mo,
                             capitation_events, treatment_events,
