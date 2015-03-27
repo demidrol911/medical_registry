@@ -5,10 +5,9 @@ from django.db import connection, transaction
 from django.db.models import Max, Q, F
 from django.db import transaction
 import time
-from tfoms.models import (
-    TariffBasic, ProvidedService, MedicalRegister, TariffNkd,
-    ProvidedServiceCoefficient, MedicalOrganization, Sanction,
-    ExaminationAgeBracket, ProvidedEvent, Sanction)
+from main.models import (
+    ProvidedService, MedicalRegister, ProvidedServiceCoefficient,
+    ExaminationAgeBracket, Sanction, SanctionStatus)
 
 from helpers import mek_raw_query
 from datetime import datetime, timedelta, date
@@ -42,32 +41,24 @@ def set_status(register_element, status_code):
              .update(status=status_code)
 
 
-def get_sanction_tuple(service_qs, error):
-    errors = [(rec.pk, 1, rec.invoiced_payment, error) for rec in list(service_qs)]
-
-    errors_pk = [rec[0] for rec in errors]
-
-    ProvidedService.objects.filter(pk__in=errors_pk).update(
-        accepted_payment=0, payment_type=3)
-
-    errors_objs = []
-    for rec in errors:
-        errors_objs.append(Sanction(service_id=rec[0], type_id=1,
-                                    underpayment=rec[2], error_id=rec[3]))
-
-    Sanction.objects.bulk_create(errors_objs)
-
-    return True
-
-
-def set_sanction_mek(service, error_code):
+def set_sanction(service, error_code):
     service.payment_type_id = 3
     service.accepted_payment = 0
     service.save()
 
-    Sanction.objects.create(
+    sanction = Sanction.objects.create(
         type_id=1, service=service, underpayment=service.invoiced_payment,
         error_id=error_code)
+
+    SanctionStatus.objects.create(
+        sanction=sanction,
+        type=SanctionStatus.SANCTION_TYPE_ADDED_BY_MEK)
+
+
+def set_sanctions(service_qs, error_code):
+    with transaction.atomic():
+        for service in service_qs:
+            set_sanction(service, error_code)
 
 
 def get_services(register_element):
@@ -413,8 +404,8 @@ def identify_patient(register_element):
                                     on person.version_id_pk = person_id.person_fk
                                 join insurance_policy
                                     on insurance_policy.person_fk = person.version_id_pk
-                            where replace(upper(regexp_replace(person_id.series, '[ -/\\_]', '')), 'I', '1') = replace(upper(regexp_replace(p2.person_id_series, '[ -/\\_]', '')), 'I', '1')
-                                and replace(upper(regexp_replace(person_id.number, '[ -/\\_]', '')), 'I', '1') = replace(upper(regexp_replace(p2.person_id_number, '[ -/\\_]', '')), 'I', '1')
+                            where translate(upper(regexp_replace(person_id.series, '[ -/\\_]', '', 'g')), 'IOT', '1ОТ') = translate(upper(regexp_replace(p2.person_id_series, '[ -/\\_]', '', 'g')), 'IOT', '1ОТ')
+                                and translate(upper(regexp_replace(person_id.number, '[ -/\\_]', '', 'g')), 'IOT', '1ОТ') = translate(upper(regexp_replace(p2.person_id_number, '[ -/\\_]', '', 'g')), 'IOT', '1ОТ')
                             order by insurance_policy.stop_date desc nulls first
                             limit 1
                         ) as T
@@ -471,7 +462,7 @@ def identify_patient(register_element):
                         where replace(first_name, 'Ё', 'Е') = replace(p2.first_name, 'Ё', 'Е')
                             and replace(middle_name, 'Ё', 'Е') = replace(p2.middle_name, 'Ё', 'Е')
                             and birthdate = p2.birthdate
-                            and regexp_replace(person.snils, '[ -/\\_]', '') = regexp_replace(p2.snils, '[ -/\\_]', '')
+                            and regexp_replace(person.snils, '[ -/\\_]', '', 'g') = regexp_replace(p2.snils, '[ -/\\_]', '', 'g')
                         ORDER BY stop_date DESC NULLS FIRST
                         limit 1) as T
                     )
@@ -705,7 +696,7 @@ def sanctions_on_repeated_service(register_element):
                         on i.version_id_pk = p.insurance_policy_fk
                 where mr.is_active
                     and mr.organization_code = %(organization)s
-                    and format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE < format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
+                    and format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE between  format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE - interval '5 months' and format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE  - interval '1 months'
                     and ps.payment_type_fk in (2, 4)
             ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
                 and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
@@ -727,7 +718,7 @@ def sanctions_on_repeated_service(register_element):
                     period=register_element['period'],
                     organization=register_element['organization_code']))
 
-    return get_sanction_tuple(services, 64)
+    return set_sanctions(services, 64)
     #return [(rec.pk, 1, rec.invoiced_payment, 64) for rec in services]
 
 
@@ -880,8 +871,8 @@ def sanctions_on_repeated_examination(register_element):
                      period=register_element['period'],
                      organization=register_element['organization_code']))
 
-    return (get_sanction_tuple(services1, 64),
-            get_sanction_tuple(services2, 64))
+    return (set_sanctions(services1, 64),
+            set_sanctions(services2, 64))
 
 
 def sanctions_on_ill_formed_adult_examination(register_element):
@@ -1007,7 +998,7 @@ def sanctions_on_ill_formed_adult_examination(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 34)
+    return set_sanctions(services, 34)
     #return [(rec.pk, 1, rec.invoiced_payment, 34) for rec in services]
 
 
@@ -1078,7 +1069,7 @@ def sanctions_on_duplicate_services(register_element):
                     period=register_element['period'],
                     organization=register_element['organization_code']))
 
-    return get_sanction_tuple(services, 67)
+    return set_sanctions(services, 67)
 
 
 def sanctions_on_cross_dates_services(register_element):
@@ -1180,7 +1171,7 @@ def sanctions_on_cross_dates_services(register_element):
                      period=register_element['period'],
                      organization=register_element['organization_code']))
 
-    return get_sanction_tuple(services1, 73) + get_sanction_tuple(services2, 73)
+    return set_sanctions(services1, 73) + set_sanctions(services2, 73)
 
 
 def sanctions_on_disease_gender(register_element):
@@ -1195,7 +1186,7 @@ def sanctions_on_disease_gender(register_element):
         event__record__register__organization_code=register_element['organization_code']
     ).extra(where=['(select count(id_pk) from provided_service_sanction where service_fk = provided_service.id_pk and error_fk = 29) = 0'])
 
-    return get_sanction_tuple(services, 29)
+    return set_sanctions(services, 29)
 
 
 def sanctions_on_service_gender(register_element):
@@ -1210,7 +1201,7 @@ def sanctions_on_service_gender(register_element):
         event__record__register__organization_code=register_element['organization_code']
     ).extra(where=['(select count(id_pk) from provided_service_sanction where service_fk = provided_service.id_pk and error_fk = 41) = 0'])
 
-    return get_sanction_tuple(services, 41)
+    return set_sanctions(services, 41)
 
 
 def sanctions_on_wrong_date_service(register_element):
@@ -1248,7 +1239,7 @@ def sanctions_on_wrong_date_service(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 32)
+    return set_sanctions(services, 32)
 
 
 def is_wrong_date(service, period):
@@ -1309,7 +1300,7 @@ def sanctions_on_wrong_age_service(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 35)
+    return set_sanctions(services, 35)
 
 
 def is_wrong_age(service):
@@ -1376,7 +1367,7 @@ def sanctions_on_wrong_examination_age_group(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 35)
+    return set_sanctions(services, 35)
 
 
 def is_wrong_examination_age_group(service):
@@ -1447,7 +1438,7 @@ def sanctions_on_not_paid_in_oms(register_element):
         event__record__register__organization_code=register_element['organization_code']
     ).extra(where=['(select id_pk from provided_service_sanction where service_fk = provided_service.id_pk and error_fk = 58) is null'])
 
-    return get_sanction_tuple(services1, 58) + get_sanction_tuple(services2, 59)
+    return set_sanctions(services1, 58) + set_sanctions(services2, 59)
 
 
 def drop_examination_event(register_element):
@@ -1593,7 +1584,7 @@ def sanctions_on_invalid_stomatology_event(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 34)
+    return set_sanctions(services, 34)
 
 
 def sanctions_on_invalid_outpatient_event(register_element):
@@ -1663,7 +1654,7 @@ def sanctions_on_invalid_outpatient_event(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 34)
+    return set_sanctions(services, 34)
 
 
 def drop_outpatient_event(register_element):
@@ -1836,7 +1827,7 @@ def sanctions_on_invalid_hitech_service_diseases(register_element):
         query2, [register_element['year'], register_element['period'],
                  register_element['organization_code']])
 
-    return get_sanction_tuple(services1, 77) + get_sanction_tuple(services2, 78)
+    return set_sanctions(services1, 77) + set_sanctions(services2, 78)
 
 
 def sanctions_on_wrong_age_adult_examination(register_element):
@@ -1871,7 +1862,7 @@ def sanctions_on_wrong_age_adult_examination(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 35)
+    return set_sanctions(services, 35)
 
 
 def sanctions_on_adult_examination_service_count(register_element):
@@ -2007,7 +1998,7 @@ def sanctions_on_adult_examination_service_count(register_element):
         query2, [register_element['year'], register_element['period'],
                  register_element['organization_code']])
 
-    return get_sanction_tuple(services1, 34) + get_sanction_tuple(services2, 34)
+    return set_sanctions(services1, 34) + set_sanctions(services2, 34)
 
 
 def sanctions_on_ill_formed_children_examination(register_element):
@@ -2075,7 +2066,7 @@ def sanctions_on_ill_formed_children_examination(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 34)
+    return set_sanctions(services, 34)
 
 
 def sanctions_on_wrong_examination_attachment(register_element):
@@ -2137,7 +2128,7 @@ def sanctions_on_wrong_examination_attachment(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 1)
+    return set_sanctions(services, 1)
 
 
 def sanctions_on_wrong_age_examination_children_adopted(register_element):
@@ -2172,7 +2163,7 @@ def sanctions_on_wrong_age_examination_children_adopted(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 35)
+    return set_sanctions(services, 35)
 
 
 def sanctions_on_wrong_age_examination_children_difficult(register_element):
@@ -2207,7 +2198,7 @@ def sanctions_on_wrong_age_examination_children_difficult(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    return get_sanction_tuple(services, 35)
+    return set_sanctions(services, 35)
 
 
 def drop_duplicate_examination_in_current_register(register_element):
@@ -2252,7 +2243,7 @@ def drop_duplicate_examination_in_current_register(register_element):
                     period=register_element['period'],
                     organization=register_element['organization_code']))
 
-    return get_sanction_tuple(services, 64)
+    return set_sanctions(services, 64)
 
 
 def sanctions_on_service_term_kind_mismatch(register_element):
@@ -2287,7 +2278,7 @@ def sanctions_on_service_term_kind_mismatch(register_element):
                     period=register_element['period'],
                     organization=register_element['organization_code']))
 
-    return get_sanction_tuple(services, 79)
+    return set_sanctions(services, 79)
 
 
 def sanctions_on_service_term_mismatch(register_element):
@@ -2322,7 +2313,7 @@ def sanctions_on_service_term_mismatch(register_element):
 
     #print len(services) #, type(services)
 
-    return get_sanction_tuple(services, 76)
+    return set_sanctions(services, 76)
 
 
 def main():
@@ -2408,33 +2399,33 @@ def main():
                 if not service.payment_type_id:
 
                     if not service.patient_policy:
-                        set_sanction_mek(service, 54)
+                        set_sanction(service, 54)
 
                     elif service.person_deathdate \
                             and service.person_deathdate < service.start_date:
-                        set_sanction_mek(service, 56)
+                        set_sanction(service, 56)
 
                     elif service.policy_stop_date:
                         if service.policy_stop_date < service.start_date \
                                 and service.stop_reason in (1, 3, 4):
-                            set_sanction_mek(service, 53)
+                            set_sanction(service, 53)
 
                         if service.policy_type == 1 and service.policy_stop_date < \
                                 min_date_for_stopped_policy:
-                            set_sanction_mek(service, 54)
+                            set_sanction(service, 54)
 
                     #if not service.service_examination_special and \
                     #        is_wrong_date(service, current_period):
-                    #    set_sanction_mek(service, 32)
+                    #    set_sanction(service, 32)
 
                     #if register_element['status'] == 1 \
                     #        and service.service_group not in (11, 9) \
                     #        and is_wrong_age(service):
-                    #    set_sanction_mek(service, 35)
+                    #    set_sanction(service, 35)
 
                     #if service.service_examination_group and \
                     #        is_wrong_examination_age_group(service):
-                    #    set_sanction_mek(service, 35)
+                    #    set_sanction(service, 35)
 
                 provided_tariff = float(service.tariff)
 
@@ -2692,7 +2683,7 @@ def main():
 
                 if (tariff - float(service.tariff)) >= 0.01 or \
                         (tariff - float(service.tariff)) <= -0.01:
-                    set_sanction_mek(service, 61)
+                    set_sanction(service, 61)
                 else:
                     service.accepted_payment = round(float(accepted_payment), 2)
                     if not service.payment_type:
