@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from django.db.models import Q
-from tfoms.models import ProvidedService, Sanction, MedicalError, \
-    MedicalServiceDisease, MedicalRegister, MedicalRegisterStatus
+from tfoms.models import (
+    ProvidedService, Sanction,
+    MedicalError,
+    MedicalRegister,
+    SanctionStatus
+)
 from collections import defaultdict
 from dbfpy import dbf
 import os
@@ -132,8 +135,16 @@ def main():
 
             if to_delete:
                 print 'delete', to_delete, error_set, pse_error_set, 'rec_id', rec['recid']
-                Sanction.objects.filter(service_id=provided_service_pk,
-                                        error__old_code__in=to_delete).delete()
+                sanctions = Sanction.objects.filter(
+                    service_id=provided_service_pk,
+                    error_old_code__in=to_delete
+                )
+                for sanction in sanctions:
+                    SanctionStatus.objects.create(
+                        sanction=sanction,
+                        type=SanctionStatus.SANCTION_TYPE_REMOVED_BY_EXPERT
+                    )
+                sanctions.update(is_active=False)
                 print len(to_delete), len(error_set), to_delete, error_set
                 if len(to_delete) == len(error_set):
                     print 'NULLed'
@@ -153,9 +164,13 @@ def main():
                 service.save()
 
                 for err_rec in to_insert:
-                    Sanction.objects.create(
+                    sanction = Sanction.objects.create(
                         service=service, type_id=1, underpayment=underpayment,
                         error_id=ERRORS_CODES.get(err_rec, None))
+                    SanctionStatus.objects.create(
+                        sanction=sanction,
+                        type=SanctionStatus.SANCTION_TYPE_ADDED_BY_EXPERT
+                    )
         #print not_found_service
         for s in not_found_service:
             file_not_found.write(s.encode('cp866')+'\n')

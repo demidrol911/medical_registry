@@ -1768,9 +1768,58 @@ def drop_outpatient_event(register_element):
         AND pss.id_pk is NULL
     """
 
+    new_query_1 = """
+    select T.error_code, provided_service.id_pk
+    from provided_service
+    JOIN medical_service ms ON ms.id_pk = provided_service.code_fk
+    join
+        (
+            select DISTINCT provided_event.id_pk as event_id,
+                pss.error_fk as error_code
+            from provided_service ps1
+                join medical_service
+                    on medical_service.id_pk = ps1.code_fk
+                join provided_event
+                    on ps1.event_fk = provided_event.id_pk
+                join medical_register_record
+                    on provided_event.record_fk = medical_register_record.id_pk
+                join medical_register mr1
+                    on medical_register_record.register_fk = mr1.id_pk
+                JOIN patient p1
+                    on medical_register_record.patient_fk = p1.id_pk
+                join provided_service_sanction pss
+                    on pss.id_pk = (
+                        select pssi.id_pk
+                        from provided_service_sanction pssi
+                            join medical_error mei
+                                on mei.id_pk = pssi.error_fk
+                        WHERE pssi.service_fk = ps1.id_pk
+                        ORDER BY mei.weight DESC
+                        limit 1
+                    )
+            where mr1.is_active
+                and mr1.year = %s
+                and mr1.period = %s
+                and mr1.organization_code = %s
+                AND (
+                       ((medical_service.group_fk not in (19, 27) or medical_service.group_fk is NULL))
+                       or
+                       (medical_service.group_fk = 19 AND medical_service.subgroup_fk is NOT NULL)
+                       )
+                and ps1.payment_type_fk = 3
+        ) as T
+        on provided_service.event_fk = T.event_id
+    LEFT JOIN provided_service_sanction pss
+        on pss.service_fk = provided_service.id_pk
+            and error_fk = T.error_code
+    where (ms.group_fk != 27 or ms.group_fk is NULL)
+    and pss.id_pk is null
+    """
+
     services = ProvidedService.objects.raw(
-        new_query, [register_element['year'], register_element['period'],
-                register_element['organization_code']])
+        new_query_1, [
+            register_element['year'], register_element['period'],
+            register_element['organization_code']])
 
     errors = [(rec.pk, 1, rec.accepted_payment, rec.error_code) for rec in list(services)]
     errors_pk = [rec[0] for rec in errors]

@@ -4,7 +4,7 @@ from django.db import models
 from django.db import connection, transaction
 from django.db.models.query import QuerySet
 from django.db.models import Sum
-from datetime import datetime
+import datetime
 
 SERVICE_XML_TYPE_PERSON = 0
 SERVICE_XML_TYPE_REGULAR = 1
@@ -1709,8 +1709,29 @@ class PaymentKind(models.Model):
 
 
 class SanctionStatus(models.Model):
+
+    SANCTION_TYPE_ADDED_BY_MEK = 1
+    SANCTION_TYPE_ADDED_BY_EXPERT = 2
+    SANCTION_TYPE_ADDED_BY_ECONOMIST = 3
+    SANCTION_TYPE_ADDED_BY_DEVELOPER = 4
+    SANCTION_TYPE_REMOVED_BY_EXPERT = 5
+    SANCTION_TYPE_REMOVED_BY_ECONOMIST = 6
+    SANCTION_TYPE_REMOVED_BY_DEVELOPER = 7
+    TYPES = (
+        (SANCTION_TYPE_ADDED_BY_MEK, u'Ошибка добавлена на первоначальном МЭК'),
+        (SANCTION_TYPE_ADDED_BY_EXPERT, u'Ошибка добавлена врачём-экспертом'),
+        (SANCTION_TYPE_ADDED_BY_ECONOMIST, u'Ошибка добавлена экономистом'),
+        (SANCTION_TYPE_ADDED_BY_DEVELOPER, u'Ошибка добавлена программистом'),
+        (SANCTION_TYPE_REMOVED_BY_EXPERT, u'Ошибка снята врачём-экспертом'),
+        (SANCTION_TYPE_REMOVED_BY_ECONOMIST, u'Ошибка снята экономистом'),
+        (SANCTION_TYPE_REMOVED_BY_DEVELOPER, u'Ошибка снята программистом'),
+    )
+
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')
     sanction = models.ForeignKey(Sanction, db_column='sanction_fk')
-    created_at = models.DateTimeField(db_column='create_at', default=datetime.now)
-    who = models.IntegerField(db_column='type')
-    comment = models.CharField(db_column='comment', max_length=128)
+    created_at = models.DateTimeField(default=datetime.datetime.utcnow())
+    type = models.SmallIntegerField(choices=TYPES)
+    comment = models.CharField(max_length=128)
+
+    class Meta:
+        db_table = 'provided_service_sanction_status'

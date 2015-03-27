@@ -357,7 +357,7 @@ class Command(BaseCommand):
         ]
 
         mo_list = func.get_mo_register(status=status)
-        #mo_list = []
+        mo_list = ['280017']
         for mo in mo_list:
             target = target_dir % (func.YEAR, func.PERIOD) + ur'\дефекты\%s_дефекты' % \
                 func.get_mo_info(mo)['name'].replace('"', '').strip()

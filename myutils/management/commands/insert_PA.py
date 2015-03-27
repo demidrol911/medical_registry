@@ -2,7 +2,11 @@
 
 from datetime import datetime
 from django.core.management.base import BaseCommand
-from tfoms.models import ProvidedService, ProvidedServiceCoefficient, Sanction
+from tfoms.models import (
+    ProvidedService,
+    Sanction,
+    SanctionStatus
+)
 from tfoms import func
 
 
@@ -79,9 +83,15 @@ class Command(BaseCommand):
                 service=service, coefficient_id=6
             )
             '''
-            Sanction.objects.create(
-                type_id=1, service=service, underpayment=accepted_payment,
+            sanction = Sanction.objects.create(
+                type_id=1,
+                service=service,
+                underpayment=accepted_payment,
                 error_id=75
+            )
+            SanctionStatus.objects.get_or_create(
+                sanction=sanction,
+                type=SanctionStatus.SANCTION_TYPE_ADDED_BY_ECONOMIST
             )
 
         func.change_register_status(mo_code, 8)
