@@ -4,7 +4,7 @@ from django.db import connection
 from medical_service_register.path import REESTR_EXP, BASE_DIR
 from report_printer.const import MONTH_NAME, ACT_CELL_POSITION
 from report_printer.excel_style import VALUE_STYLE, PERIOD_VALUE_STYLE
-from helpers.excel_writer import ExcelWriter
+from report_printer.excel_writer import ExcelWriter
 
 
 ACT_PATH = ur'{dir}\{title}_{month}_{year}'
@@ -76,8 +76,20 @@ def print_act(year, period, data):
                 for division in data_query['structure'][1]:
                     division_by = get_division_by(data_query['structure'][2], division)
                     column_len = get_division_by(data_query['column_length'], division)
-                    data_divisions = data_sum[mo_code].get(division, [(0, 0, 0), ]*column_len)
-                    for data_division in data_divisions[: column_len]:
+                    if isinstance(column_len, int):
+                        data_divisions = data_sum[mo_code].get(division, [(0, 0, 0), ]*column_len)[: column_len]
+                    elif isinstance(column_len, list):
+                        if division in data_sum[mo_code]:
+                            data_divisions = []
+                            data_buff = data_sum[mo_code][division]
+                            print data_buff
+                            for idx in column_len:
+                                data_divisions.append(
+                                    data_buff[idx]
+                                )
+                        else:
+                            data_divisions = [(0, 0, 0), ]*len(column_len)
+                    for data_division in data_divisions:
                         if division_by == DIVISION_1:
                             act_book.write_cell(data_division[1], 'c')
                         elif division_by == DIVISION_2:
@@ -179,53 +191,3 @@ def print_act_1(year, period, data):
             act_book.write_cell(data_division[2][0], 'c')
             act_book.write_cell(data_division[2][1], 'c')
             act_book.write_cell(data_division[2][2], 'c')
-
-
-### Устаревший метод распечатки актов
-def run_sql1(year, period):
-    def run(query):
-        pattern_query, condition = query
-        text_query = pattern_query.format(year=year, period=period,
-                                          condition=condition)
-        cursor = connection.cursor()
-        cursor.execute(text_query)
-        result_sum = {mo_data[0]: [value for value in mo_data[1:]]
-                      for mo_data in cursor.fetchall()}
-        cursor.close()
-        return result_sum
-    return lambda query: run(query)
-
-
-def print_act_2(year, period, rule):
-    target_dir = REESTR_EXP % (year, period)
-    act_path = ACT_PATH.format(
-        dir=target_dir,
-        title=rule['title'],
-        month=MONTH_NAME[period],
-        year=year)
-    temp_path = TEMP_PATH.format(
-        base=BASE_DIR,
-        template=rule['pattern'])
-    with ExcelWriter(act_path,
-                     template=temp_path,
-                     sheet_names=[MONTH_NAME[period], ]) as act_book:
-        act_book.set_overall_style({'font_size': 11, 'border': 1})
-        act_book.set_cursor(4, 2)
-        act_book.set_style(PERIOD_VALUE_STYLE)
-        act_book.write_cell(u'за %s %s года' % (MONTH_NAME[period], year))
-        act_book.set_style(VALUE_STYLE)
-        block_index = 2
-        for condition in rule['sum']:
-            result_data = condition['query']
-            if result_data:
-                total_sum = [0, ]*len(result_data.values()[0])
-                for mo_code, value in result_data.iteritems():
-                    act_book.set_cursor(ACT_CELL_POSITION[mo_code], block_index)
-                    for index, cell_value in enumerate(value):
-                        total_sum[index] += cell_value
-                        act_book.write_cell(cell_value, 'c')
-                act_book.set_cursor(101, block_index)
-                for cell_value in total_sum:
-                    act_book.write_cell(cell_value, 'c')
-            block_index += condition['len'] + \
-                condition['separator_length']

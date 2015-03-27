@@ -101,12 +101,12 @@ class Command(BaseCommand):
              'patient_id': service['event__record__patient__pk']}
             for service in services_values]
 
-        patients = get_patients(year, period, mo_code)
+        patients = get_patients(mo_code)
 
         title_table = [
             u'Полис', u'ФИО', u'Дата рожд', u'Номер карты',
             u'Дата усл', u'Пос\госп', u'Кол дн', u'УЕТ', u'Код',
-            u'Диагн', u'Отд.', u'№ случая', u'ID_SERV', u'ID_PAC',
+            u'Диагн', u'Отд.', u'ЛПУ', u'ID_SERV', u'ID_PAC',
             u'Предъявл', u'Расч.\Сумма', u'Снят.\Сумма'
         ]
         reestr_path = REESTR_EXP % (year, period)
@@ -151,7 +151,7 @@ class Command(BaseCommand):
 
                 act_book.write_cell(service['name'], 'c')                             # Название услуги
 
-                act_book.write_cell(service['event_id'], 'c')                         # Ид случая
+                act_book.write_cell(service['department'], 'c')                         # Ид случая
 
                 act_book.write_cell(service['xml_id'], 'c')                           # Ид услуги в xml
 

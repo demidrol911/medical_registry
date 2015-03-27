@@ -8,11 +8,9 @@ from django.db.models import Sum
 
 from report_printer.excel_style import VALUE_STYLE
 from medical_service_register.path import REESTR_EXP, BASE_DIR
-from helpers.excel_writer import ExcelWriter
+from report_printer.excel_writer import ExcelWriter
 from report_printer.const import ACT_CELL_POSITION_EXT, MONTH_NAME
 from tfoms.models import ProvidedService, Sanction
-
-
 
 
 ### Печатает сводный акт принятых услуг за месяц
@@ -27,44 +25,37 @@ class Command(BaseCommand):
         reestr_path = REESTR_EXP % (year, period)
 
         # Рассчёт сумм
-        invoiced_payment = ProvidedService.objects.filter(
+        services_mo = ProvidedService.objects.filter(
             event__record__register__year=year,
             event__record__register__period=period,
-            event__record__register__is_active=True).\
+            event__record__register__is_active=True)
+
+        invoiced_payment = services_mo.\
             values('organization__code').\
             annotate(sum_invoiced=Sum('invoiced_payment'))
 
-        accepted_payment = ProvidedService.objects.filter(
-            event__record__register__year=year,
-            event__record__register__period=period,
-            event__record__register__is_active=True,
+        accepted_payment = services_mo.filter(
             payment_type__in=[2, 4]).\
             values('organization__code').\
             annotate(sum_accepted=Sum('accepted_payment'))
 
-        policlinic_capitation = ProvidedService.objects.filter(
-            event__record__register__year=year,
-            event__record__register__period=period,
-            event__record__register__is_active=True,
+        policlinic_capitation = services_mo.filter(
             payment_type__in=[2, 4],
-            payment_kind__in=[2, 3],
+            payment_kind__in=[2],
             event__term=3).\
             values('organization__code').\
             annotate(sum_capitation=Sum('accepted_payment'))
 
-        acute_care = ProvidedService.objects.filter(
-            event__record__register__year=year,
-            event__record__register__period=period,
-            event__record__register__is_active=True,
+        acute_care = services_mo.filter(
             payment_type__in=[2, 4],
-            payment_kind__in=[2, 3],
             event__term=4).\
             values('organization__code').\
             annotate(sum_capitation=Sum('accepted_payment'))
 
         surcharge = Sanction.objects.filter(
             type=4,
-            date=datetime.date(year=int(year), month=int(period)-1, day=30)).\
+            date=datetime.date(year=int(year), month=1, day=30),
+            is_active=True).\
             values('service__organization__code').\
             annotate(sum_surcharge=Sum('underpayment'))
 

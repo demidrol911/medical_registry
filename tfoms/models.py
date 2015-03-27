@@ -516,7 +516,7 @@ class MedicalOrganization(models.Model):
     '''
 
     def get_attachment_count(self, date):
-        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date, group__isnull=False)
+        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date)
         result = {
             1: {'men': 0, 'fem': 0},
             2: {'men': 0, 'fem': 0},
@@ -525,19 +525,23 @@ class MedicalOrganization(models.Model):
             5: {'men': 0, 'fem': 0}
         }
         for population in populations:
-            group = population.group
-            if group in (1, 2, 3):
-                result[group]['men'] = population.children_male
-                result[group]['fem'] = population.children_female
-            elif group in (4, 5):
-                result[group]['men'] = population.adult_male
-                result[group]['fem'] = population.adult_female
+            result[1]['men'] += population.less_one_age_male
+            result[1]['fem'] += population.less_one_age_female
+            result[2]['men'] += population.one_four_age_male
+            result[2]['fem'] += population.one_four_age_female
+            result[3]['men'] += population.five_seventeen_age_male
+            result[3]['fem'] += population.five_seventeen_age_female
+            result[4]['men'] += population.eighthteen_fiftynine_age_male
+            result[4]['fem'] += population.eighthteen_fiftyfour_age_female
+            result[5]['men'] += population.older_sixty_age_male
+            result[5]['fem'] += population.older_fiftyfive_age_female
         return result
 
     def get_ambulance_attachment_count(self, date):
         # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
         # при рассчёт численности для 280017 и 280001 используется следующий запрос
-        if self.code in ('280017', '280001', '280027'):
+        # 280088 обслуживает 280028
+        if self.code in ('280017', '280001', '280088'):
             query = """
             select medical_organization.id_pk, count(*) as attachment_count,
             sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) < '1 years' then 1 else 0 end) as men1,
@@ -608,72 +612,6 @@ class MedicalOrganization(models.Model):
                     result[group]['men'] += mo_result[group]['men']
                     result[group]['fem'] += mo_result[group]['fem']
         return result
-
-    '''
-    def get_ambulance_attachment_count(self, date):
-        # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
-        # при рассчёт численности для 280017 и 280001 используется следующий запрос
-        if self.code in ('280017', '280001'):
-            query = """
-            select
-            medical_organization.id_pk, count(*) as ambulance_attachment_count,
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end)+
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_male_count,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end)+
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_female_count,
-
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '59 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '59 years' then 1 else 0 end) as adults_male_count,
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '54 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '54 years' then 1 else 0 end) as adults_female_count
-
-            from attachment
-            join medical_organization on (medical_organization.id_pk = medical_organization_fk and
-                medical_organization.teritorial_parent_fk is null) or medical_organization.id_pk =
-                (select teritorial_parent_fk from medical_organization where id_pk = medical_organization_fk)
-
-            join medical_organization ambulanceMO on (ambulanceMO.id_pk = medical_organization.ambulance_fk and
-            medical_organization.ambulance_fk is not null)
-            or (ambulanceMO.id_pk = medical_organization.id_pk and medical_organization.ambulance_fk is null)
-
-            join person on attachment.person_fk = person.version_id_pk
-            join insurance_policy on insurance_policy.person_fk = person.version_id_pk
-            join active_insurance_policy on active_insurance_policy.version_fk = insurance_policy.version_id_pk
-
-            where
-            ambulanceMO.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.date <= %(date)s and attachment.is_active = true and
-            attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.date <= %(date)s group by person_fk)
-            group by medical_organization.id_pk
-            """
-
-            result = {'adults_male_count': 0, 'children_male_count': 0,
-                      'adults_female_count': 0, 'children_female_count': 0}
-
-            for population_object in MedicalOrganization.objects.raw(query,
-                                                                     dict(organization=self.code,
-                                                                          date=date)):
-                result['adults_male_count'] += population_object.adults_male_count
-                result['children_male_count'] += population_object.children_male_count
-                result['adults_female_count'] += population_object.adults_female_count
-                result['children_female_count'] += population_object.children_female_count
-
-        # Для вех остальных больниц используются уже рассчитанные значения численности из
-        # таблицы attachment_statistics
-        else:
-            result = self.get_attachment_count(date)
-            for mo in MedicalOrganization.objects.filter(
-                    ambulance=self.pk,
-                    parent__isnull=True):
-                mo_result = mo.get_attachment_count(date)
-                result['adults_male_count'] += mo_result['adults_male_count']
-                result['children_male_count'] += mo_result['children_male_count']
-                result['adults_female_count'] += mo_result['adults_female_count']
-                result['children_female_count'] += mo_result['children_female_count']
-
-        return result
-    '''
 
     ### Расчёт количества обращений (в разрезе взрослые, дети) для указаной причины отказа
     def get_policlinic_treatment_error(self, year, period, failure_cause):
@@ -1745,10 +1683,16 @@ class TariffCapitation(models.Model):
 class AttachmentStatistics(models.Model):
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')
     organization = models.CharField(max_length=6, db_column='organization')
-    children_male = models.IntegerField()
-    children_female = models.IntegerField()
-    adult_male = models.IntegerField()
-    adult_female = models.IntegerField()
+    less_one_age_male = models.IntegerField()
+    less_one_age_female = models.IntegerField()
+    one_four_age_male = models.IntegerField()
+    one_four_age_female = models.IntegerField()
+    five_seventeen_age_male = models.IntegerField()
+    five_seventeen_age_female = models.IntegerField()
+    eighthteen_fiftynine_age_male = models.IntegerField()
+    eighthteen_fiftyfour_age_female = models.IntegerField()
+    older_sixty_age_male = models.IntegerField()
+    older_fiftyfive_age_female = models.IntegerField()
     at = models.DateField()
     group = models.IntegerField()
 
@@ -1762,3 +1706,32 @@ class PaymentKind(models.Model):
 
     class Meta:
         db_table = 'payment_kind'
+
+
+class SanctionStatus(models.Model):
+
+    SANCTION_TYPE_ADDED_BY_MEK = 1
+    SANCTION_TYPE_ADDED_BY_EXPERT = 2
+    SANCTION_TYPE_ADDED_BY_ECONOMIST = 3
+    SANCTION_TYPE_ADDED_BY_DEVELOPER = 4
+    SANCTION_TYPE_REMOVED_BY_EXPERT = 5
+    SANCTION_TYPE_REMOVED_BY_ECONOMIST = 6
+    SANCTION_TYPE_REMOVED_BY_DEVELOPER = 7
+    TYPES = (
+        (SANCTION_TYPE_ADDED_BY_MEK, u'Ошибка добавлена на первоначальном МЭК'),
+        (SANCTION_TYPE_ADDED_BY_EXPERT, u'Ошибка добавлена врачём-экспертом'),
+        (SANCTION_TYPE_ADDED_BY_ECONOMIST, u'Ошибка добавлена экономистом'),
+        (SANCTION_TYPE_ADDED_BY_DEVELOPER, u'Ошибка добавлена программистом'),
+        (SANCTION_TYPE_REMOVED_BY_EXPERT, u'Ошибка снята врачём-экспертом'),
+        (SANCTION_TYPE_REMOVED_BY_ECONOMIST, u'Ошибка снята экономистом'),
+        (SANCTION_TYPE_REMOVED_BY_DEVELOPER, u'Ошибка снята программистом'),
+    )
+
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    sanction = models.ForeignKey(Sanction, db_column='sanction_fk')
+    created_at = models.DateTimeField(default=datetime.datetime.utcnow())
+    type = models.SmallIntegerField(choices=TYPES)
+    comment = models.CharField(max_length=128)
+
+    class Meta:
+        db_table = 'provided_service_sanction_status'

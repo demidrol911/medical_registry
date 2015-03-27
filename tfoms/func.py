@@ -1,44 +1,160 @@
 #! -*- coding: utf-8 -*-
-from copy import deepcopy
 
 from datetime import datetime
 from decimal import Decimal
-from dateutil.relativedelta import relativedelta
-from shutil import copy2
-from dbfpy import dbf
+from django.db.models import Q
+from django.db import connection
+from tfoms.models import (
+    MedicalError, ProvidedService, MedicalRegister,
+    ProvidedEvent,
+    TariffFap, PaymentFailureCause,
+    MedicalRegisterRecord, Sanction,
+    MedicalOrganization, TariffCapitation,
+    MedicalWorkerSpeciality, MedicalServiceProfile,
+    MedicalService, MedicalDivision,
+    MedicalServiceSubgroup, MedicalServiceTerm,
+    TariffProfile, MedicalServiceGroup,
+    MedicalServiceReason,
+    ProvidedServiceCoefficient,
+    TariffCoefficient,
+    ProvidedEventConcomitantDisease
+)
 
-from django.db.models import Q, Sum
-from tfoms.models import (MedicalError, ProvidedService, MedicalRegister,
-                          TariffFap, PaymentFailureCause,
-                          MedicalRegisterRecord, Sanction,
-                          MedicalOrganization, TariffCapitation,
-                          MedicalWorkerSpeciality, MedicalServiceProfile,
-                          MedicalService, MedicalDivision,
-                          MedicalServiceSubgroup, MedicalServiceTerm,
-                          TariffProfile, MedicalServiceGroup,
-                          MedicalServiceReason, ProvidedServiceCoefficient,
-                          TariffCoefficient,
-                          ProvidedEventConcomitantDisease)
+### Отчётный год и период
+cur_date = datetime.now()
 
-from medical_service_register.path import BASE_DIR, REESTR_PSE
-
-from helpers.correct import date_correct
-
-#from pandas import DataFrame
-
-
-### Значение даты следующей за отчётным периодом
-def get_date_following_reporting_period(year, period):
-    return datetime.strptime('{year}-{period}-1'.format(year=year,
-                                                        period=period),
-                             '%Y-%m-%d')
-    #+ relativedelta(months=1)
+YEAR = str(cur_date.year)
+PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
+PERIOD = '02'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+DATE_ATTACHMENT = datetime.strptime(
+    '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
+    '%Y-%m-%d'
+)
 
 
-def get_concomitant_disease(year, period, department):
+### Справочники
+
+# Справочник причин отказов
+FAILURE_CAUSES = {
+    failure_cause.pk: {'number': failure_cause.number, 'name': failure_cause.name}
+    for failure_cause in PaymentFailureCause.objects.all()
+}
+
+# Справочник ошибок
+ERRORS = {
+    error.pk: {
+        'code': error.old_code,
+        'failure_cause': error.failure_cause_id,
+        'name': error.name
+    }
+    for error in MedicalError.objects.all()
+}
+
+# Справочник специальностей мед. работника
+WORKER_SPECIALITIES = {
+    worker.pk: {
+        'code': worker.code,
+        'name': worker.name
+    }
+    for worker in MedicalWorkerSpeciality.objects.all()
+}
+
+# Справочник медицинских профилей
+MEDICAL_PROFILES = {
+    profile.pk: {
+        'code': profile.code,
+        'name': profile.name
+    }
+    for profile in MedicalServiceProfile.objects.all()
+}
+
+# Справочник тарифных профилей
+TARIFF_PROFILES = {
+    profile.pk: {'name': profile.name}
+    for profile in TariffProfile.objects.all()
+}
+
+# Справочник медицинских услуг
+MEDICAL_SERVICES = {
+    service.pk: {
+        'code': service.code,
+        'name': service.name
+    }
+    for service in MedicalService.objects.all()
+}
+
+# Справочник медицинских отделений
+MEDICAL_DIVISIONS = {
+    division.pk: {
+        'code': division.code,
+        'name': division.name
+    }
+    for division in MedicalDivision.objects.all()
+}
+
+# Справочник медицинских групп
+MEDICAL_GROUPS = {
+    group.pk: {'name': group.name}
+    for group in MedicalServiceGroup.objects.all()
+}
+
+# Справочник медицинских подгрупп
+MEDICAL_SUBGROUPS = {
+    subgroup.pk: {'name': subgroup.name}
+    for subgroup in MedicalServiceSubgroup.objects.all()
+}
+
+# Справочник условий оказания мед. помощи
+MEDICAL_TERMS = {
+    term.pk: {'name': term.name}
+    for term in MedicalServiceTerm.objects.all()
+}
+
+# Справочник причин оказания мед. помощи
+MEDICAL_REASONS = {
+    reason.pk: {'name': reason.name}
+    for reason in MedicalServiceReason.objects.all()
+}
+
+# Справочник типов коэффициентовы
+COEFFICIENT_TYPES = {
+    coefficient.pk: {'name': coefficient.name, 'value': coefficient.value}
+    for coefficient in TariffCoefficient.objects.all()
+}
+
+
+# Информация о лечебном учреждении
+def get_mo_info(mo_code, department_code=None):
+    if department_code:
+        mo = MedicalOrganization.objects.get(code=mo_code, old_code=department_code)
+    else:
+        mo = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
+    return {'code': mo.code, 'name': mo.name, 'is_agma_cathedra': mo.is_agma_cathedra}
+
+
+# Коды больниц прикреплённых к указанной больнице
+def get_partial_register(mo_code):
+    return ProvidedService.objects.filter(
+        event__record__register__year=YEAR,
+        event__record__register__period=PERIOD,
+        event__record__register__is_active=True,
+        event__record__register__organization_code=mo_code).\
+        values_list('department__old_code', flat=True).distinct()
+
+
+# Коды больниц в медицинском реестре за указанный период
+def get_mo_register(status=None):
+    organizations = MedicalRegister.objects.filter(year=YEAR, period=PERIOD, is_active=True, type=1)
+    if status:
+        organizations = organizations.filter(status__pk=status)
+    return organizations.values_list('organization_code', flat=True)
+
+
+# Сопутствующие диаагнозы
+def get_concomitant_disease(department):
     diseases = ProvidedEventConcomitantDisease.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
+        event__record__register__year=YEAR,
+        event__record__register__period=PERIOD,
         event__record__register__is_active=True,
         event__department__old_code=department
     ).values('event__id_pk', 'disease__idc_code')
@@ -50,10 +166,10 @@ def get_concomitant_disease(year, period, department):
 
 
 ### Информация о пациентах в указанной больнице
-def get_patients(year, period, mo_code):
+def get_patients(mo_code):
     patients = MedicalRegisterRecord.objects.filter(
-        register__year=year,
-        register__period=period,
+        register__year=YEAR,
+        register__period=PERIOD,
         register__is_active=True,
         register__organization_code=mo_code
     ).values(
@@ -65,28 +181,30 @@ def get_patients(year, period, mo_code):
         'patient__middle_name',              # Отчество пациента
         'patient__birthdate',                # Дата рождения
         'patient__gender__code',
-        'id').distinct()
+        'id'
+    ).distinct()
 
-    patients_dict = {patient['patient__pk']
-                     : {'policy_series': patient['patient__insurance_policy_series'],
-                        'policy_number': patient['patient__insurance_policy_number'],
-                        'last_name': patient['patient__last_name'],
-                        'first_name': patient['patient__first_name'],
-                        'middle_name': patient['patient__middle_name'],
-                        'birthdate': patient['patient__birthdate'],
-                        'gender_code': patient['patient__gender__code'],
-                        'xml_id': patient['id']}
-
-                     for patient in patients}
+    patients_dict = {
+        patient['patient__pk']: {
+            'policy_series': patient['patient__insurance_policy_series'],
+            'policy_number': patient['patient__insurance_policy_number'],
+            'last_name': patient['patient__last_name'],
+            'first_name': patient['patient__first_name'],
+            'middle_name': patient['patient__middle_name'],
+            'birthdate': patient['patient__birthdate'],
+            'gender_code': patient['patient__gender__code'],
+            'xml_id': patient['id']
+        }
+        for patient in patients}
     return patients_dict
 
 
 ### Информация об услугах в указанной больнице
-def get_services(year, period, mo_code, is_include_operation=False, department_code=None, payment_type=None,
+def get_services(mo_code, is_include_operation=False, department_code=None, payment_type=None,
                  payment_kind=None):
     services = ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
+        event__record__register__year=YEAR,
+        event__record__register__period=PERIOD,
         event__record__register__is_active=True,
         event__record__register__organization_code=mo_code
     )
@@ -143,9 +261,11 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
         'event__pk',                                        # Ид случая
         'department__old_code',                             # Код филиала
         'event__record__patient__pk'                        # Ид патиента
-    ).order_by('event__record__patient__last_name',
-               'event__record__patient__first_name',
-               'event__pk', 'code__code')
+    ).order_by(
+        'event__record__patient__last_name',
+        'event__record__patient__first_name',
+        'event__pk', 'code__code'
+    )
 
     services_list = [
         {'id': service['id_pk'],
@@ -188,12 +308,13 @@ def get_services(year, period, mo_code, is_include_operation=False, department_c
 
 
 ### Информация об ошибках в указанной больнице
-def get_sanctions(year, period, mo_code):
+def get_sanctions(mo_code):
     sanctions = Sanction.objects.filter(
-        service__event__record__register__year=year,
-        service__event__record__register__period=period,
+        service__event__record__register__year=YEAR,
+        service__event__record__register__period=PERIOD,
         service__event__record__register__is_active=True,
         service__event__record__register__organization_code=mo_code,
+        is_active=True,
         service__payment_type__in=[3, 4],
         type_id=1,
     )
@@ -214,10 +335,10 @@ def get_sanctions(year, period, mo_code):
     return sanctions_dict
 
 
-def get_coefficients(year, period, mo_code):
+def get_coefficients(mo_code):
     coefficients = ProvidedServiceCoefficient.objects.filter(
-        service__event__record__register__year=year,
-        service__event__record__register__period=period,
+        service__event__record__register__year=YEAR,
+        service__event__record__register__period=PERIOD,
         service__event__record__register__is_active=True,
         service__event__record__register__organization_code=mo_code
     )
@@ -235,17 +356,57 @@ def get_coefficients(year, period, mo_code):
 
 
 ### Ид случаев, по которым рассчитывается подушевое
-def get_capitation_events(year, period, mo_code):
-    data = get_date_following_reporting_period(year, period)
+def get_capitation_events(mo_code):
     mo_obj = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
-    return mo_obj.get_capitation_events(year, period, data)
+    return mo_obj.get_capitation_events(YEAR, PERIOD, DATE_ATTACHMENT)
 
 
 ### Ид случаев, по которым рассчитыватся обращения
-def get_treatment_events(year, period, mo_code):
+def get_treatment_events(mo_code):
+    query = """
+    select
+    distinct pe.id_pk as event_id
+    from medical_register mr
+        JOIN medical_register_record mrr
+            ON mr.id_pk=mrr.register_fk
+        JOIN provided_event pe
+            ON mrr.id_pk=pe.record_fk
+        JOIN provided_service ps
+            ON ps.event_fk=pe.id_pk
+        JOIN medical_organization mo
+            ON ps.organization_fk=mo.id_pk
+        JOIN medical_service ms
+            ON ms.id_pk = ps.code_fk
+        JOIN patient pt
+            ON pt.id_pk = mrr.patient_fk
+        left join medical_division msd
+            on msd.id_pk = pe.division_fk
+        where mr.is_active
+           and mr.year=%(year)s
+           and mr.period=%(period)s
+           and mo.code=%(mo)s
+           AND (
+             (ms.group_fk = 19 and ms.subgroup_fk = 12)
+              or (pe.term_fk = 3 and ms.reason_fk = 1 and
+                  (ms.group_fk is NULL or ms.group_fk = 24)
+                    and (
+                      select count(ps1.id_pk)
+                      FROM provided_service ps1
+                      join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                      WHERE ps1.event_fk  = ps.event_fk
+                            and (ms1.group_fk is NULL or ms1.group_fk = 24)
+                      )>1
+                    )
+                  )
+    """
+    cursor = connection.cursor()
+    cursor.execute(query, dict(year=YEAR, period=PERIOD, mo=mo_code))
+    return [row[0] for row in cursor.fetchall()]
+
+    '''
     events = ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
+        event__record__register__year=YEAR,
+        event__record__register__period=PERIOD,
         event__record__register__is_active=True,
         event__record__register__organization_code=mo_code).\
         filter(
@@ -254,153 +415,43 @@ def get_treatment_events(year, period, mo_code):
              (Q(code__group__isnull=True) | Q(code__group__pk=24)))
         )
     return events.values_list('event__pk', flat=True).distinct()
-
-
-### Информация
-def get_mo_info(mo_code, department_code=None):
-    if department_code:
-        mo = MedicalOrganization.objects.get(code=mo_code, old_code=department_code)
-    else:
-        mo = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
-    return {'name': mo.name, 'is_agma_cathedra': mo.is_agma_cathedra}
-
-
-### Коды больниц прикреплённых к указанной больнице
-def get_partial_register(year, period, mo_code):
-    return ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
-        event__record__register__is_active=True,
-        event__record__register__organization_code=mo_code).\
-        values_list('department__old_code', flat=True).distinct()
-
-
-### Справочники
-### Справочник причин отказов
-def get_failure_causes():
-    return {failure_cause.pk: {'number': failure_cause.number,
-                               'name': failure_cause.name}
-            for failure_cause in PaymentFailureCause.objects.all()}
-
-
-### Справочник ошибок
-def get_errors():
-    return {error.pk: {'code': error.old_code,
-                       'failure_cause': error.failure_cause_id,
-                       'name': error.name}
-            for error in MedicalError.objects.all()}
-
-
-### Справочник специальностей мед. работника
-def get_medical_worker_speciality():
-    return {worker.pk: {'code': worker.code,
-                        'name': worker.name}
-            for worker in MedicalWorkerSpeciality.objects.all()}
-
-
-### Справочник медицинских профилей
-def get_medical_profile():
-    return {profile.pk: {'code': profile.code,
-                         'name': profile.name}
-            for profile in MedicalServiceProfile.objects.all()}
-
-
-### Справочник тарифных профилей
-def get_tariff_profile():
-    return {profile.pk: {'name': profile.name}
-            for profile in TariffProfile.objects.all()}
-
-
-### Справочник медицинских услуг
-def get_medical_code():
-    return {service.pk: {'code': service.code,
-                         'name': service.name}
-            for service in MedicalService.objects.all()}
-
-
-### Справочник медицинских отделений
-def get_medical_division():
-    return {division.pk: {'code': division.code,
-                          'name': division.name}
-            for division in MedicalDivision.objects.all()}
-
-
-### Справочник медицинских групп
-def get_medical_group():
-    return {group.pk: {'name': group.name}
-            for group in MedicalServiceGroup.objects.all()}
-
-
-### Справочник медицинских подгрупп
-def get_medical_subgroup():
-    return {subgroup.pk: {'name': subgroup.name}
-            for subgroup in MedicalServiceSubgroup.objects.all()}
-
-
-### Справочник условий оказания мед. помощи
-def get_medical_term():
-    return {term.pk: {'name': term.name}
-            for term in MedicalServiceTerm.objects.all()}
-
-
-### Справочник причин оказания мед. помощи
-def get_medical_reason():
-    return {reason.pk: {'name': reason.name}
-            for reason in MedicalServiceReason.objects.all()}
-
-
-### Справочник типов коэффициентовы
-def get_coefficient_type():
-    return {coefficient.pk: {'name': coefficient.name, 'value': coefficient.value}
-            for coefficient in TariffCoefficient.objects.all()}
-
-
-### Итоговая сумма основного тарифа по МО
-def get_total_sum(year, period, mo):
-    total_sum = ProvidedService.objects.filter(
-        event__record__register__year=year,
-        event__record__register__period=period,
-        event__record__register__is_active=True,
-        organization__code=mo).aggregate(tariff=Sum('tariff'))
-    return total_sum['tariff']
+    '''
 
 
 ### Расчёт тарифа по подушевому по поликлинике и скорой помощи c января 2015
-def calculate_capitation_tariff(term, year, period, mo_code):
-    data_attachment = get_date_following_reporting_period(year, period)
+def calculate_capitation_tariff(term, mo_code):
     tariff = TariffCapitation.objects.filter(
         term=term, organization__code=mo_code,
-        start_date__lte=data_attachment,
+        start_date__lte=DATE_ATTACHMENT,
         is_children_profile=True
     )
     result = [
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
 
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
-        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0]
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0],
+        [0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0,  0, 0]
     ]
 
-    if tariff:
+    if tariff and mo_code not in ('280070', ):
         if term == 3:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_attachment_count(data_attachment)
+                get_attachment_count(DATE_ATTACHMENT)
         elif term == 4:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_ambulance_attachment_count(data_attachment)
+                get_ambulance_attachment_count(DATE_ATTACHMENT)
     else:
         return False, result
 
-    print '*', population
     # Чмсленность
 
     result[0][1] = population[1]['men']
@@ -436,295 +487,38 @@ def calculate_capitation_tariff(term, year, period, mo_code):
     result[9][4] = tariff.filter(age_group=5, gender=2).order_by('-start_date')[0].value
 
     for idx in xrange(0, 10):
-        result[idx][8] = result[idx][0]*result[idx][4]
-        result[idx][9] = result[idx][1]*result[idx][5]
+        result[idx][8] = Decimal(round(result[idx][0]*result[idx][4], 2))
+        result[idx][9] = Decimal(round(result[idx][1]*result[idx][5], 2))
+        # Повышающий коэффициент для Магдагачей
+        if mo_code == '280029':
+            result[idx][8] *= 2
+            result[idx][9] *= 2
+        if mo_code == '280064' and term == 3 and idx in (4, 5):
+            result[idx][8] *= Decimal(1.5)
+            result[idx][9] *= Decimal(1.5)
 
     if term == 3:
         fap = TariffFap.objects.filter(organization__code=mo_code,
-                                       start_date__lte=data_attachment,
+                                       start_date__lte=DATE_ATTACHMENT,
                                        is_children_profile=True)
         if fap:
             coeff = fap.order_by('-start_date')[0].value
             for idx in xrange(0, 10):
-                result[idx][16] = result[idx][8]*(coeff-1)
-                result[idx][17] = result[idx][9]*(coeff-1)
+                result[idx][16] = Decimal(round(float(result[idx][8])*float(coeff-1), 2))
+                result[idx][17] = Decimal(round(float(result[idx][9])*float(coeff-1), 2))
 
     for idx in xrange(0, 10):
-        result[idx][22] = result[idx][8] + result[idx][16]
-        result[idx][23] = result[idx][9] + result[idx][17]
+        result[idx][26] = Decimal(round(result[idx][8] + result[idx][16], 2))
+        result[idx][27] = Decimal(round(result[idx][9] + result[idx][17], 2))
 
     return True, result
 
 
-'''
-### Расчёт тарифа по подушевому по поликлинике и скорой помощи c сентября 2014
-def calculate_capitation_tariff(term, year, period, mo_code):
-    if term == 3:
-        print u'Рассчёт подушевого по поликлиннике...'
-    elif term == 4:
-        print u'Рассчёт подушевого по скорой помощи...'
-    data_attachment = get_date_following_reporting_period(year, period)
-    tariff = TariffCapitation.objects.filter(term=term, organization__code=mo_code,
-                                             start_date__lte=data_attachment)
-
-    value_keys = (
-        'adult',                     # Взрослые
-        'children'                   # Дети
-    )
-    column_keys = (
-        'population',                # Численность прикреплёных пациентов
-        'tariff',                    # Тариф по подушевому
-        'population_tariff',         # Численность * тариф по подушевому
-        'coefficient_value',         # Величина коэффициента ФАП
-        'coefficient',               # Коэффициент ФАП
-        'accepted_payment'           # Численность * тариф + тариф * (1-ФАП)
-    )
-
-    init_sum = {column_key: {value_key: 0 for value_key in value_keys}
-                for column_key in column_keys}
-    capitation_data = {'male': deepcopy(init_sum), 'female': deepcopy(init_sum)}
-    if tariff:
-        if term == 4:
-            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_ambulance_attachment_count(data_attachment)
-        elif term == 3:
-            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
-                get_attachment_count(data_attachment)
-
-        # Численность прикреплённых
-        capitation_data['male']['population']['adult'] = population['adults_male_count']
-        capitation_data['male']['population']['children'] = population['children_male_count']
-        capitation_data['female']['population']['adult'] = population['adults_female_count']
-        capitation_data['female']['population']['children'] = population['children_female_count']
-
-        """
-        if term == 4:
-            capitation_data['male']['population']['adult'] = 18533
-            capitation_data['female']['population']['adult'] = 26517
-        """
-
-        # Подушевой тариф
-        capitation_data['male']['tariff']['adult'] = tariff.filter(is_children_profile=False).\
-            order_by('-start_date')[0].value\
-            if population['adults_male_count'] else 0
-        capitation_data['female']['tariff']['adult'] = capitation_data['male']['tariff']['adult']
-        capitation_data['male']['tariff']['children'] = tariff.filter(is_children_profile=True).\
-            order_by('-start_date')[0].value\
-            if population['children_male_count'] else 0
-        capitation_data['female']['tariff']['children'] = capitation_data['male']['tariff']['children']
-
-        # Основой тариф
-        capitation_data['male']['population_tariff']['adult'] = \
-            capitation_data['male']['population']['adult'] * capitation_data['male']['tariff']['adult']
-        capitation_data['male']['population_tariff']['children'] = \
-            capitation_data['male']['population']['children'] * capitation_data['male']['tariff']['children']
-        capitation_data['female']['population_tariff']['adult'] = \
-            capitation_data['female']['population']['adult'] * capitation_data['female']['tariff']['adult']
-        capitation_data['female']['population_tariff']['children'] = \
-            capitation_data['female']['population']['children'] * capitation_data['female']['tariff']['children']
-
-        # Для Магдагачи 280029
-        """
-        capitation_data['male']['population_tariff']['adult'] *= 2
-        capitation_data['male']['population_tariff']['children'] *= 2
-        capitation_data['female']['population_tariff']['adult'] *= 2
-        capitation_data['female']['population_tariff']['children'] *= 2
-        """
-
-        # Коэффициент по подушевому
-        if term == 3:
-            fap = TariffFap.objects.filter(organization__code=mo_code,
-                                           start_date__lte=data_attachment)
-            if fap:
-                capitation_data['male']['coefficient_value']['adult'] = \
-                    fap.filter(is_children_profile=False).order_by('-start_date')[0].value
-                capitation_data['female']['coefficient_value']['adult'] = \
-                    capitation_data['male']['coefficient_value']['adult']
-                capitation_data['male']['coefficient_value']['children'] = \
-                    fap.filter(is_children_profile=True).order_by('-start_date')[0].value
-                capitation_data['female']['coefficient_value']['children'] = \
-                    capitation_data['male']['coefficient_value']['children']
-
-                capitation_data['male']['coefficient']['adult'] = \
-                    capitation_data['male']['population_tariff']['adult'] * \
-                    (capitation_data['male']['coefficient_value']['adult']-1)
-                capitation_data['female']['coefficient']['adult'] = \
-                    capitation_data['female']['population_tariff']['adult'] * \
-                    (capitation_data['female']['coefficient_value']['adult']-1)
-
-                capitation_data['male']['coefficient']['children'] = \
-                    capitation_data['male']['population_tariff']['children'] * \
-                    (capitation_data['male']['coefficient_value']['children']-1)
-                capitation_data['female']['coefficient']['children'] = \
-                    capitation_data['female']['population_tariff']['children'] * \
-                    (capitation_data['female']['coefficient_value']['children']-1)
-
-        # Принятая к оплате
-        capitation_data['male']['accepted_payment']['adult'] = \
-            capitation_data['male']['population_tariff']['adult'] + Decimal(round(capitation_data['male']['coefficient']['adult'], 2))
-        capitation_data['female']['accepted_payment']['adult'] = \
-            capitation_data['female']['population_tariff']['adult'] + Decimal(round(capitation_data['female']['coefficient']['adult'], 2))
-
-        capitation_data['male']['accepted_payment']['children'] = \
-            capitation_data['male']['population_tariff']['children'] + \
-            Decimal(round(capitation_data['male']['coefficient']['children'], 2))
-        capitation_data['female']['accepted_payment']['children'] = \
-            capitation_data['female']['population_tariff']['children'] + \
-            Decimal(round(capitation_data['female']['coefficient']['children'], 2))
-
-    return capitation_data
-'''
-
-
-### Коды больниц в медицинском реестре за указанный период
-def get_mo_register(year, period, status=None):
-    organizations = MedicalRegister.objects.filter(year=year, period=period, is_active=True, type=1)
-    if status:
-        organizations = organizations.filter(status__pk=status)
-    return organizations.values_list('organization_code', flat=True)
-
-
-### Экспорт реестра в PSE файла
-### (P - файл пациентов, S - файл услуг, E - файл ошибок)
-def pse_export(year, period, mo_code, register_status, data, handbooks):
-    print u'Выгрузка в PSE файлы...'
-    target_dir = REESTR_PSE
-    templates_path = '%s/templates/dbf_pattern' % BASE_DIR
-    errors_code = handbooks['errors_code']
-
-    services = data['invoiced_services']
-    patients = data['patients']
-    sanctions = data['sanctions']
-
-    # Группировка услуг по прикреплённым больницам
-    services_group = {}
-    for index, service in enumerate(services):
-        if service['department'] not in services_group:
-            services_group[service['department']] = []
-        if service['group'] != 27:
-            services_group[service['department']].append(index)
-
-    for department in services_group:
-        concomitant_diseases = get_concomitant_disease(year, period, department)
-        rec_id = 1
-        unique_patients = []
-        copy2('%s/template_p.dbf' % templates_path,
-              '%s/p%s.dbf' % (target_dir, department))
-        copy2('%s/template_s.dbf' % templates_path,
-              '%s/s%s.dbf' % (target_dir, department))
-        copy2('%s/template_e.dbf' % templates_path,
-              '%s/e%s.dbf' % (target_dir, department))
-        p_file = dbf.Dbf('%s/p%s.dbf' % (target_dir, department))
-        s_file = dbf.Dbf('%s/s%s.dbf' % (target_dir, department))
-        e_file = dbf.Dbf('%s/e%s.dbf' % (target_dir, department))
-
-        for index in services_group[department]:
-            service = services[index]
-            patient = patients[service['patient_id']]
-
-            #Записываем данные услуги в S-файл
-            s_rec = s_file.newRecord()
-            s_rec['RECID'] = rec_id
-            s_rec['MCOD'] = service['department']
-            police = ' '.join([patient['policy_series'] or '99',
-                               patient['policy_number'] or ''])
-            s_rec['SN_POL'] = police.encode('cp866')
-            s_rec['C_I'] = service['anamnesis_number'].encode('cp866')
-            s_rec['OTD'] = service['division_code'] or ''
-            s_rec['COD'] = float(service['code'] or 0)
-            #s_rec['TIP'] = ''
-            s_rec['D_BEG'] = date_correct(service['start_date'], service['id'], 'start_date')
-            s_rec['D_U'] = date_correct(service['end_date'], service['id'], 'end_date')
-            s_rec['K_U'] = service['quantity'] or 1
-            s_rec['DS'] = (service['basic_disease'] or '').encode('cp866')
-            s_rec['DS2'] = (concomitant_diseases.get(service['event_id'], '')).encode('cp866')
-            #s_rec['TR'] = ''
-            s_rec['EXTR'] = '0'
-            s_rec['PS'] = 1 if service['term'] == 1 else 0
-            s_rec['BE'] = '1'
-            s_rec['TN1'] = service['worker_code'].encode('cp866')
-            #s_rec['TN2'] = ''
-            s_rec['TARIF'] = '1'
-            s_rec['KLPU'] = '1'
-            s_rec['KRR'] = 1
-            s_rec['UKL'] = 1
-            s_rec['SK'] = 1
-            s_rec['S_ALL'] = service['tariff'] or 0
-            s_rec['KSG'] = (service['comment'] or '').encode('cp866')
-            s_rec['D_TYPE'] = '1'
-            s_rec['STAND'] = 1000
-            s_rec['K_U_O'] = 100
-            s_rec['SRV_PK'] = service['id']
-            s_rec.store()
-
-            # Записываем пациентов в P-файл
-            if service['patient_id'] not in unique_patients:
-                p_rec = p_file.newRecord()
-                p_rec['RECID'] = rec_id
-                p_rec['MCOD'] = department
-                p_rec['SN_POL'] = police.encode('cp866')
-                p_rec['FAM'] = (patient['last_name'] or '').capitalize().encode('cp866')
-                p_rec['IM'] = (patient['first_name'] or '').capitalize().encode('cp866')
-                p_rec['OT'] = (patient['middle_name'] or '').capitalize().encode('cp866')
-                p_rec['DR'] = date_correct(patient['birthdate'])
-                p_rec['W'] = patient['gender_code']
-                #p_rec['REGS'] = 0
-                p_rec['NULN'] = ' '*20
-                p_rec['UL'] = 0
-                p_rec['DOM'] = ' '*7
-                p_rec['KOR'] = ' '*5
-                p_rec['STR'] = ' '*5
-                p_rec['KV'] = ' '*5
-                p_rec['ADRES'] = ' '*80
-                p_rec['Q'] = 'DM'
-                p_rec['KT'] = '  '
-                #p_rec['SP'] = ''
-                p_rec['VED'] = '  '
-                #p_rec['MR'] = 0
-                p_rec['D_TYPE'] = '1'
-                p_rec.store()
-                unique_patients.append(service['patient_id'])
-
-            # Записываем ошибки в E-файл
-            if sanctions.get(service['id']):
-                unique_errors = []
-                for sanction in sanctions[service['id']]:
-                    if sanction['error'] not in unique_errors:
-                        e_rec = e_file.newRecord()
-                        e_rec['F'] = 'S'
-                        e_rec['C_ERR'] = errors_code[sanction['error']]['code']
-                        e_rec['N_REC'] = rec_id
-                        e_rec['RECID'] = rec_id
-                        e_rec['MCOD'] = department
-                        e_rec.store()
-                        unique_errors.append(sanction['error'])
-            #Ставим на стоматологических приёмах ошибку HD
-            if service['subgroup'] in [12, 13, 14, 17]:
-                e_rec = e_file.newRecord()
-                e_rec['F'] = 'S'
-                e_rec['C_ERR'] = 'HD'
-                e_rec['N_REC'] = rec_id
-                e_rec['RECID'] = rec_id
-                e_rec['MCOD'] = department
-                e_rec.store()
-            rec_id += 1
-        p_file.close()
-        s_file.close()
-        e_file.close()
-    change_register_status(year, period, mo_code, register_status)
-
-
 ### Устанавливает статус реестру
-def change_register_status(year, period, mo_code, register_status):
+def change_register_status(mo_code, register_status):
     MedicalRegister.objects.filter(
-        year=year,
-        period=period,
+        year=YEAR,
+        period=PERIOD,
         organization_code=mo_code,
         is_active=True
     ).update(status=register_status)
-    '''
-    register_files = MedicalRegister.objects.filter(year=year, period=period, organization_code=mo_code, is_active=True)
-    for register_file in register_files:
-        register_file.status_id = register_status
-        register_file.save()
-    '''

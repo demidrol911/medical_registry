@@ -8,15 +8,14 @@ from django.db import connection
 from medical_service_register.path import REESTR_EXP
 from report_printer.excel_writer import ExcelWriter
 from report_printer.const import MONTH_NAME
+from tfoms import func
 
 
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
         start = time.time()
-        year = args[0]
-        period = args[1]
-        reestr_path = REESTR_EXP % (year, period)
+        reestr_path = REESTR_EXP % (func.YEAR, func.PERIOD)
 
         query = """
         SELECT
@@ -38,21 +37,23 @@ class Command(BaseCommand):
               AND medical_register.is_active
               AND provided_service.payment_type_fk in (2, 4)
               AND provided_event.term_fk = 1
-              AND (medical_service.group_fk IS NULL or medical_service.group_fk in (1, 2, 20))
+              AND (medical_service.group_fk IS NULL or medical_service.group_fk in (1, 2, 20, 32, 3))
         GROUP BY medical_division.id_pk, medical_division.code, medical_division.name
         ORDER BY medical_division.code
         """
 
         cursor = connection.cursor()
-        cursor.execute(query.format(year=year, period=period))
+        cursor.execute(query.format(year=func.YEAR, period=func.PERIOD))
 
         # Распечатка акта
-        with ExcelWriter(u'%s/кругстац_%s_%s' % (reestr_path, year, MONTH_NAME[period])) as act_book:
+        with ExcelWriter(u'%s/кругстац_%s_%s' % (
+                reestr_path, func.YEAR,
+                MONTH_NAME[func.PERIOD])) as act_book:
             act_book.set_style()
             act_book.write_cell(u'Код', 'c')
             act_book.write_cell(u'Наименование', 'c')
-            act_book.write_cell(u'за %s' % MONTH_NAME[period], 'c')
-            act_book.write_cell(u'за %d месяцев' % int(period), 'r')
+            act_book.write_cell(u'за %s' % MONTH_NAME[func.PERIOD], 'c')
+            act_book.write_cell(u'за %d месяцев' % int(func.PERIOD), 'r')
             for mo_data in cursor.fetchall():
                 for value in mo_data[1:]:
                     act_book.write_cell(value, 'c')

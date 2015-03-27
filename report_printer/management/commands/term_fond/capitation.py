@@ -1,8 +1,11 @@
 #! -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand
-from report_printer.func import print_act_2
-from tfoms.func import (get_mo_register,
-                        calculate_capitation_tariff)
+
+from report_printer.management.commands.term_fond.func import print_act_2
+from tfoms.func import (
+    get_mo_register,
+    calculate_capitation_tariff
+)
 
 
 ### Подушевое по поликлинике
