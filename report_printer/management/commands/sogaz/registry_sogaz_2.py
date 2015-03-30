@@ -62,7 +62,11 @@ def get_statistics(mo):
                  pe.term_fk = 3 or pe.term_fk is null as is_policlinic,
                  pe.term_fk = 4 As is_ambulance,
 
-                (ms.group_fk=19 and ms.subgroup_fk is null) or (ms.group_fk=7 and ms.subgroup_fk=5) as is_not_count,
+                (select max(ms1.subgroup_fk)
+                 from provided_service ps1
+                 join medical_service ms1 on ps1.code_fk = ms1.id_pk
+                 where ps1.event_fk = ps.event_fk and ms1.group_fk = 19) is NULL  and ms.group_fk = 19
+                or (ms.group_fk=7 and ms.subgroup_fk=5) as is_not_count,
                 pss.error_fk != 75 as is_not_pa,
                 pss.error_fk = 75 as is_pa
 

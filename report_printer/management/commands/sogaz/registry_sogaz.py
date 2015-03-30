@@ -39,9 +39,9 @@ def get_statistics(mo):
             sum(CASE WHEN T.is_day_hospital THEN T.tariff ELSE 0 END) AS inv_sum_tariff_day_hosp, -- сумма по тарифу в дневном стационаре
 
 
-            count(distinct CASE WHEN T.is_paid and T.is_policlinic THEn T.event_id END)+
-            count(distinct CASE WHEN T.is_not_paid and T.is_policlinic THEn T.event_id END) -
-            count(CASE WHEN T.is_paid and T.is_not_count THEN T.event_id END) as inv_count_policlinic,  -- количество услуг в поликлинике
+            count(distinct CASE WHEN T.is_policlinic THEn T.event_id END) -
+            count(DISTINCT CASE WHEN T.is_paid and T.is_not_count THEN T.event_id END)
+            as inv_count_policlinic,  -- количество услуг в поликлинике
 
             sum(CASE WHEN T.is_policlinic THEN T.tariff ELSE 0 END) AS inv_sum_tariff_policlinic, -- сумма по тарифу в поликлинике
 
@@ -83,7 +83,7 @@ def get_statistics(mo):
 
             sum(CASE WHEN  T.is_not_paid and T.is_not_pa and T.is_day_hospital THEN T.provided_tariff ELSE 0 END) AS sanc_sum_tariff_day_hosp, -- сумма снятая по дневному стационару
 
-            count(DISTINCT CASE WHEN T.is_not_paid and T.is_not_pa and T.is_policlinic THEN T.event_id END) AS sanc_count_policlinic, -- количество снятых услуг в поликлинике
+            count(DISTINCT CASE WHEN T.is_not_paid and T.is_not_pa and T.is_policlinic and T.is_event THEN T.event_id END) AS sanc_count_policlinic, -- количество снятых услуг в поликлинике
 
             sum(CASE WHEN T.is_not_paid and T.is_not_pa and T.is_policlinic  AND T.is_tariff THEN T.provided_tariff ELSE 0 END) AS sanc_sum_tariff_policlinic, -- сумма снятая по поликлинике
 
@@ -97,7 +97,7 @@ def get_statistics(mo):
             sum(CASE WHEN T.is_not_paid and T.is_pa and T.is_policlinic THEn T.provided_tariff ELSE 0 END) as pa_sum_tariff_policlinic, -- сумма санкций сверх объёма по поликлинике
 
             -- Не подлежит к оплате (итоговая)
-            count(DISTINCT CASE WHEN T.is_not_paid THEN T.event_id END) AS sanc_count_all,  -- количество санкций (итоговое)
+            count(DISTINCT CASE WHEN T.is_not_paid and T.is_event THEN T.event_id END) AS sanc_count_all,  -- количество санкций (итоговое)
 
             sum(CASE WHEN T.is_not_paid and T.is_tariff THEn T.provided_tariff ELSE 0 END) as sanc_sum_tariff_all
 
@@ -111,12 +111,19 @@ def get_statistics(mo):
                  ps.provided_tariff as provided_tariff,
                  ps.payment_kind_fk = 1 and (pe.term_fk !=4 or pe.term_fk is NULL) as is_tariff,
 
-                 pe.term_fk = 1 as is_hospital,
+                 pe.term_fk = 1 and (ms.group_fk != 31 or ms.group_fk is null) as is_hospital,
                  pe.term_fk = 2 as is_day_hospital,
-                 pe.term_fk = 3 or pe.term_fk is null as is_policlinic,
+                 pe.term_fk = 3 or pe.term_fk is null or ms.group_fk = 31 as is_policlinic,
                  pe.term_fk = 4 As is_ambulance,
 
-                (ms.group_fk=19 and ms.subgroup_fk is null) or (ms.group_fk=7 and ms.subgroup_fk=5) as is_not_count,
+                (ms.group_fk != 19 or ms.group_fk is null) or
+                (ms.group_fk = 19 and ms.subgroup_fk is not null) as is_event,
+
+                (select max(ms1.subgroup_fk)
+                 from provided_service ps1
+                 join medical_service ms1 on ps1.code_fk = ms1.id_pk
+                 where ps1.event_fk = ps.event_fk and ms1.group_fk = 19) is NULL  and ms.group_fk = 19
+                or (ms.group_fk=7 and ms.subgroup_fk=5) as is_not_count,
                 pss.error_fk != 75 as is_not_pa,
                 pss.error_fk = 75 as is_pa
 
@@ -295,8 +302,8 @@ def get_sanction_info(mo, term=0, has_pa=False):
                   AND ps.payment_type_fk = 3
                   AND (ms.group_fk != 27 or ms.group_fk is NULL)
             """
-    term_criterias = {1: 'and pe.term_fk=1', 2: 'and pe.term_fk=2',
-                      3: 'and (pe.term_fk=3 or pe.term_fk is NULL)',
+    term_criterias = {1: 'AND (pe.term_fk = 1 and (ms.group_fk != 31 or ms.group_fk is null))', 2: 'and pe.term_fk=2',
+                      3: 'and (pe.term_fk=3 or pe.term_fk is NULL or ms.group_fk = 31)',
                       4: 'and pe.term_fk=4', 0: ''}
 
     services_obj = ProvidedService.objects.raw(
@@ -309,7 +316,8 @@ def get_sanction_info(mo, term=0, has_pa=False):
             mo.id_pk,
             sum(CASE WHEN ps.payment_kind_fk = 1
                 and (pe.term_fk !=4 or pe.term_fk is NULL) THEN ps.provided_tariff ELSE 0 end) as sanc_sum,
-            count(distinct pe.id_pk) as sanc_count
+            count(distinct CASE WHEN (ms.group_fk != 19 or ms.group_fk is null)
+                  or (ms.group_fk = 19 and ms.subgroup_fk is not null) then pe.id_pk end) as sanc_count
             from medical_register mr JOIN medical_register_record mrr
                   ON mr.id_pk=mrr.register_fk
             JOIN provided_event pe
