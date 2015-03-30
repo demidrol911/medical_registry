@@ -202,7 +202,7 @@ def identify_patient(register_element):
     query1 = """
         update patient set insurance_policy_fk = T.policy_id from (
         select DISTINCT p1.id_pk as patient_id, (
-            select version_id_pk
+            select max(version_id_pk)
             from insurance_policy
             where id = (
                 select insurance_policy.id
@@ -689,7 +689,7 @@ def get_payments_sum(service):
                     '098967', '098968', '098969'):
                 duration_coefficient = 50
 
-            if is_endovideosurgery or service.service_code in ('098913', ):
+            if is_endovideosurgery or service.service_code in ('098913', '098940'):
                 duration_coefficient = 0
 
             if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
@@ -707,9 +707,6 @@ def get_payments_sum(service):
 
             if is_endovideosurgery:
                 duration_coefficient = 50
-
-        if service.service_code == '098964':
-            print service.service_code, duration_coefficient, nkd
 
         duration = (days / float(nkd)) * 100
 
@@ -918,6 +915,9 @@ def main():
             checks.underpay_service_term_mismatch(register_element)
             checks.underpay_service_term_kind_mismatch(register_element)
 
+            print u'underpay_wrong_gender_examination'
+            checks.underpay_wrong_gender_examination(register_element)
+
         print 'iterate tariff', register_element
         with transaction.atomic():
             for row, service in enumerate(get_services(register_element)):
@@ -944,6 +944,9 @@ def main():
 
                 payments = get_payments_sum(service)
 
+                service.calculated_payment = payments['calculated_payment']
+                service.provided_tariff = payments['provided_tariff']
+
                 if (payments['tariff'] - float(service.tariff)) >= 0.01 or \
                         (payments['tariff'] - float(service.tariff)) <= -0.01:
                     set_sanction(service, 61)
@@ -963,12 +966,14 @@ def main():
         else:
             checks.underpay_invalid_stomatology_event(register_element)
             checks.underpay_repeated_service(register_element)
-            checks.underpay_outpatient_event(register_element)
             checks.underpay_invalid_outpatient_event(register_element)
             checks.underpay_examination_event(register_element)
             checks.underpay_ill_formed_children_examination(register_element)
             checks.underpay_ill_formed_adult_examination(register_element)
             checks.underpay_duplicate_examination_in_current_register(register_element)
+
+            checks.underpay_second_phase_examination(register_element)
+            checks.underpay_outpatient_event(register_element)
 
         print Sanction.objects.filter(
             service__event__record__register__is_active=True,
