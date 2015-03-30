@@ -1,4 +1,8 @@
 /.idea/
 /static/
-.xml
-.pyc
+*.xml
+*.pyc
+settings.py
+settings.pyc
+path.py
+path.pyc
