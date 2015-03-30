@@ -382,6 +382,8 @@ def main():
     period = '02'
     year = '2015'
     print datetime.datetime.now()
+
+    sumv_usl_sum = 0
     registers = MedicalRegister.objects.filter(
         is_active=True, period=period, year=year,
         #organization_code__in=('280036', )
@@ -651,6 +653,10 @@ def main():
                     accepted_payment = 0
 
                 sumv_usl = round(float(accepted_payment), 2)
+
+                if record.service_payment_type_code == 1:
+                    sumv_usl_sum += sumv_usl
+
                 hm_xml.put('SUMV_USL', sumv_usl or 0)
                 hm_xml.put('PRVS', record.service_worker_speciality_code or '')
                 hm_xml.put('CODE_MD', (record.service_worker_code or '').encode('cp1251'))
@@ -665,6 +671,8 @@ def main():
         hm_xml.end('ZAP')
         hm_xml.end('ZL_LIST')
         print datetime.datetime.now()
+
+    print sumv_usl_sum
 
 class Command(BaseCommand):
     help = 'export big XML'
