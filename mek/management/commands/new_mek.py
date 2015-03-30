@@ -656,19 +656,6 @@ def get_payments_sum(service):
     term = service.service_term
     nkd = service.nkd or 1
 
-    if service.service_code in ('098958', '098959'):
-        nkd = 12
-    elif service.service_code in ('098960', '098961'):
-        nkd = 12
-    elif service.service_code in ('098962', '098963'):
-        nkd = 7
-    elif service.service_code in ('098964', '098965'):
-        nkd = 30
-    elif service.service_code in ('098966', '098967'):
-        nkd = 30
-    elif service.service_code in ('098968', '098969'):
-        nkd = 30
-
     ### Неонатология 11 - я группа
     if service.service_group == 20 and service.vmp_group == 11:
         nkd = 70
