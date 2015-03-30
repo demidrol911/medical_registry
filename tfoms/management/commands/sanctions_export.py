@@ -37,7 +37,7 @@ def set_precision(number, precision):
 
 
 def get_patients(period, start_date, end_date):
-    attachment_date = '2014-%s-01' % str(int(period)+1)
+    attachment_date = '2015-%s-01' % str(int(period)+1)
     query = """
         select p1.*, medOrg.code as attachment_code
             , person_id_type.code as id_type
@@ -432,9 +432,9 @@ def get_records(register_element, start_date, end_date):
 
 
 def main():
-    sanction_start_date = '2014-11-01'
-    sanction_end_date = '2014-11-30'
-    period = '12'
+    sanction_start_date = '2015-01-01'
+    sanction_end_date = '2015-01-31'
+    period = '02'
 
     print datetime.datetime.now()
     registers = Sanction.objects.filter(
@@ -450,15 +450,15 @@ def main():
             'service__event__record__register__year',
             'service__event__record__register__period')
 
-    file_regular = 'HX28002T28_14%s1' % period
-    file_patients = 'LX28002T28_14%s1' % period
+    file_regular = 'HX28002T28_15%s1' % period
+    file_patients = 'LX28002T28_15%s1' % period
 
     lm_xml = writer.Xml('%s.xml' % file_patients)
     lm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
     lm_xml.start('PERS_LIST')
     lm_xml.start('ZGLV')
     lm_xml.put('VERSION', '2.1')
-    lm_xml.put('DATA', '18.%s.2014' % period)
+    lm_xml.put('DATA', '18.%s.2015' % period)
     lm_xml.put('FILENAME', file_patients)
     lm_xml.put('FILENAME1', file_regular)
     lm_xml.end('ZGLV')
@@ -474,7 +474,7 @@ def main():
 
     hm_xml.start('ZGLV')
     hm_xml.put('VERSION', '2.1')
-    hm_xml.put('DATA', '18.%s.2014' % period)
+    hm_xml.put('DATA', '18.%s.2015' % period)
     hm_xml.put('FILENAME', file_regular)
     hm_xml.end('ZGLV')
     print registers

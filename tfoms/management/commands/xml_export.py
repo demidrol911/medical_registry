@@ -108,6 +108,7 @@ def get_records(register_pk):
             medical_service_hitech_kind.code as hitech_kind_code,
             provided_event.hitech_method_fk as hitech_method_code,
             provided_event.hospitalization_fk as event_hospitalization_code,
+            /*
             (
                 select code
                 from provided_service
@@ -117,6 +118,8 @@ def get_records(register_pk):
                 order by end_date DESC
                 limit 1
             ) as event_division_code,
+            */
+            event_division.code as event_division_code,
             referred.code as event_referred_organization_code,
             medical_register.organization_code as event_organization_code,
             medical_organization.old_code as event_department_code,
@@ -298,8 +301,8 @@ def get_records(register_pk):
             provided_service.invoiced_payment as service_invoiced_payment,
             payment_type.code as service_payment_type_code,
             provided_service.accepted_payment as service_accepted_payment,
-            medical_error.failure_cause_fk as service_failure_cause_code,
-            provided_service_sanction.underpayment as service_sanction_mek,
+            --medical_error.failure_cause_fk as service_failure_cause_code,
+            --provided_service_sanction.underpayment as service_sanction_mek,
             service_worker_speciality.code as service_worker_speciality_code,
             provided_service.worker_code as service_worker_code,
             provided_service.comment as service_comment
@@ -326,12 +329,8 @@ def get_records(register_pk):
                 on referred.id_pk = provided_event.refer_organization_fk
             left join idc idc_initial
                 on idc_initial.id_pk = provided_event.initial_disease_fk
-            LEFT join idc idc_basic
+            join idc idc_basic
                 on idc_basic.id_pk = provided_event.basic_disease_fk
-            left join provided_event_concomitant_disease pecd
-                on pecd.event_fk = provided_event.id_pk
-            left join idc idc_concomitant
-                on idc_concomitant.id_pk = pecd.disease_fk
             LEFT JOIN treatment_result
                 on treatment_result.id_pk = provided_event.treatment_result_fk
             LEFT join treatment_outcome
@@ -343,7 +342,7 @@ def get_records(register_pk):
 
             left JOIN medical_division service_division
                 on service_division.id_pk = provided_service.division_fk
-            LEFT JOIN medical_organization service_department
+            JOIN medical_organization service_department
                 ON service_department.id_pk = provided_service.department_fk
             LEFT join idc service_idc_basic
                 on service_idc_basic.id_pk = provided_service.basic_disease_fk
@@ -351,10 +350,11 @@ def get_records(register_pk):
                 on service_profile.id_pk = provided_service.profile_fk
             LEFT JOin medical_worker_speciality service_worker_speciality
                 on service_worker_speciality.id_pk = provided_service.worker_speciality_fk
-            LEFT JOIN medical_service
+            JOIN medical_service
                 on provided_service.code_fk = medical_service.id_pk
-            LEFT JOIN payment_type
+            JOIN payment_type
                 on provided_service.payment_type_fk = payment_type.id_pk
+            /*
             left join provided_service_sanction
                 on provided_service_sanction.service_fk = provided_service.id_pk
                     and provided_service_sanction.id_pk = (
@@ -365,6 +365,7 @@ def get_records(register_pk):
                     and provided_service.payment_type_fk in (3, 4)
             LEFT JOIN medical_error
                 on provided_service_sanction.error_fk = medical_error.id_pk
+            */
             LEFT JOIN medical_service_kind
                 on medical_service_kind.id_pk = provided_event.kind_fk
         where
@@ -378,7 +379,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '01'
+    period = '02'
     year = '2015'
     print datetime.datetime.now()
     registers = MedicalRegister.objects.filter(
