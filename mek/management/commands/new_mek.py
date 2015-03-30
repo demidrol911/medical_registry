@@ -835,6 +835,14 @@ def get_payments_sum(service):
             ProvidedServiceCoefficient.objects.get_or_create(
                 service=service, coefficient_id=4)
 
+        if service.organization_code == '280003' \
+                and service.service_code in ('001203', '001204') \
+                and is_aood_x_ray:
+            accepted_payment += round(accepted_payment * 1,9, 2)
+            provided_tariff += round(provided_tariff * 1,9, 2)
+            ProvidedServiceCoefficient.objects.get_or_create(
+                service=service, coefficient_id=19)
+
     elif service.event.term_id == 4:
         quantity = service.quantity or 1
         accepted_payment = tariff * float(quantity)
