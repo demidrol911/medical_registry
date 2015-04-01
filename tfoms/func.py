@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from django.db.models import Q
 from django.db import connection
-from tfoms.models import (
+from main.models import (
     MedicalError, ProvidedService, MedicalRegister,
     ProvidedEvent,
     TariffFap, PaymentFailureCause,
@@ -515,10 +515,17 @@ def calculate_capitation_tariff(term, mo_code):
 
 
 ### Устанавливает статус реестру
-def change_register_status(mo_code, register_status):
+def change_register_status(mo_code, status):
     MedicalRegister.objects.filter(
         year=YEAR,
         period=PERIOD,
         organization_code=mo_code,
         is_active=True
-    ).update(status=register_status)
+    ).update(status=status)
+    if status == 4:
+        MedicalRegister.objects.filter(
+        year=YEAR,
+        period=PERIOD,
+        organization_code=mo_code,
+        is_active=True
+    ).update(pse_export_date=datetime.now())

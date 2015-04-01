@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from tfoms.models import ProvidedService, Sanction, SanctionStatus, ProvidedServiceCoefficient
+from main.models import ProvidedService, Sanction, SanctionStatus, ProvidedServiceCoefficient
 from datetime import datetime
 
 FILE_NAME = 'service.csv'
@@ -66,7 +66,6 @@ def drop_sanction(services_id):
         SanctionStatus.objects.get_or_create(
             sanction=sanction,
             created_at=datetime.now(),
-            who=WHO_STATUS
         )
         return True
     else:
@@ -83,7 +82,7 @@ class Command(BaseCommand):
                 actions_result = drop_sanction(services_id)
             elif actions_cmd == 'insert':
                 errors_id = args[1]
-                actions_result = insert_sanction(services_id, errors_id)
+                # actions_result = insert_sanction(services_id, errors_id)
             else:
                 print u'Действие не опознано'
             if not actions_result:

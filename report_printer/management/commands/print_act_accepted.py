@@ -21,7 +21,7 @@ from report_printer.management.commands.sogaz import (
     registry_sogaz_2
 )
 from helpers.correct import date_correct
-from tfoms.models import MedicalService
+from main.models import MedicalService
 from tfoms import func
 from pse_exporter import Command as PseExporter
 from copy import deepcopy
@@ -2908,7 +2908,7 @@ class Command(BaseCommand):
             sum_capitation_policlinic = func.calculate_capitation_tariff(3, mo)
             sum_capitation_ambulance = func.calculate_capitation_tariff(4, mo)
 
-            target = target_dir % (handbooks['year'], handbooks['period']) + ur'\согаз\%s' % \
+            target = target_dir % (handbooks['year'], handbooks['period']) + ur'\согаз3\%s' % \
                 handbooks['mo_info']['name'].replace('"', '').strip()
             print u'Печать акта: %s ...' % target
 

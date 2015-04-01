@@ -310,171 +310,49 @@ class MedicalOrganization(models.Model):
     class Meta:
         db_table = "medical_organization"
 
-
-    def get_ambulance_attachment_count(self, date):
-        query = """
-            select
-            medical_organization.id_pk, count(*) as ambulance_attachment_count,
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_count,
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '59 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '54 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '59 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '54 years' then 1 else 0 end) as adults_count
-
-            from attachment
-            join medical_organization on (medical_organization.id_pk = medical_organization_fk and
-                medical_organization.teritorial_parent_fk is null) or medical_organization.id_pk =
-                (select teritorial_parent_fk from medical_organization where id_pk = medical_organization_fk)
-
-            join medical_organization ambulanceMO on (ambulanceMO.id_pk = medical_organization.ambulance_fk and
-            medical_organization.ambulance_fk is not null)
-            or (ambulanceMO.id_pk = medical_organization.id_pk and medical_organization.ambulance_fk is null)
-
-            join person on attachment.person_fk = person.version_id_pk
-            join insurance_policy on insurance_policy.person_fk = person.version_id_pk
-            join active_insurance_policy on active_insurance_policy.version_fk = insurance_policy.version_id_pk
-
-            where
-            ambulanceMO.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.date <= %(date)s and attachment.is_active = true and
-            attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.date <= %(date)s group by person_fk)
-            group by medical_organization.id_pk
-        """
-
-        result = {'adults_count': 0, 'children_count': 0}
-
-        for population_object in MedicalOrganization.objects.raw(query, dict(organization=self.code, date=date)):
-            result['adults_count'] += population_object.adults_count
-            result['children_count'] += population_object.children_count
-
-        return result
-
     def get_attachment_count(self, date):
-        query = """
-            select medical_organization.id_pk, count(*) as attachment_count,
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_count,
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '59 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '54 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '59 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '54 years' then 1 else 0 end) as adults_count
-
-            from attachment
-            join medical_organization on (medical_organization.id_pk = medical_organization_fk and
-                medical_organization.parent_fk is null) or medical_organization.id_pk =
-                (select parent_fk from medical_organization where id_pk = medical_organization_fk)
-            join person on attachment.person_fk = person.version_id_pk
-            join insurance_policy on insurance_policy.person_fk = person.version_id_pk
-            join active_insurance_policy on active_insurance_policy.version_fk = insurance_policy.version_id_pk
-            where
-            medical_organization.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.date <= %(date)s and attachment.is_active = true and
-            attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.date <= %(date)s group by person_fk)
-            group by medical_organization.id_pk
-        """
-        result = {'adults_count': 0, 'children_count': 0}
-
-        for population_object in MedicalOrganization.objects.raw(query, dict(organization=self.code, date=date)):
-            result['adults_count'] += population_object.adults_count
-            result['children_count'] += population_object.children_count
+        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date)
+        result = {
+            1: {'men': 0, 'fem': 0},
+            2: {'men': 0, 'fem': 0},
+            3: {'men': 0, 'fem': 0},
+            4: {'men': 0, 'fem': 0},
+            5: {'men': 0, 'fem': 0}
+        }
+        for population in populations:
+            result[1]['men'] += population.less_one_age_male
+            result[1]['fem'] += population.less_one_age_female
+            result[2]['men'] += population.one_four_age_male
+            result[2]['fem'] += population.one_four_age_female
+            result[3]['men'] += population.five_seventeen_age_male
+            result[3]['fem'] += population.five_seventeen_age_female
+            result[4]['men'] += population.eighthteen_fiftynine_age_male
+            result[4]['fem'] += population.eighthteen_fiftyfour_age_female
+            result[5]['men'] += population.older_sixty_age_male
+            result[5]['fem'] += population.older_fiftyfive_age_female
         return result
-
-
-    def get_capitation_events(self, year, period, date):
-        query = """
-        SELECT DISTINCT medical_organization.id_pk, provided_event.id_pk AS event_id
-        FROM provided_service
-        JOIN provided_event
-            ON provided_service.event_fk = provided_event.id_pk
-        JOIN medical_register_record
-            ON provided_event.record_fk = medical_register_record.id_pk
-        JOIN patient ON medical_register_record.patient_fk = patient.id_pk
-        JOIN medical_register
-            ON medical_register_record.register_fk = medical_register.id_pk
-        JOIN medical_service
-            ON provided_service.code_fk = medical_service.id_pk
-        JOIN medical_organization
-            ON provided_service.organization_fk = medical_organization.id_pk
-        WHERE medical_register.year = %(year)s
-             AND medical_register.period = %(period)s
-             AND medical_register.is_active and medical_organization.code = %(organization)s
-             AND (provided_event.term_fk = 4
-             OR (medical_service.group_fk = 24 and medical_service.reason_fk = 1
-             AND provided_service.department_fk NOT IN (15, 88, 89)
-             AND medical_organization.id_pk in (
-                 SELECT med_org.id_pk
-                 FROM patient pt
-                 JOIN insurance_policy
-                      ON pt.insurance_policy_fk = insurance_policy.version_id_pk
-                 JOIN person
-                      ON person.version_id_pk =(
-                          SELECT version_id_pk
-                          FROM person WHERE id = (
-                              SELECT id FROM person
-                              WHERE version_id_pk = insurance_policy.person_fk) AND is_active)
-                 JOIN attachment
-                      ON attachment.id_pk = (
-                          SELECT MAX(id_pk)
-                          FROM attachment
-                          WHERE person_fk = person.version_id_pk AND status_fk = 1
-                             AND date <= %(date)s AND attachment.is_active)
-
-                 JOIN medical_organization med_org
-                      ON (med_org.id_pk = attachment.medical_organization_fk
-                          AND med_org.parent_fk IS NULL)
-                          OR med_org.id_pk = (
-                             SELECT parent_fk FROM medical_organization
-                             WHERE id_pk = attachment.medical_organization_fk)
-                WHERE pt.id_pk = patient.id_pk)))
-        """
-
-        return [event.event_id for event in MedicalOrganization.objects.raw(
-            query,
-            dict(organization=self.code,
-                 date=date,
-                 year=year,
-                 period=period))]
-
-    def get_attachment_count(self, date):
-        population = AttachmentStatistics.objects.filter(organization=self.code, at=date)
-        if population:
-            return {
-                'adults_male_count': population[0].adult_male,
-                'children_male_count': population[0].children_male,
-                'adults_female_count': population[0].adult_female,
-                'children_female_count': population[0].children_female
-            }
-        else:
-            return {
-                'adults_male_count': 0,
-                'children_male_count': 0,
-                'adults_female_count': 0,
-                'children_female_count': 0
-            }
 
     def get_ambulance_attachment_count(self, date):
         # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
         # при рассчёт численности для 280017 и 280001 используется следующий запрос
-        if self.code in ('280017', '280001'):
+        # 280088 обслуживает 280028
+        if self.code in ('280017', '280001', '280088'):
             query = """
-            select
-            medical_organization.id_pk, count(*) as ambulance_attachment_count,
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end)+
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_male_count,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) <= '4 years' then 1 else 0 end)+
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) > '4 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as children_female_count,
+            select medical_organization.id_pk, count(*) as attachment_count,
+            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) < '1 years' then 1 else 0 end) as men1,
+            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) < '1 years' then 1 else 0 end) as fem1,
 
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '59 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '1' and age( %(date)s, person.birthdate) >= '59 years' then 1 else 0 end) as adults_male_count,
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '18 years' and age( %(date)s, person.birthdate) < '54 years' then 1 else 0 end) +
-            sum(case when person.gender_fk = '2' and age( %(date)s, person.birthdate) >= '54 years' then 1 else 0 end) as adults_female_count
+            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '1 years' and age(%(date)s, person.birthdate) < '5 years' then 1 else 0 end) as men2,
+            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '1 years' and age(%(date)s, person.birthdate) < '5 years' then 1 else 0 end) as fem2,
+
+            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '5 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as men3,
+            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '5 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as fem3,
+
+            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '18 years' and age(%(date)s, person.birthdate) < '59 years' then 1 else 0 end) as men4,
+            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '18 years' and age(%(date)s, person.birthdate) < '54 years' then 1 else 0 end) as fem4,
+
+            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '59 years' then 1 else 0 end) as men5,
+            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '54 years' then 1 else 0 end) as fem5
 
             from attachment
             join medical_organization on (medical_organization.id_pk = medical_organization_fk and
@@ -497,16 +375,25 @@ class MedicalOrganization(models.Model):
             group by medical_organization.id_pk
             """
 
-            result = {'adults_male_count': 0, 'children_male_count': 0,
-                      'adults_female_count': 0, 'children_female_count': 0}
+            result = {
+                1: {'men': 0, 'fem': 0},
+                2: {'men': 0, 'fem': 0},
+                3: {'men': 0, 'fem': 0},
+                4: {'men': 0, 'fem': 0},
+                5: {'men': 0, 'fem': 0}
+            }
 
-            for population_object in MedicalOrganization.objects.raw(query,
-                                                                     dict(organization=self.code,
-                                                                          date=date)):
-                result['adults_male_count'] += population_object.adults_male_count
-                result['children_male_count'] += population_object.children_male_count
-                result['adults_female_count'] += population_object.adults_female_count
-                result['children_female_count'] += population_object.children_female_count
+            for population_object in MedicalOrganization.objects.raw(query, dict(organization=self.code, date=date)):
+                result[1]['men'] += population_object.men1
+                result[1]['fem'] += population_object.fem1
+                result[2]['men'] += population_object.men2
+                result[2]['fem'] += population_object.fem2
+                result[3]['men'] += population_object.men3
+                result[3]['fem'] += population_object.fem3
+                result[4]['men'] += population_object.men4
+                result[4]['fem'] += population_object.fem4
+                result[5]['men'] += population_object.men5
+                result[5]['fem'] += population_object.fem5
 
         # Для вех остальных больниц используются уже рассчитанные значения численности из
         # таблицы attachment_statistics
@@ -516,61 +403,19 @@ class MedicalOrganization(models.Model):
                     ambulance=self.pk,
                     parent__isnull=True):
                 mo_result = mo.get_attachment_count(date)
-                result['adults_male_count'] += mo_result['adults_male_count']
-                result['children_male_count'] += mo_result['children_male_count']
-                result['adults_female_count'] += mo_result['adults_female_count']
-                result['children_female_count'] += mo_result['children_female_count']
-
+                for group in mo_result:
+                    result[group]['men'] += mo_result[group]['men']
+                    result[group]['fem'] += mo_result[group]['fem']
         return result
 
-    ### Расчёт количества обращений (в разрезе взрослые, дети) для указаной причины отказа
-    def get_policlinic_treatment_error(self, year, period, failure_cause):
-        query = """
-            SELECT
-            medical_organization.id_pk,
-            COUNT(DISTINCT provided_event.id_pk) AS all,
-            COUNT(DISTINCT CASE WHEN medical_service.code like %(adult)s
-                  THEN provided_event.id_pk END) AS adult,
-            COUNT(DISTINCT CASE WHEN medical_service.code like %(children)s
-                  THEN provided_event.id_pk END) AS children
-            FROM provided_service
-            JOIN provided_event
-                 ON provided_event.id_pk = provided_service.event_fk
-            JOIN medical_register_record
-                 ON medical_register_record.id_pk = provided_event.record_fk
-            JOIN medical_register
-                 ON medical_register.id_pk = medical_register_record.register_fk
-            JOIN medical_service
-                 ON medical_service.id_pk = provided_service.code_fk
-            JOIN provided_service_sanction
-                 ON provided_service_sanction.service_fk = provided_service.id_pk
-            JOIN medical_error
-                 ON medical_error.id_pk = provided_service_sanction.error_fk
-            JOIN medical_organization
-                 ON medical_organization.id_pk = provided_service.organization_fk
-            WHERE medical_register.period=%(period)s
-                  AND medical_register.year=%(year)s
-                  AND medical_register.is_active
-                  AND medical_organization.code = %(organization)s
-                  AND provided_service.payment_type_fk = 3
-                  AND (provided_event.term_fk = 3
-                       AND medical_service.reason_fk = 1
-                       AND (medical_service.group_fk IS NULL
-                            OR medical_service.group_fk != 19)
-                      )
-                  AND medical_error.failure_cause_fk = %(failure_cause)s
-                  AND medical_error.weight = (
-                       SELECT MAX(medical_error1.weight)
-                       FROM provided_service_sanction provided_service_sanction1
-                       JOIN medical_error medical_error1 ON provided_service_sanction1.error_fk = medical_error1.id_pk
-                       WHERE provided_service_sanction1.service_fk = provided_service.id_pk
-                  )
-            GROUP BY medical_organization.id_pk
-        """
-        return MedicalOrganization.objects.raw(query, dict(adult='0%', children='1%',
-                                                           year=year, period=period,
-                                                           organization=self.code,
-                                                           failure_cause=int(failure_cause)))[0]
+    def get_capitation_events(self, year, period, date):
+        return ProvidedService.objects.filter(
+            event__record__register__year=year,
+            event__record__register__period=period,
+            event__record__register__is_active=True,
+            event__record__register__organization_code=self.code,
+            payment_kind__in=[2, 3]).\
+            values_list('event__id_pk', flat=True).distinct()
 
 
 class MedicalRegisterStatus(models.Model):
@@ -604,6 +449,7 @@ class MedicalRegister(models.Model):
                                                    decimal_places=4)
     organization_code = models.CharField(max_length=6)
     type = models.SmallIntegerField()
+    pse_export_date = models.DateField(db_column='pse_export_date')
 
     class Meta:
         db_table = "medical_register"
@@ -777,8 +623,10 @@ class MedicalService(models.Model):
     tariff_profile = models.ForeignKey('TariffProfile',
                                        db_column='tariff_profile_fk')
     is_paid = models.BooleanField()
+    vmp_group = models.IntegerField(db_column='vmp_group')
 
     objects = ExtendedObjectManager()
+
 
     class Meta:
         db_table = "medical_service"
@@ -1358,6 +1206,7 @@ class ProvidedService(models.Model):
     calculated_payment = models.DecimalField(max_digits=16, decimal_places=4)
     provided_tariff = models.DecimalField(max_digits=16, decimal_places=4)
     migration = models.IntegerField(db_column='migration_id')
+    payment_kind = models.ForeignKey("PaymentKind", db_column='payment_kind_fk')
 
     def get_sanctions_mee(self):
         return Sanction.objects.filter(service=self,
@@ -1577,6 +1426,8 @@ class TariffCapitation(models.Model):
     is_children_profile = models.BooleanField()
     value = models.DecimalField(max_digits=12, decimal_places=2)
     start_date = models.DateField(db_column='start_date')
+    gender = models.ForeignKey(Gender, db_column='gender_fk')
+    age_group = models.IntegerField(db_column='age_group')
 
     class Meta:
         db_table = 'tariff_capitation'
@@ -1585,14 +1436,29 @@ class TariffCapitation(models.Model):
 class AttachmentStatistics(models.Model):
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')
     organization = models.CharField(max_length=6, db_column='organization')
-    children_male = models.IntegerField()
-    children_female = models.IntegerField()
-    adult_male = models.IntegerField()
-    adult_female = models.IntegerField()
+    less_one_age_male = models.IntegerField()
+    less_one_age_female = models.IntegerField()
+    one_four_age_male = models.IntegerField()
+    one_four_age_female = models.IntegerField()
+    five_seventeen_age_male = models.IntegerField()
+    five_seventeen_age_female = models.IntegerField()
+    eighthteen_fiftynine_age_male = models.IntegerField()
+    eighthteen_fiftyfour_age_female = models.IntegerField()
+    older_sixty_age_male = models.IntegerField()
+    older_fiftyfive_age_female = models.IntegerField()
     at = models.DateField()
+    group = models.IntegerField()
 
     class Meta:
         db_table = 'attachment_statistics'
+
+
+class PaymentKind(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    name = models.CharField(max_length=40, db_column='name')
+
+    class Meta:
+        db_table = 'payment_kind'
 
 
 class SanctionStatus(models.Model):

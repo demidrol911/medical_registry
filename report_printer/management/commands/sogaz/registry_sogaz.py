@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from tfoms.models import MedicalOrganization, ProvidedService
+from main.models import MedicalOrganization, ProvidedService
 from tfoms import func
 
 
@@ -39,8 +39,9 @@ def get_statistics(mo):
             sum(CASE WHEN T.is_day_hospital THEN T.tariff ELSE 0 END) AS inv_sum_tariff_day_hosp, -- сумма по тарифу в дневном стационаре
 
 
-            count(distinct CASE WHEN T.is_policlinic THEn T.event_id END) -
-            count(DISTINCT CASE WHEN T.is_paid and T.is_not_count THEN T.event_id END)
+             count(distinct CASE WHEN T.is_policlinic and T.is_event THEN
+                               case when T.is_phase_exam then T.service_id
+                               ELSE T.event_id END END)
             as inv_count_policlinic,  -- количество услуг в поликлинике
 
             sum(CASE WHEN T.is_policlinic THEN T.tariff ELSE 0 END) AS inv_sum_tariff_policlinic, -- сумма по тарифу в поликлинике
@@ -54,8 +55,9 @@ def get_statistics(mo):
             -- Принятые услуги
             sum(CASE WHEN T.is_paid and T.is_tariff THEN T.accepted_payment ELSE 0 END) as accept_sum_tariff,
 
-            count(distinct CASE WHEN T.is_paid THEN T.event_id END) -
-            count(CASE WHEN  T.is_paid and T.is_not_count THEN T.event_id END) as accept_count_all, -- количество принятых услуг (в акте)
+            count(distinct CASE WHEN T.is_paid and T.is_event THEN
+                               case when T.is_phase_exam then T.service_id
+                               ELSE T.event_id END END) as accept_count_all, -- количество принятых услуг (в акте)
 
 
             count(DISTINCT CASE WHEN T.is_paid and T.is_hospital THEN T.event_id END) AS accept_count_hosp,  -- количество услуг в стационаре
@@ -67,10 +69,14 @@ def get_statistics(mo):
 
             sum(CASE WHEN T.is_paid and T.is_day_hospital THEN T.accepted_payment ELSE 0 END) AS accept_sum_tariff_day_hosp, -- принятая сумма в дневном стационаре
 
-            count(distinct CASE WHEN T.is_paid and T.is_policlinic THEn T.event_id END) -
-            count(CASE WHEN  T.is_paid AND T.is_not_count THEN T.event_id END) as accept_count_policlinic, -- количество услуг в поликлинике
+            count(distinct CASE WHEN T.is_paid and T.is_policlinic and T.is_event THEN
+                               case when T.is_phase_exam then T.service_id
+                               ELSE T.event_id END END)
+            as accept_count_policlinic, -- количество услуг в поликлинике
 
             sum(CASE WHEN T.is_paid and T.is_tariff and T.is_policlinic THEn T.accepted_payment ELSE 0 END) as accept_sum_tariff_policlinic, -- принятая сумма по поликлинике
+
+            count(distinct CASE WHEN T.is_paid and T.is_ambulance THEn T.event_id END) as accept_count_ambulance, -- количество услуг в скорой помощи
 
             -- Не принятые услуги
             sum(CASE WHEN T.is_not_paid and T.is_tariff THEn T.provided_tariff ELSE 0 END) as sanc_sum_tariff,   -- сумма санкциий
@@ -83,11 +89,17 @@ def get_statistics(mo):
 
             sum(CASE WHEN  T.is_not_paid and T.is_not_pa and T.is_day_hospital THEN T.provided_tariff ELSE 0 END) AS sanc_sum_tariff_day_hosp, -- сумма снятая по дневному стационару
 
-            count(DISTINCT CASE WHEN T.is_not_paid and T.is_not_pa and T.is_policlinic and T.is_event THEN T.event_id END) AS sanc_count_policlinic, -- количество снятых услуг в поликлинике
+            count(DISTINCT CASE WHEN T.is_not_paid and T.is_not_pa and T.is_policlinic and T.is_event THEN
+                    case when T.is_phase_exam then T.service_id
+                    ELSE T.event_id END END) AS sanc_count_policlinic, -- количество снятых услуг в поликлинике
 
             sum(CASE WHEN T.is_not_paid and T.is_not_pa and T.is_policlinic  AND T.is_tariff THEN T.provided_tariff ELSE 0 END) AS sanc_sum_tariff_policlinic, -- сумма снятая по поликлинике
 
+            count(DISTINCT CASE WHEN T.is_not_paid and T.is_not_pa and T.is_ambulance THEN T.event_id END) AS sanc_count_ambulance, -- количество снятых услуг в скорой помощи
+
+
             -- Услуги сняты сверх объёма
+            count(CASE WHEN T.is_not_paid and T.is_pa THEn T.event_id END) as pa_count, -- количество санкций сверх объёма
             sum(CASE WHEN T.is_not_paid and T.is_pa THEn T.provided_tariff ELSE 0 END) as pa_sum_tariff, -- сумма санкций сверх объёма
 
             sum(CASE WHEN T.is_not_paid and T.is_pa and T.is_hospital THEn T.provided_tariff ELSE 0 END) as pa_sum_tariff_hosp, -- сумма санкций сверх объёма по стациоанру
@@ -97,12 +109,15 @@ def get_statistics(mo):
             sum(CASE WHEN T.is_not_paid and T.is_pa and T.is_policlinic THEn T.provided_tariff ELSE 0 END) as pa_sum_tariff_policlinic, -- сумма санкций сверх объёма по поликлинике
 
             -- Не подлежит к оплате (итоговая)
-            count(DISTINCT CASE WHEN T.is_not_paid and T.is_event THEN T.event_id END) AS sanc_count_all,  -- количество санкций (итоговое)
+            count(DISTINCT CASE WHEN T.is_not_paid and T.is_event THEN
+                               case when T.is_phase_exam then T.service_id
+                               ELSE T.event_id END END) AS sanc_count_all,  -- количество санкций (итоговое)
 
             sum(CASE WHEN T.is_not_paid and T.is_tariff THEn T.provided_tariff ELSE 0 END) as sanc_sum_tariff_all
 
             from (
             select pe.id_pk as event_id,
+                 ps.id_pk as service_id,
                  mo.id_pk as organization,
                  ps.payment_type_fk = 3 as is_not_paid,
                  ps.payment_type_fk = 2 AS is_paid,
@@ -118,6 +133,7 @@ def get_statistics(mo):
 
                 (ms.group_fk != 19 or ms.group_fk is null) or
                 (ms.group_fk = 19 and ms.subgroup_fk is not null) as is_event,
+                (ms.group_fk in (25, 26)) as is_phase_exam,
 
                 (select max(ms1.subgroup_fk)
                  from provided_service ps1
@@ -220,6 +236,9 @@ def get_statistics(mo):
     stat_dict['accept_count_policlinic'] = stat_obj.accept_count_policlinic
     stat_dict['accept_sum_tariff_policlinic'] = stat_obj.accept_sum_tariff_policlinic + capitation_policlinic
 
+    stat_dict['accept_count_ambulance'] = stat_obj.accept_count_ambulance
+    stat_dict['accept_sum_tariff_ambulance'] = capitation_ambulance
+
     ### Снятые с оплаты
 
     # Непринятые к оплате (без подушевого)
@@ -237,7 +256,12 @@ def get_statistics(mo):
     stat_dict['sanc_count_policlinic'] = stat_obj.sanc_count_policlinic
     stat_dict['sanc_sum_tariff_policlinic'] = stat_obj.sanc_sum_tariff_policlinic
 
+    # Не принятые реестры по скорой помощи
+    stat_dict['sanc_count_ambulance'] = stat_obj.sanc_count_ambulance
+    stat_dict['sanc_sum_tariff_ambulance'] = 0
+
     # Не принятые услуги сверх объема
+    stat_dict['pa_count'] = stat_obj.pa_count
     stat_dict['pa_sum_tariff'] = stat_obj.pa_sum_tariff
 
     # Не принятые услуги сверх объёма за стационар
@@ -445,43 +469,52 @@ def print_registry_sogaz_1(act_book, mo):
     act_book.write_cella(19, 1, sum_dict['inv_sum_tariff_hosp'])
     act_book.write_cella(21, 1, sum_dict['inv_count_day_hosp'])         # всего подано по дневному стационару
     act_book.write_cella(22, 1, sum_dict['inv_sum_tariff_day_hosp'])
+
     act_book.write_cella(24, 1, sum_dict['inv_count_policlinic'])       # всего подано по поликлинике
-    act_book.write_cella(24, 6, sum_dict['inv_sum_tariff_policlinic'])
-    act_book.write_cella(26, 1, sum_dict['inv_count_ambulance'])        # всего по скорой помощи
-    act_book.write_cella(27, 1, sum_dict['inv_sum_tariff_ambulance'])
+    act_book.write_cella(25, 1, sum_dict['inv_sum_tariff_policlinic'])
+    act_book.write_cella(27, 1, sum_dict['inv_count_ambulance'])        # всего по скорой помощи
+    act_book.write_cella(28, 1, sum_dict['inv_sum_tariff_ambulance'])
 
     # Принятые к оплате реестры счетов
-    act_book.write_cella(29, 2, sum_dict['accept_sum_tariff'])             # принято по тарифу
+    act_book.write_cella(30, 2, sum_dict['accept_sum_tariff'])             # принято по тарифу
     # Подушевое
-    act_book.write_cella(30, 2, sum_dict['accept_sum_policlinic_tariff_capitation'])
-    act_book.write_cella(31, 2, sum_dict['accept_sum_ambulance_tariff_capitation'])
+    act_book.write_cella(31, 2, sum_dict['accept_sum_policlinic_tariff_capitation'])
+    act_book.write_cella(32, 2, sum_dict['accept_sum_ambulance_tariff_capitation'])
 
-    act_book.write_cella(32, 3, sum_dict['accept_sum_tariff_other_mo'])    # заказано в другой мо
-    act_book.write_cella(33, 2, sum_dict['accept_sum_tariff_mo'])          # принято к оплате
-    act_book.write_cella(34, 1, sum_dict['accept_count_all'])              # всего принято к оплате
-    act_book.write_cella(34, 4, sum_dict['accept_sum_tariff_all'])
+    act_book.write_cella(33, 3, sum_dict['accept_sum_tariff_other_mo'])    # заказано в другой мо
+    act_book.write_cella(34, 2, sum_dict['accept_sum_tariff_mo'])          # принято к оплате
+    act_book.write_cella(35, 1, sum_dict['accept_count_all'])              # всего принято к оплате
+    act_book.write_cella(35, 4, sum_dict['accept_sum_tariff_all'])
 
-    act_book.write_cella(36, 5, sum_dict['accept_sum_tariff_hosp'])        # принято по стационару
-    act_book.write_cella(36, 7, sum_dict['accept_count_hosp'])
-    act_book.write_cella(37, 5, sum_dict['accept_sum_tariff_day_hosp'])    # принято по дневному стационару
-    act_book.write_cella(37, 7, sum_dict['accept_count_day_hosp'])
-    act_book.write_cella(38, 5, sum_dict['accept_sum_tariff_policlinic'])  # принято по поликлинике
-    act_book.write_cella(38, 7, sum_dict['accept_count_policlinic'])
+    act_book.write_cella(37, 5, sum_dict['accept_sum_tariff_hosp'])        # принято по стационару
+    act_book.write_cella(37, 7, sum_dict['accept_count_hosp'])
+    act_book.write_cella(38, 5, sum_dict['accept_sum_tariff_day_hosp'])    # принято по дневному стационару
+    act_book.write_cella(38, 7, sum_dict['accept_count_day_hosp'])
+    act_book.write_cella(39, 5, sum_dict['accept_sum_tariff_policlinic'])  # принято по поликлинике
+    act_book.write_cella(39, 7, sum_dict['accept_count_policlinic'])
+
+    act_book.write_cella(40, 5, sum_dict['accept_sum_tariff_ambulance'])  # принято по скорой помощи
+    act_book.write_cella(40, 7, sum_dict['accept_count_ambulance'])
 
     # Не принятые к оплате реестры счетов
-    act_book.write_cella(39, 5, sum_dict['sanc_sum_tariff'])             # не принято к оплате
-    act_book.write_cella(40, 5, sum_dict['sanc_sum_tariff_hosp'])        # не принято по стационару
-    act_book.write_cella(40, 7, sum_dict['sanc_count_hosp'])
-    act_book.write_cella(41, 5, sum_dict['sanc_sum_tariff_day_hosp'])    # не принято по дневному стационару
-    act_book.write_cella(41, 7, sum_dict['sanc_count_day_hosp'])
-    act_book.write_cella(42, 5, sum_dict['sanc_sum_tariff_policlinic'])  # не принято по поликлинике
-    act_book.write_cella(42, 7, sum_dict['sanc_count_policlinic'])
-    act_book.write_cella(43, 5, sum_dict['pa_sum_tariff'])          # не принято сверх объема
-    act_book.write_cella(44, 3, sum_dict['sanc_count_all'])              # не подлежит оплате
-    act_book.write_cella(44, 5, sum_dict['sanc_sum_tariff_all'])
+    act_book.write_cella(41, 5, sum_dict['sanc_sum_tariff'])             # не принято к оплате
+    act_book.write_cella(42, 5, sum_dict['sanc_sum_tariff_hosp'])        # не принято по стационару
+    act_book.write_cella(42, 7, sum_dict['sanc_count_hosp'])
+    act_book.write_cella(43, 5, sum_dict['sanc_sum_tariff_day_hosp'])    # не принято по дневному стационару
+    act_book.write_cella(43, 7, sum_dict['sanc_count_day_hosp'])
+    act_book.write_cella(44, 5, sum_dict['sanc_sum_tariff_policlinic'])  # не принято по поликлинике
+    act_book.write_cella(44, 7, sum_dict['sanc_count_policlinic'])
+
+    act_book.write_cella(45, 5, sum_dict['sanc_sum_tariff_ambulance'])  # не принято по скорой помощи
+    act_book.write_cella(45, 7, sum_dict['sanc_count_ambulance'])
+
+    act_book.write_cella(46, 5, sum_dict['pa_sum_tariff'])          # не принято сверх объема
+    act_book.write_cella(46, 7, sum_dict['pa_count'])
+    act_book.write_cella(47, 3, sum_dict['sanc_count_all'])              # не подлежит оплате
+    act_book.write_cella(47, 5, sum_dict['sanc_sum_tariff_all'])
 
     # Снятая с оплаты в стационаре
-    act_book.set_cursor(45, 0)
+    act_book.set_cursor(48, 0)
     print_sanction(
         act_book,
         data=get_sanction_info(mo, term=1),

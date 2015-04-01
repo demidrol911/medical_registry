@@ -1,12 +1,11 @@
 #! -*- coding: utf-8 -*-
 from report_printer.excel_style import VALUE_STYLE
 
-from tfoms.models import MedicalOrganization
+from main.models import MedicalOrganization, MedicalService
 from tfoms import func
 from django.core.management.base import BaseCommand
 from medical_service_register.path import REESTR_DIR, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
-from tfoms.models import MedicalService
 from report_printer.const import MONTH_NAME
 from django.db import connection
 

@@ -1,5 +1,5 @@
 import datetime
-from tfoms.models import ProvidedService
+from main.models import ProvidedService
 
 
 def date_correct(date, id_service=None, date_field=None):

@@ -900,11 +900,7 @@ def underpay_outpatient_event(register_element):
                     and mr1.year = %s
                     and mr1.period = %s
                     and mr1.organization_code = %s
-                    AND (
-                           ((medical_service.group_fk not in (19, 27) or medical_service.group_fk is NULL))
-                           or
-                           (medical_service.group_fk = 19 AND medical_service.subgroup_fk is NOT NULL)
-                           )
+                    AND (medical_service.group_fk != 27 or medical_service.group_fk is NULL)
                     and ps1.payment_type_fk = 3
             ) as T
             on provided_service.event_fk = T.event_id

@@ -1,12 +1,11 @@
 #! -*- coding: utf-8 -*-
 from report_printer.excel_style import VALUE_STYLE
 
-from tfoms.models import MedicalOrganization
+from main.models import MedicalOrganization, MedicalService
 from tfoms import func
 from django.core.management.base import BaseCommand
 from medical_service_register.path import REESTR_DIR, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
-from tfoms.models import MedicalService
 from report_printer.const import MONTH_NAME
 
 
@@ -125,7 +124,9 @@ def get_mo_statistics(mo):
                     (ms.group_fk is NULL or ms.group_fk = 24)
                     and (select count(ps1.id_pk) FROM provided_service ps1
                          join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                         WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24))>1
+                         WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24)
+                         and ms1.reason_fk = 1
+                         )>1
                     ) as is_policlinic_treatment,
                  (select distinct ms1.subgroup_fk
                     from medical_service ms1
@@ -223,13 +224,14 @@ def get_mo_error_statistics(mo):
 
             CASE WHEN T.error in (145, 128) THEN 55
                  WHEN T.error = 127 THEN 133
-                 ELSE T.error END as error,
+                 ELSE T.error END as failure_cause,
 
             -- Исключено
             count(distinct CASE WHEN T.is_excluded THEN T.service_id END) as visit_exclude,
             count(distinct CASE WHEN T.is_excluded THEN
                   case when T.service_group in (25, 26) THEN T.service_id
                   when T.service_group in (19) and T.stomatology_reason is NULL THEN NULL
+                  when T.service_group in (19) and T.service_subgroup is NULL THEN NULL
                   ELSE T.event_id END END) as treatment_exclude,
             sum(CASE WHEN T.is_excluded THEN T.count_days else 0 END) as count_days_exclude,
             sum(CASE WHEN T.is_excluded THEN T.uet else 0 END) as uet_exclude
@@ -249,7 +251,9 @@ def get_mo_error_statistics(mo):
                         (ms.group_fk is NULL or ms.group_fk = 24)
                         and (select count(ps1.id_pk) FROM provided_service ps1
                              join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                             WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24))>1
+                             WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk = 24)
+                             and ms1.reason_fk = 1
+                             )>1
                         ) as is_policlinic_treatment,
                      (select distinct ms1.subgroup_fk from medical_service ms1
                       where ms1.id_pk in (
@@ -271,7 +275,7 @@ def get_mo_error_statistics(mo):
                              and ps1.end_date=ps.end_date
                              and ps1.payment_type_fk = ps.payment_type_fk
                              and pss1.is_active
-                             and me1.failure_cause_fk = me.failure_cause_fk
+                             --and me1.failure_cause_fk = me.failure_cause_fk
                          )
                          AND ms1.subgroup_fk is NOT NULL
                          AND ms1.group_fk =19
@@ -311,8 +315,8 @@ def get_mo_error_statistics(mo):
             ) AS T
             join medical_organization mo
                 on mo.id_pk = T.organization_id
-            group by mo.id_pk, division_term, error
-            order by mo.id_pk, division_term, error
+            group by mo.id_pk, division_term, failure_cause
+            order by mo.id_pk, division_term, failure_cause
             """
     #
     return MedicalOrganization.objects.raw(query, dict(period=func.PERIOD, year=func.YEAR, organization=mo))
@@ -334,7 +338,7 @@ class Command(BaseCommand):
             'peritondialis_hospital': [(4, TREATMENT), (5, COUNT_DAYS)],
             'day_hospital': [(6, VISIT), (7, COUNT_DAYS)],
             'policlinic_disease': [(8, VISIT), (9, TREATMENT)],
-            'policlinic_priventive': [(10, VISIT)],
+            'policlinic_priventive': [(10, TREATMENT)],
             'policlinic_ambulance': [(11, VISIT)],
             'adult_exam': [(12, TREATMENT), (13, VISIT)],
             'ambulance': [(14, VISIT)],
@@ -357,7 +361,7 @@ class Command(BaseCommand):
         ]
 
         mo_list = func.get_mo_register(status=status)
-        mo_list = ['280067']
+        mo_list = ['280080']
         for mo in mo_list:
             target = target_dir % (func.YEAR, func.PERIOD) + ur'\дефекты\%s_дефекты' % \
                 func.get_mo_info(mo)['name'].replace('"', '').strip()
@@ -406,7 +410,7 @@ class Command(BaseCommand):
                 error_stat_obj = get_mo_error_statistics(mo=mo)
                 for data in error_stat_obj:
                     division_term = data.division_term
-                    error = data.error
+                    error = data.failure_cause
                     index = error_sequence.index(error)
                     if division_term not in rules:
                         if division_term not in ignore_services:

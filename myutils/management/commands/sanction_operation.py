@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from tfoms.models import ProvidedService, Sanction, SanctionStatus
+from main.models import ProvidedService, Sanction, SanctionStatus
 
 FILE_NAME = 'service.csv'
 
