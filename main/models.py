@@ -1622,3 +1622,15 @@ class SanctionStatus(models.Model):
 
     class Meta:
         db_table = 'provided_service_sanction_status'
+
+
+class MedicalServiceVolume(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    organization = models.ForeignKey(MedicalOrganization,
+                                     db_column='organization_fk')
+    date = models.DateField()
+    hospital = models.IntegerField()
+    day_hospital = models.IntegerField()
+
+    class Meta:
+        db_table = 'medical_service_volume'
