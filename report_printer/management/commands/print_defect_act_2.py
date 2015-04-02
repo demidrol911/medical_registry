@@ -7,12 +7,13 @@ from django.core.management.base import BaseCommand
 from medical_service_register.path import REESTR_DIR, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
 from report_printer.const import MONTH_NAME
+from django.db import connection
 
 
-def get_mo_statistics(mo):
+def get_mo_statistics():
     query = """
             select
-            mo.id_pk,
+            1,
             case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2,20, 32)) then 'hospital'
                   when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
                   when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
@@ -157,20 +158,20 @@ def get_mo_statistics(mo):
                     where mr.is_active
                           AND mr.period= %(period)s
                           and mr.year= %(year)s
-                          and mr.organization_code = %(organization)s
                           and (ms.group_fk != 27 or ms.group_fk is null)
             ) AS T
-            join medical_organization mo on mo.id_pk = T.organization_id
-            group by mo.id_pk, division_term
+            group by division_term
             """
 
-    return MedicalOrganization.objects.raw(query, dict(period=func.PERIOD, year=func.YEAR, organization=mo))
+    cursor = connection.cursor()
+    cursor.execute(query, dict(period=func.PERIOD, year=func.YEAR))
+    return cursor.fetchall()
 
 
-def get_mo_error_statistics(mo):
+def get_mo_error_statistics():
     query = """
             select
-            mo.id_pk,
+            1,
             case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2, 20, 32)) then 'hospital'
                   when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
                   when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
@@ -308,24 +309,22 @@ def get_mo_error_statistics(mo):
                         where mr.is_active
                         AND mr.period= %(period)s
                         and mr.year= %(year)s
-                        and mr.organization_code = %(organization)s
                         and ps.payment_type_fk = 3
                         and pss.is_active
                         and (ms.group_fk != 27 or ms.group_fk is null)
             ) AS T
-            join medical_organization mo
-                on mo.id_pk = T.organization_id
-            group by mo.id_pk, division_term, failure_cause
-            order by mo.id_pk, division_term, failure_cause
+            group by division_term, failure_cause
+            order by division_term, failure_cause
             """
     #
-    return MedicalOrganization.objects.raw(query, dict(period=func.PERIOD, year=func.YEAR, organization=mo))
+    cursor = connection.cursor()
+    cursor.execute(query, dict(period=func.PERIOD, year=func.YEAR))
+    return cursor.fetchall()
 
 
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        status = args[0]
         VISIT = 1
         TREATMENT = 2
         COUNT_DAYS = 3
@@ -360,83 +359,81 @@ class Command(BaseCommand):
             69, 70, 71, 72, 73, 74, 75
         ]
 
-        mo_list = func.get_mo_register(status=status)
-        mo_list = ['280040']
-        for mo in mo_list:
-            target = target_dir % (func.YEAR, func.PERIOD) + ur'\дефекты\%s_дефекты' % \
-                func.get_mo_info(mo)['name'].replace('"', '').strip()
-            print target
-            with ExcelWriter(target, template=template) as act_book:
-                act_book.set_sheet(0)
-                act_book.write_cella(0, 3, u'Сводная справка  по  дефектам  за %s %s г.'
-                                           % (MONTH_NAME[func.PERIOD], func.YEAR))
-                act_book.write_cella(3, 0, mo+' '+func.get_mo_info(mo)['name'])
-                act_book.set_style(VALUE_STYLE)
-                stat_obj = get_mo_statistics(mo=mo)
-                ignore_services = {}
-                for data in stat_obj:
-                    division_term = data.division_term
-                    if division_term not in rules:
-                        if division_term not in ignore_services:
-                            ignore_services[division_term] = [0, 0, 0, 0]
-                        ignore_services[division_term][0] = data.visit_exclude
-                        ignore_services[division_term][2] = data.uet_exclude
-                    for cell, field_group in rules.get(division_term, []):
-                        act_book.set_cursor(4+cell, 2)
-                        if field_group == VISIT:
-                            act_book.write_cell(data.visit_all_adult, 'c')
-                            act_book.write_cell(data.visit_all_children, 'c')
-                            act_book.write_cell(data.visit_accept_adult, 'c')
-                            act_book.write_cell(data.visit_accept_children, 'c')
-                            act_book.write_cell(data.visit_exclude, 'c')
-                        elif field_group == TREATMENT:
-                            act_book.write_cell(data.treatment_all_adult, 'c')
-                            act_book.write_cell(data.treatment_all_children, 'c')
-                            act_book.write_cell(data.treatment_accept_adult, 'c')
-                            act_book.write_cell(data.treatment_accept_children, 'c')
-                            act_book.write_cell(data.treatment_exclude, 'c')
-                        elif field_group == COUNT_DAYS:
-                            act_book.write_cell(data.count_days_all_adult, 'c')
-                            act_book.write_cell(data.count_days_all_children, 'c')
-                            act_book.write_cell(data.count_days_accept_adult, 'c')
-                            act_book.write_cell(data.count_days_accept_children, 'c')
-                            act_book.write_cell(data.count_days_exclude, 'c')
-                        elif field_group == UET:
-                            act_book.write_cell(data.uet_all_adult, 'c')
-                            act_book.write_cell(data.uet_all_children, 'c')
-                            act_book.write_cell(data.uet_accept_adult, 'c')
-                            act_book.write_cell(data.uet_accept_children, 'c')
-                            act_book.write_cell(data.uet_exclude, 'c')
-                error_stat_obj = get_mo_error_statistics(mo=mo)
-                for data in error_stat_obj:
-                    division_term = data.division_term
-                    error = data.failure_cause
-                    index = error_sequence.index(error)
-                    if division_term not in rules:
-                        if division_term not in ignore_services:
-                            ignore_services[division_term] = [0, 0, 0, 0]
-                        ignore_services[division_term][1] = data.visit_exclude
-                        ignore_services[division_term][3] = data.uet_exclude
-                    for cell, field_group in rules.get(division_term, []):
-                        act_book.set_cursor(4+cell, 7+index)
-                        if field_group == VISIT:
-                            act_book.write_cell(data.visit_exclude, 'c')
-                        elif field_group == TREATMENT:
-                            act_book.write_cell(data.treatment_exclude, 'c')
-                        elif field_group == COUNT_DAYS:
-                            act_book.write_cell(data.count_days_exclude, 'c')
-                        elif field_group == UET:
-                            act_book.write_cell(data.uet_exclude, 'c')
-                act_book.set_sheet(1)
-                act_book.set_cursor(1, 0)
-                for service in ignore_services:
-                    act_book.write_cell(service, 'c')
-                    act_book.write_cell(MedicalService.objects.get(code=service).name, 'c')
-                    group = ''
-                    if MedicalService.objects.filter(code=service, group__isnull=False):
-                        group = MedicalService.objects.get(code=service).group.name
-                    act_book.write_cell(group, 'c')
-                    act_book.write_cell(ignore_services[service][0], 'c')
-                    act_book.write_cell(ignore_services[service][1], 'c')
-                    act_book.write_cell(ignore_services[service][2], 'c')
-                    act_book.write_cell(ignore_services[service][3], 'r')
+        target = target_dir % (func.YEAR, func.PERIOD) + ur'\дефекты\%s_дефекты' % \
+            u'общий'
+        print target
+        with ExcelWriter(target, template=template) as act_book:
+            act_book.set_sheet(0)
+            act_book.write_cella(0, 3, u'Сводная справка  по  дефектам  за %s %s г.'
+                                       % (MONTH_NAME[func.PERIOD], func.YEAR))
+            act_book.write_cella(3, 0, u'Общий')
+            act_book.set_style(VALUE_STYLE)
+            stat_obj = get_mo_statistics()
+            ignore_services = {}
+            for data in stat_obj:
+                print len(data)
+                division_term = data[1]
+                if division_term not in rules:
+                    if division_term not in ignore_services:
+                        ignore_services[division_term] = [0, 0, 0, 0]
+                    ignore_services[division_term][0] = data[18]
+                    ignore_services[division_term][2] = data[21]
+                for cell, field_group in rules.get(division_term, []):
+                    act_book.set_cursor(4+cell, 2)
+                    if field_group == VISIT:
+                        act_book.write_cell(data[2], 'c')
+                        act_book.write_cell(data[3], 'c')
+                        act_book.write_cell(data[10], 'c')
+                        act_book.write_cell(data[11], 'c')
+                        act_book.write_cell(data[18], 'c')
+                    elif field_group == TREATMENT:
+                        act_book.write_cell(data[4], 'c')
+                        act_book.write_cell(data[5], 'c')
+                        act_book.write_cell(data[12], 'c')
+                        act_book.write_cell(data[13], 'c')
+                        act_book.write_cell(data[19], 'c')
+                    elif field_group == COUNT_DAYS:
+                        act_book.write_cell(data[6], 'c')
+                        act_book.write_cell(data[7], 'c')
+                        act_book.write_cell(data[14], 'c')
+                        act_book.write_cell(data[15], 'c')
+                        act_book.write_cell(data[20], 'c')
+                    elif field_group == UET:
+                        act_book.write_cell(data[8], 'c')
+                        act_book.write_cell(data[9], 'c')
+                        act_book.write_cell(data[16], 'c')
+                        act_book.write_cell(data[17], 'c')
+                        act_book.write_cell(data[21], 'c')
+            error_stat_obj = get_mo_error_statistics()
+            for data in error_stat_obj:
+                division_term = data[1]
+                error = data[2]
+                index = error_sequence.index(error)
+                if division_term not in rules:
+                    if division_term not in ignore_services:
+                        ignore_services[division_term] = [0, 0, 0, 0]
+                    ignore_services[division_term][1] = data[3]
+                    ignore_services[division_term][3] = data[4]
+                for cell, field_group in rules.get(division_term, []):
+                    act_book.set_cursor(4+cell, 7+index)
+                    if field_group == VISIT:
+                        act_book.write_cell(data[3], 'c')
+                    elif field_group == TREATMENT:
+                        act_book.write_cell(data[4], 'c')
+                    elif field_group == COUNT_DAYS:
+                        act_book.write_cell(data[5], 'c')
+                    elif field_group == UET:
+                        act_book.write_cell(data[6], 'c')
+            act_book.set_sheet(1)
+            act_book.set_cursor(1, 0)
+            for service in ignore_services:
+                act_book.write_cell(service, 'c')
+                act_book.write_cell(MedicalService.objects.get(code=service).name, 'c')
+                group = ''
+                if MedicalService.objects.filter(code=service, group__isnull=False):
+                    group = MedicalService.objects.get(code=service).group.name
+                act_book.write_cell(group, 'c')
+                act_book.write_cell(ignore_services[service][0], 'c')
+                act_book.write_cell(ignore_services[service][1], 'c')
+                act_book.write_cell(ignore_services[service][2], 'c')
+                act_book.write_cell(ignore_services[service][3], 'r')

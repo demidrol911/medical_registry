@@ -526,7 +526,7 @@ def update_payment_kind(register_element):
             when 3 then
                 CASE
                     ((medical_service.group_fk = 24 and medical_service.reason_fk in (1, 2, 3, 8) and provided_event.term_fk=3)
-                      or ((select count(ps2.id_pk)
+                      or (((select count(ps2.id_pk)
                               from provided_service ps2
                               join medical_service ms2 on ms2.id_pk = ps2.code_fk
                               where ps2.event_fk = ps1.event_fk and
@@ -541,7 +541,7 @@ def update_payment_kind(register_element):
                                 115,
                                 123,
                                 124,
-                                134)
+                                134))
                     )
                     AND ps1.department_fk NOT IN (15, 88, 89)
                 when TRUE THEN

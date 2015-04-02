@@ -395,6 +395,7 @@ def get_treatment_events(mo_code):
                       join medical_service ms1 on ms1.id_pk = ps1.code_fk
                       WHERE ps1.event_fk  = ps.event_fk
                             and (ms1.group_fk is NULL or ms1.group_fk = 24)
+                            and ms.reason_fk = 1
                       )>1
                     )
                   )

@@ -318,11 +318,13 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
                  CASE when pe.term_fk = 3 THEN (
                            CASE WHEN ms.reason_fk = 1 and
-                           (ms.group_fk = 24 or ms.group_fk is NULL) and
-                           (select count(ps1.id_pk) from provided_service ps1
-                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
-                           ) = 1 then 99
+                                   (ms.group_fk = 24 or ms.group_fk is NULL) and
+                                   (select count(ps1.id_pk) from provided_service ps1
+                                   join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                                   where ps1.event_fk = ps.event_fk
+                                         and (ms1.group_fk = 24 or ms1.group_fk is null)
+                                         and ms1.reason_fk = 1
+                                         ) = 1 then 99
                            else ms.reason_fk END
                       )
                       when pe.term_fk = 2 then msd.term_fk
@@ -681,11 +683,13 @@ def print_invoiced_services(act_book, mo, sum_capitation_policlinic,
             case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
              CASE when pe.term_fk = 3 THEN (
                        CASE WHEN ms.reason_fk = 1 and
-                       (ms.group_fk = 24 or ms.group_fk is NULL) and
-                       (select count(ps1.id_pk) from provided_service ps1
-                       join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                       where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
-                       ) = 1 then 99
+                                   (ms.group_fk = 24 or ms.group_fk is NULL) and
+                                   (select count(ps1.id_pk) from provided_service ps1
+                                   join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                                   where ps1.event_fk = ps.event_fk
+                                         and (ms1.group_fk = 24 or ms1.group_fk is null)
+                                         and ms1.reason_fk = 1
+                                         ) = 1 then 99
                        else ms.reason_fk END
                   )
                   when pe.term_fk = 2 then msd.term_fk
@@ -871,11 +875,13 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
             case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
                  CASE when pe.term_fk = 3 THEN (
                            CASE WHEN ms.reason_fk = 1 and
-                           (ms.group_fk = 24 or ms.group_fk is NULL) and
-                           (select count(ps1.id_pk) from provided_service ps1
-                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
-                           ) = 1 then 99
+                                   (ms.group_fk = 24 or ms.group_fk is NULL) and
+                                   (select count(ps1.id_pk) from provided_service ps1
+                                   join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                                   where ps1.event_fk = ps.event_fk
+                                         and (ms1.group_fk = 24 or ms1.group_fk is null)
+                                         and ms1.reason_fk = 1
+                                         ) = 1 then 99
                            else ms.reason_fk END
                       )
                       when pe.term_fk = 2 then msd.term_fk
@@ -1271,11 +1277,13 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
         case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
          CASE when pe.term_fk = 3 THEN (
                    CASE WHEN ms.reason_fk = 1 and
-                   (ms.group_fk = 24 or ms.group_fk is NULL) and
-                   (select count(ps1.id_pk) from provided_service ps1
-                   join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                   where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
-                   ) = 1 then 99
+                           (ms.group_fk = 24 or ms.group_fk is NULL) and
+                           (select count(ps1.id_pk) from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk
+                                 and (ms1.group_fk = 24 or ms1.group_fk is null)
+                                 and ms1.reason_fk = 1
+                                 ) = 1 then 99
                    else ms.reason_fk END
               )
               when pe.term_fk = 2 then msd.term_fk
@@ -1462,11 +1470,13 @@ def print_sanction_services(act_book, mo, sum_capitation_policlinic,
             case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
                  CASE when pe.term_fk = 3 THEN (
                            CASE WHEN ms.reason_fk = 1 and
-                           (ms.group_fk = 24 or ms.group_fk is NULL) and
-                           (select count(ps1.id_pk) from provided_service ps1
-                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                           where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
-                           ) = 1 then 99
+                                   (ms.group_fk = 24 or ms.group_fk is NULL) and
+                                   (select count(ps1.id_pk) from provided_service ps1
+                                   join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                                   where ps1.event_fk = ps.event_fk
+                                         and (ms1.group_fk = 24 or ms1.group_fk is null)
+                                         and ms1.reason_fk = 1
+                                         ) = 1 then 99
                            else ms.reason_fk END
                       )
                       when pe.term_fk = 2 then msd.term_fk
@@ -1862,11 +1872,13 @@ def print_sanction_services(act_book, mo, sum_capitation_policlinic,
         case when ms.group_fk is NULL or ms.group_fk = 24 THEN (
          CASE when pe.term_fk = 3 THEN (
                    CASE WHEN ms.reason_fk = 1 and
-                   (ms.group_fk = 24 or ms.group_fk is NULL) and
-                   (select count(ps1.id_pk) from provided_service ps1
-                   join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                   where ps1.event_fk = ps.event_fk and (ms1.group_fk != 27 or ms1.group_fk is null)
-                   ) = 1 then 99
+                           (ms.group_fk = 24 or ms.group_fk is NULL) and
+                           (select count(ps1.id_pk) from provided_service ps1
+                           join medical_service ms1 on ms1.id_pk = ps1.code_fk
+                           where ps1.event_fk = ps.event_fk
+                                 and (ms1.group_fk = 24 or ms1.group_fk is null)
+                                 and ms1.reason_fk = 1
+                                 ) = 1 then 99
                    else ms.reason_fk END
               )
               when pe.term_fk = 2 then msd.term_fk
