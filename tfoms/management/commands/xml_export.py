@@ -305,7 +305,8 @@ def get_records(register_pk):
             --provided_service_sanction.underpayment as service_sanction_mek,
             service_worker_speciality.code as service_worker_speciality_code,
             provided_service.worker_code as service_worker_code,
-            provided_service.comment as service_comment
+            provided_service.comment as service_comment,
+            provided_service.payment_kind_fk as payment_kind_code
         from
             medical_register
             join medical_register_record
@@ -671,6 +672,7 @@ def main():
                 comment = record.event_comment
                 previous_record_uid = record.event_uid
 
+        hm_xml.put('PAYMENT_KIND', safe_str(record.payment_kind_code))
         hm_xml.put('COMENTSL', safe_str(record.event_comment))
         hm_xml.end('SLUCH')
         hm_xml.end('ZAP')
