@@ -717,11 +717,13 @@ def main():
                             new_service_list.append(new_service)
                             #print '*', _type
 
-                            if new_event.get('USL_OK',
-                                             '') == '1' and new_service.get(
-                                    'CODE_USL', '').startswith(
-                                    'A') and _type == 'H':
-                                has_surgery = True
+
+                            #if new_event.get('USL_OK',
+                            #                '') == '1' and new_service.get(
+                            #     'CODE_USL', '').startswith(
+                            #      'A') and _type == 'H':
+                            #  has_surgery = True
+
 
                             services_errors += handle_errors(
                                 raw_service.errors() or [], parent='USL',
@@ -730,12 +732,12 @@ def main():
                                 service_uid=new_service['IDSERV']
                             )
 
-                            if new_event['USL_OK'] == '1' \
+                            if new_event.get('USL_OK', '') == '1' \
                                     and new_service[
                                         'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS:
                                 hospital_volume_service.add(new_event['IDCASE'])
 
-                            if new_event['USL_OK'] == '2' \
+                            if new_event.get('USL_OK', '') == '2' \
                                     and new_service[
                                         'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS:
                                 day_hospital_volume_service.add(
@@ -814,14 +816,20 @@ def main():
                        u'разработке территориальной программы обязательного медицинского страхования Амурской области.\n'
                        u'\n'
                        u'В текущем реестре выполнено:\n'
-                       u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'
-                       u'Дневной стационар - {2}, запланировано решением тарифной комисси - {3}\n'
-                       u'\n'
-                       u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n')
-            message_file.write(message.format(len(hospital_volume_service),
-                                              volume.hospital,
-                                              len(day_hospital_volume_service),
-                                              volume.day_hospital).encode('cp1251'))
+                       )
+            message += \
+                (u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
+                 len(hospital_volume_service), volume.hospital)) \
+                if len(hospital_volume_service) > volume.hospital \
+                else u''
+            message += \
+                (u'Дневной стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
+                 len(day_hospital_volume_service), volume.day_hospital)) \
+                if len(day_hospital_volume_service) > volume.day_hospital \
+                else u''
+            message += u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n'
+            print len(hospital_volume_service), volume.hospital, len(day_hospital_volume_service), volume.day_hospital
+            message_file.write(message.encode('cp1251'))
             message_file.close()
 
         if has_insert:

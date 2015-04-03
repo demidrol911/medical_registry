@@ -169,7 +169,7 @@ def get_services(register_element):
         LEFT join tariff_basic
             on tariff_basic.service_fk = provided_service.code_fk
                 and tariff_basic.group_fk = medical_organization.tariff_group_fk
-                and tariff_basic.start_date = least(
+                and tariff_basic.start_date = GREATEST(
                     (select max(start_date)
                      from tariff_basic
                      where start_date <= provided_service.end_date
@@ -836,6 +836,7 @@ def get_payments_sum(service):
 
     return {'tariff': round(tariff, 2),
             'calculated_payment': round(accepted_payment, 2),
+            'accepted_payment': round(accepted_payment, 2),
             'provided_tariff': round(provided_tariff, 2)}
 
 
