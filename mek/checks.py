@@ -408,6 +408,7 @@ def underpay_cross_dates_services(register_element):
                     and mr1.organization_code = %(organization)s
                     and provided_event.term_fk = 1
                     and ms.group_fk not in (27, 5, 3)
+                    and ms.code not like 'A%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
                 or (ps.end_date > T.start_date and ps.end_date < T.end_date)
@@ -449,6 +450,7 @@ def underpay_cross_dates_services(register_element):
                     and mr1.organization_code = %(organization)s
                     and provided_event.term_fk in (1, 2)
                     and ms.group_fk not in (27, 5, 3)
+                    and ms.code not like 'A%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
                 or (ps.end_date > T.start_date and ps.end_date < T.end_date)

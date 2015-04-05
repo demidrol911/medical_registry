@@ -34,9 +34,10 @@ from zipfile import ZipFile
 cursor = connection.cursor()
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
-HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103')
-DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712',
-                                  '098715', '098770')
+HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103')
+DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
+                                  '098770', '98710', '98711', '98712', '98715',
+                                  '98770')
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s28002_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
@@ -731,8 +732,7 @@ def main():
                             )
 
                             if new_event['USL_OK'] == '1' \
-                                    and new_service[
-                                        'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS:
+                                    and new_service['CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS:
                                 hospital_volume_service.add(new_event['IDCASE'])
 
                             if new_event['USL_OK'] == '2' \
@@ -805,7 +805,7 @@ def main():
 
         if over_volume:
             has_insert = False
-            message_file = open(TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
+            message_file = open(TEMP_DIR+u'Ошибка обработки {0} - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
                        u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
