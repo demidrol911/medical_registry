@@ -991,8 +991,6 @@ def sanctions_on_ill_formed_adult_examination(register_element):
             and (primary_count != 1 or specialist_count = 0 or finals_count != 1)
             and pss.id_pk is null
             and ps.payment_type_fk != 3
-
-
     """
     services = ProvidedService.objects.raw(
         query, [register_element['year'], register_element['period'],
@@ -1236,6 +1234,8 @@ def sanctions_on_wrong_date_service(register_element):
                 ) or (
                     ms.examination_special = True
                         and age((mr.year || '-' || mr.period || '-' || '01')::DATE - interval '1 month', ps.end_date) > '1 year'
+                ) or (
+
                 )
             ) and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 32) = 0
 

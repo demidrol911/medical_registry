@@ -464,6 +464,7 @@ def main():
         for index, register in enumerate(registers.filter(type=register_type)):
             if new_register:
                 hm_xml.put('COMENTSL', safe_str(comment))
+                hm_xml.put('PAYMENT_KIND', payment_kind)
                 hm_xml.end('SLUCH')
                 hm_xml.end('ZAP')
             comment = ''
@@ -505,6 +506,7 @@ def main():
                 if record.record_uid != current_record:
                     if i != 0:
                         hm_xml.put('COMENTSL', safe_str(comment))
+                        hm_xml.put('PAYMENT_KIND', payment_kind)
                         hm_xml.end('SLUCH')
                         hm_xml.end('ZAP')
                         event_counter = 0
@@ -538,6 +540,7 @@ def main():
                     current_event = record.event_uid
                     if event_counter != 0:
                         hm_xml.put('COMENTSL', safe_str(comment))
+                        hm_xml.put('PAYMENT_KIND', payment_kind)
                         hm_xml.end('SLUCH')
 
                     hm_xml.start('SLUCH')
@@ -670,10 +673,11 @@ def main():
                 hm_xml.end('USL')
 
                 comment = record.event_comment
+                payment_kind = safe_int(record.payment_kind_code)
                 previous_record_uid = record.event_uid
 
-        hm_xml.put('PAYMENT_KIND', safe_str(record.payment_kind_code))
         hm_xml.put('COMENTSL', safe_str(record.event_comment))
+        hm_xml.put('PAYMENT_KIND', safe_int(record.payment_kind_code))
         hm_xml.end('SLUCH')
         hm_xml.end('ZAP')
         hm_xml.end('ZL_LIST')
