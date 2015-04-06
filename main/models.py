@@ -414,7 +414,7 @@ class MedicalOrganization(models.Model):
             event__record__register__period=period,
             event__record__register__is_active=True,
             event__record__register__organization_code=self.code,
-            payment_kind__in=[2, 3]).\
+            payment_kind=2).\
             values_list('event__id_pk', flat=True).distinct()
 
 

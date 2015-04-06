@@ -124,7 +124,7 @@ def get_statistics(mo):
                  ps.tariff as tariff,
                  ps.accepted_payment as accepted_payment,
                  ps.provided_tariff as provided_tariff,
-                 ps.payment_kind_fk = 1 and (pe.term_fk !=4 or pe.term_fk is NULL) as is_tariff,
+                 ps.payment_kind_fk in (1, 3) and (pe.term_fk !=4 or pe.term_fk is NULL) as is_tariff,
 
                  pe.term_fk = 1 and (ms.group_fk != 31 or ms.group_fk is null) as is_hospital,
                  pe.term_fk = 2 as is_day_hospital,
@@ -455,7 +455,7 @@ def print_registry_sogaz_1(act_book, mo):
 
     capitation_events = func.get_capitation_events(mo_code=mo)
 
-    act_book.set_sheet(7)
+    act_book.set_sheet(5)
     act_book.set_style()
     act_book.write_cella(9, 0, mo_name)
     act_book.write_cella(10, 1, mo)

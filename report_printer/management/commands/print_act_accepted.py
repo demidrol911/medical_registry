@@ -117,6 +117,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
     act_book.set_cursor(7, 0)
     sum_term = None
     total_sum = None
+    policlinic_sum = None
     for row in data:
         term = row[0]
         capitation = row[1]
@@ -211,6 +212,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
                     act_book.set_style(TITLE_STYLE)
                     act_book.write_cell(u'Поликлиника (подушевое)', 'r', ACT_WIDTH+1)
                     print u'Поликлиника (подушевое)'
+                    policlinic_sum = None
                     last_title_division = None
                     last_division_id = 0
                     is_print_capit = False
@@ -218,6 +220,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
                     act_book.set_style(TITLE_STYLE)
                     act_book.write_cell(u'Поликлиника (за единицу объёма)', 'r', ACT_WIDTH+1)
                     print u'Поликлиника (за единицу объёма)'
+                    policlinic_sum = None
                     last_title_division = None
                     last_division_id = 0
                     is_print_unit = False
@@ -2920,7 +2923,7 @@ class Command(BaseCommand):
             sum_capitation_policlinic = func.calculate_capitation_tariff(3, mo)
             sum_capitation_ambulance = func.calculate_capitation_tariff(4, mo)
 
-            target = target_dir % (handbooks['year'], handbooks['period']) + ur'\согаз3\%s' % \
+            target = target_dir % (handbooks['year'], handbooks['period']) + ur'\%s' % \
                 handbooks['mo_info']['name'].replace('"', '').strip()
             print u'Печать акта: %s ...' % target
 
@@ -2956,7 +2959,7 @@ class Command(BaseCommand):
                     sum_capitation_ambulance
                 )
 
-                print_error_fund(act_book, mo, data, handbooks)
+                #print_error_fund(act_book, mo, data, handbooks)
 
                 ### Согазовские отчёты
                 registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo)
@@ -3041,7 +3044,8 @@ class Command(BaseCommand):
                             sum_capitation_ambulance,
                             department=department
                         )
-                        print_error_fund(act_book, mo, data, handbooks)
+
+                        #print_error_fund(act_book, mo, data, handbooks)
                     print u'Выгружен', department
             elapsed = time.clock() - start
             print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))

@@ -37,15 +37,13 @@ def get_statistics(mo):
             select
             mo.id_pk,
             -- Поданные услуги --
-           count(distinct CASE WHEN T.is_event THEn
-                case when T.is_phase_exam then T.service_id
-                ELSE T.event_id END END) as count_invoiced,
+           count(distinct T.service_id) as count_invoiced,
 
-            sum(CASE WHEN T.is_paid and T.is_tariff THEn T.accepted_payment ELSE 0 END) +
+            sum(CASE WHEN T.is_paid and T.is_tariff THEN T.accepted_payment ELSE 0 END) +
             sum(CASE WHEN T.is_not_paid and T.is_tariff THEn T.provided_tariff ELSE 0 END) as sum_invoiced, -- сумма предъявленная рассчётная
 
-            count(distinct CASE WHEN T.is_not_paid THEn T.event_id END) as count_sanction,
-            sum(CASE WHEN T.is_not_paid and T.is_tariff THEn T.provided_tariff ELSE 0 END) as sum_sanction, -- сумма снятая рассчётная
+            count(distinct CASE WHEN T.is_not_paid THEN T.service_id END) as count_sanction,
+            sum(CASE WHEN T.is_not_paid and T.is_tariff THEN T.provided_tariff ELSE 0 END) as sum_sanction, -- сумма снятая рассчётная
 
             sum(CASE WHEN T.is_paid and T.is_tariff THEn T.accepted_payment ELSE 0 END) as sum_accepted -- сумма принятая рассчётная
 
@@ -58,7 +56,7 @@ def get_statistics(mo):
                  ps.tariff as tariff,
                  ps.accepted_payment as accepted_payment,
                  ps.provided_tariff as provided_tariff,
-                 ps.payment_kind_fk = 1 and (pe.term_fk !=4 or pe.term_fk is NULL) as is_tariff,
+                 ps.payment_kind_fk in (1, 3) and (pe.term_fk !=4 or pe.term_fk is NULL) as is_tariff,
 
                  pe.term_fk = 1 as is_hospital,
                  pe.term_fk = 2 as is_day_hospital,
@@ -160,7 +158,7 @@ def print_registry_sogaz_3(act_book, mo):
     has_nl = has_error(services, ['NL', 'TP', 'L1', 'L2'], handbooks)
     stat_dict = get_statistics(mo)
 
-    act_book.set_sheet(8)
+    act_book.set_sheet(6)
     act_book.set_style()
     act_book.set_style({'align': 'center'})
     act_book.write_cella(3, 2, u'за %s %s г.' % (MONTH_NAME[func.PERIOD], func.YEAR))

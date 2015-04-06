@@ -25,7 +25,7 @@ cur_date = datetime.now()
 
 YEAR = str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
-PERIOD = '02'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+PERIOD = '03'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -448,6 +448,7 @@ def calculate_capitation_tariff(term, mo_code):
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
                 get_attachment_count(DATE_ATTACHMENT)
         elif term == 4:
+            #pass
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
                 get_ambulance_attachment_count(DATE_ATTACHMENT)
     else:
@@ -455,6 +456,7 @@ def calculate_capitation_tariff(term, mo_code):
 
     # Чмсленность
 
+    #if term == 3:
     result[0][1] = population[1]['men']
     result[1][1] = population[1]['fem']
 
@@ -469,6 +471,24 @@ def calculate_capitation_tariff(term, mo_code):
 
     result[8][0] = population[5]['men']
     result[9][0] = population[5]['fem']
+
+    ##292		240	2198	2107		6220	6056		20200	20070	5748	13191
+
+    if term == 4 and mo_code == '280017':
+        result[0][1] = 292
+        result[1][1] = 240
+
+        result[2][1] = 2198
+        result[3][1] = 2107
+
+        result[4][1] = 6220
+        result[5][1] = 6056
+
+        result[6][0] = 20200
+        result[7][0] = 20070
+
+        result[8][0] = 5748
+        result[9][0] = 13191
 
     # Тариф основной
 
