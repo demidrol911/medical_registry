@@ -34,9 +34,10 @@ from zipfile import ZipFile
 cursor = connection.cursor()
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
-HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103')
-DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712',
-                                  '098715', '098770')
+HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103')
+DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
+                                  '098770', '98710', '98711', '98712', '98715',
+                                  '98770')
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s28002_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)

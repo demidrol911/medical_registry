@@ -43,8 +43,6 @@ def underpay_repeated_service(register_element):
                 on medical_register_record.patient_fk = p1.id_pk
             join insurance_policy i1
                 on i1.version_id_pk = p1.insurance_policy_fk
-            LEFT JOIN provided_service_sanction pss
-                on pss.service_fk = ps1.id_pk and pss.error_fk = 64
             JOIN (
                 select ps.id_pk as pk, i.id as policy, ps.code_fk as code, ps.end_date,
                     ps.basic_disease_fk as disease, ps.worker_code, mr.year, mr.period
@@ -66,11 +64,12 @@ def underpay_repeated_service(register_element):
             ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
                 and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
                 and ps1.worker_code = T1.worker_code
-                and pss.id_pk is null
         where mr1.is_active
             and mr1.year = %(year)s
             and mr1.period = %(period)s
             and mr1.organization_code = %(organization)s
+            AND (select count(pss.id_pk) from provided_service_sanction pss
+                 where pss.service_fk = ps1.id_pk and pss.error_fk = 64) = 0
     """
 
     services = ProvidedService.objects.raw(

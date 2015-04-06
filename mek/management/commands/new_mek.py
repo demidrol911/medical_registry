@@ -94,7 +94,7 @@ def get_services(register_element):
                     ) and profile_fk = medical_service.tariff_profile_fk
                         and is_children_profile = provided_service.is_children_profile
                         and (( provided_event.term_fk = 1 and "level" = department.level)
-                            or (provided_event.term_fk = 1)
+                            or (provided_event.term_fk = 2)
                         )
                     order by start_date DESC
                     limit 1
@@ -169,12 +169,13 @@ def get_services(register_element):
         LEFT join tariff_basic
             on tariff_basic.service_fk = provided_service.code_fk
                 and tariff_basic.group_fk = medical_organization.tariff_group_fk
-                and tariff_basic.start_date = GREATEST(
+                and tariff_basic.start_date =
+                GREATEST(
                     (select max(start_date)
                      from tariff_basic
                      where start_date <= provided_service.end_date
                      and service_fk = provided_service.code_fk),
-                    '2015-01-01'::DATE
+                    (CASE WHEN medical_service.tariff_profile_fk = 107 then '2015-03-01' ELSE '2015-01-01' END) :: DATE
                 )
     where medical_register.is_active
         and medical_register.year = %(year)s
