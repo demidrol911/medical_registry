@@ -392,6 +392,8 @@ def underpay_cross_dates_services(register_element):
                 on pe.record_fk = mrr.id_pk
             join medical_register mr
                 on mrr.register_fk = mr.id_pk
+            join medical_service ms
+                on ms.id_pk = ps.code_fk
             LEFT JOIN provided_service_sanction pss
                 on pss.service_fk = ps.id_pk and pss.error_fk = 73
             JOIN (
@@ -412,7 +414,7 @@ def underpay_cross_dates_services(register_element):
                     and mr1.organization_code = %(organization)s
                     and provided_event.term_fk = 1
                     and ms.group_fk not in (27, 5, 3)
-                    and ms.code not like 'A%'
+                    and ms.code not like 'A%%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
                 or (ps.end_date > T.start_date and ps.end_date < T.end_date)
@@ -423,6 +425,7 @@ def underpay_cross_dates_services(register_element):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and pe.term_fk = 3
+            and ms.code not like 'A%%'
         order by ps.id_pk
     """
 
@@ -435,6 +438,8 @@ def underpay_cross_dates_services(register_element):
                 on pe.record_fk = mrr.id_pk
             join medical_register mr
                 on mrr.register_fk = mr.id_pk
+            join medical_service ms
+                on ms.id_pk = ps.code_fk
             LEFT JOIN provided_service_sanction pss
                 on pss.service_fk = ps.id_pk and pss.error_fk = 73
             JOIN (
@@ -454,7 +459,7 @@ def underpay_cross_dates_services(register_element):
                     and mr1.organization_code = %(organization)s
                     and provided_event.term_fk in (1, 2)
                     and ms.group_fk not in (27, 5, 3)
-                    and ms.code not like 'A%'
+                    and ms.code not like 'A%%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
                 or (ps.end_date > T.start_date and ps.end_date < T.end_date)
@@ -466,6 +471,7 @@ def underpay_cross_dates_services(register_element):
             and mr.organization_code = %(organization)s
             and pe.term_fk in (1, 2)
             and pss.id_pk is null
+            and ms.code not like 'A%%'
         order by ps.id_pk
     """
 
