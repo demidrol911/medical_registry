@@ -395,7 +395,7 @@ def get_treatment_events(mo_code):
                       join medical_service ms1 on ms1.id_pk = ps1.code_fk
                       WHERE ps1.event_fk  = ps.event_fk
                             and (ms1.group_fk is NULL or ms1.group_fk = 24)
-                            and ms.reason_fk = 1
+                            and ms1.reason_fk = 1
                       )>1
                     )
                   )
@@ -472,26 +472,6 @@ def calculate_capitation_tariff(term, mo_code):
     result[8][0] = population[5]['men']
     result[9][0] = population[5]['fem']
 
-    ##292		240	2198	2107		6220	6056		20200	20070	5748	13191
-
-    if term == 4 and mo_code == '280017':
-        result[0][1] = 292
-        result[1][1] = 240
-
-        result[2][1] = 2198
-        result[3][1] = 2107
-
-        result[4][1] = 6220
-        result[5][1] = 6056
-
-        result[6][0] = 20200
-        result[7][0] = 20070
-
-        result[8][0] = 5748
-        result[9][0] = 13191
-
-    # Тариф основной
-
     result[0][5] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
     result[1][5] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
 
@@ -514,9 +494,9 @@ def calculate_capitation_tariff(term, mo_code):
         if mo_code == '280029':
             result[idx][8] *= 2
             result[idx][9] *= 2
-        if mo_code == '280064' and term == 3 and idx in (4, 5):
-            result[idx][8] *= Decimal(1.5)
-            result[idx][9] *= Decimal(1.5)
+        if mo_code == '280064' and term == 3:
+            result[idx][8] *= Decimal(1.95)
+            result[idx][9] *= Decimal(1.95)
 
     if term == 3:
         fap = TariffFap.objects.filter(organization__code=mo_code,
@@ -545,8 +525,26 @@ def change_register_status(mo_code, status):
     ).update(status=status)
     if status == 4:
         MedicalRegister.objects.filter(
+            year=YEAR,
+            period=PERIOD,
+            organization_code=mo_code,
+            is_active=True).update(pse_export_date=datetime.now())
+
+
+def get_mo_code(status):
+    organizations = MedicalRegister.objects.filter(
         year=YEAR,
         period=PERIOD,
-        organization_code=mo_code,
-        is_active=True
-    ).update(pse_export_date=datetime.now())
+        is_active=True,
+        type=1,
+        status__pk=status
+    )
+    if organizations:
+        organization_code = organizations[0].organization_code
+    else:
+        organization_code = ''
+    return organization_code
+
+
+def get_mo_name(mo_code):
+    return MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).name

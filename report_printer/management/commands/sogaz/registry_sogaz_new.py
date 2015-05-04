@@ -3,6 +3,7 @@
 from django.core.management.base import BaseCommand
 from main.models import MedicalOrganization, ProvidedService
 from tfoms import func
+from report_printer.const import MONTH_NAME
 
 
 def calculated_capitation(mo, term):
@@ -335,57 +336,11 @@ def get_sanction_info(mo, term=0, has_pa=False):
         dict(year=func.YEAR, period=func.PERIOD, mo=mo)
     )
 
-    query_1 = """
-            select
-            mo.id_pk,
-            sum(CASE WHEN ps.payment_kind_fk = 1
-                and (pe.term_fk !=4 or pe.term_fk is NULL) THEN ps.provided_tariff ELSE 0 end) as sanc_sum,
-            count(distinct CASE WHEN (ms.group_fk != 19 or ms.group_fk is null)
-                  or (ms.group_fk = 19 and ms.subgroup_fk is not null) then pe.id_pk end) as sanc_count
-            from medical_register mr JOIN medical_register_record mrr
-                  ON mr.id_pk=mrr.register_fk
-            JOIN provided_event pe
-                  ON mrr.id_pk=pe.record_fk
-            JOIN provided_service ps
-                  ON ps.event_fk=pe.id_pk
-            JOIN medical_organization mo
-                  ON mo.id_pk = ps.organization_fk
-            JOIN medical_service ms
-                  ON ms.id_pk = ps.code_fk
-            join provided_service_sanction pss
-                  ON pss.service_fk = ps.id_pk and pss.error_fk = (
-                        select pss1.error_fk
-                        from provided_service_sanction pss1
-                        JOIN medical_error me1 ON me1.id_pk = pss1.error_fk
-                        where pss1.is_active
-                              and pss1.service_fk = ps.id_pk
-                        order by me1.weight desc LIMIT 1
-                  )
-            where mr.is_active and mr.year = %(year)s
-                  and mr.period = %(period)s
-                  and mr.organization_code = %(organization)s
-                  and pss.is_active
-                  AND (ms.group_fk != 27 or ms.group_fk is NULL)
-                  and ps.payment_type_fk = 3
-            """
-
-    sum_obj = MedicalOrganization.objects.raw(
-        query_1+term_criterias[term]+(' AND pss.error_fk=75' if has_pa else ' AND pss.error_fk!=75') +
-        ' group by mo.id_pk',
-        dict(year=func.YEAR, period=func.PERIOD, organization=mo)
-    )
-
-    sanc_sum = 0
-    sanc_count = 0
-    if len(list(sum_obj)) > 0:
-        sanc_sum = sum_obj[0].sanc_sum
-        sanc_count = sum_obj[0].sanc_count
-
-    return services_obj, sanc_sum, sanc_count
+    return services_obj
 
 
-def print_sanction(act_book, data, capitation_events, title, handbooks):
-    services_obj, sanc_sum, sanc_count = data
+def print_sanction(act_book, data, sanc_sum, sanc_count, capitation_events, title, handbooks):
+    services_obj = data
     act_book.set_style()
     act_book.write_cell('', 'r')
     if title:
@@ -457,6 +412,7 @@ def print_registry_sogaz_1(act_book, mo):
 
     act_book.set_sheet(5)
     act_book.set_style()
+    act_book.write_cella(2, 1, u'за %s %s г.' % (MONTH_NAME[func.PERIOD], func.YEAR))
     act_book.write_cella(9, 0, mo_name)
     act_book.write_cella(10, 1, mo)
     # Представлены реестры счетов (все поданные)
@@ -518,6 +474,8 @@ def print_registry_sogaz_1(act_book, mo):
     print_sanction(
         act_book,
         data=get_sanction_info(mo, term=1),
+        sanc_sum=sum_dict['sanc_sum_tariff_hosp'],
+        sanc_count=sum_dict['sanc_count_hosp'],
         capitation_events=capitation_events,
         title=u'2.1.1. за стационарную медицинскую помощь на сумму:',
         handbooks=handbooks
@@ -526,6 +484,8 @@ def print_registry_sogaz_1(act_book, mo):
     print_sanction(
         act_book,
         data=get_sanction_info(mo, term=2),
+        sanc_sum=sum_dict['sanc_sum_tariff_day_hosp'],
+        sanc_count=sum_dict['sanc_count_day_hosp'],
         capitation_events=capitation_events,
         title=u'2.1.2. за мед. помощь в дневном стационаре  на сумму:',
         handbooks=handbooks
@@ -534,6 +494,8 @@ def print_registry_sogaz_1(act_book, mo):
     print_sanction(
         act_book,
         data=get_sanction_info(mo, term=3),
+        sanc_sum=sum_dict['sanc_sum_tariff_policlinic'],
+        sanc_count=sum_dict['sanc_count_policlinic'],
         capitation_events=capitation_events,
         title=u'2.1.3. за амбулаторно-поликлиническую помощь  на сумму:',
         handbooks=handbooks
@@ -542,6 +504,8 @@ def print_registry_sogaz_1(act_book, mo):
     print_sanction(
         act_book,
         data=get_sanction_info(mo, term=4),
+        sanc_sum=sum_dict['sanc_sum_tariff_ambulance'],
+        sanc_count=sum_dict['sanc_count_ambulance'],
         capitation_events=capitation_events,
         title=u'2.1.4. за скорую медицинскую помощь  на сумму:',
         handbooks=handbooks
@@ -565,6 +529,8 @@ def print_registry_sogaz_1(act_book, mo):
     print_sanction(
         act_book,
         data=get_sanction_info(mo, has_pa=True),
+        sanc_sum=sum_dict['pa_sum_tariff'],
+        sanc_count=sum_dict['pa_count'],
         capitation_events=capitation_events,
         title='',
         handbooks=handbooks

@@ -7,23 +7,27 @@ from django.core.management.base import BaseCommand
 from medical_service_register.path import REESTR_DIR, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
 from report_printer.const import MONTH_NAME
+from tfoms.func import get_mo_register
 
 
 def get_mo_statistics(mo):
     query = """
             select
             mo.id_pk,
-            case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2,20, 32)) then 'hospital'
+            case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2, 20)) then 'hospital'
+                  when T.service_group = 31 then 'hospital_ambulance'
+                  when T.service_group = 32 then 'coronary_angiography'
+                  when T.service_group = 40 then 'cerebral_angiography'
                   when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
                   when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
-                  when T.term = 2 and (T.service_group is null or T.service_group in (17, 28)) then 'day_hospital'
+                  when T.term = 2 and (T.service_group is null or T.service_group in (17, 28, 30)) then 'day_hospital'
                   when T.is_policlinic_treatment THEN 'policlinic_disease'
                   when ((T.service_group IS NULL or T.service_group = 24)
                        and ((T.term = 3 and T.service_reason in (2, 3, 8))
                             or (T.term = 3 and  T.service_reason = 1
                                    and not T.is_policlinic_treatment)))
                        or T.service_group = 4 THEN 'policlinic_priventive'
-                  when T.term = 3 and T.service_reason = 5 or T.service_group = 31 THEN 'policlinic_ambulance'
+                  when T.term = 3 and T.service_reason = 5 THEN 'policlinic_ambulance'
                   when T.service_group = 9 and T.service_code in ('019214', '019215', '019216' ,'019217',
                                                                   '019212', '019201'
                                                                   ) then 'adult_exam'
@@ -124,7 +128,7 @@ def get_mo_statistics(mo):
                     (ms.group_fk is NULL or ms.group_fk = 24)
                     and (select count(ps1.id_pk) FROM provided_service ps1
                          join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                         WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk in (24, 29))
+                         WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk in (24))
                          and ms1.reason_fk = 1
                          )>1
                     ) as is_policlinic_treatment,
@@ -171,17 +175,20 @@ def get_mo_error_statistics(mo):
     query = """
             select
             mo.id_pk,
-            case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2, 20, 32)) then 'hospital'
+            case when T.term = 1 and (T.service_group is null or T.service_group in (1, 2, 20)) then 'hospital'
+                  when T.service_group = 31 then 'hospital_ambulance'
+                  when T.service_group = 32 then 'coronary_angiography'
+                  when T.service_group = 40 then 'cerebral_angiography'
                   when T.service_code in ('049023', '149023') then 'gemodialis_hospital'
                   when T.service_code in ('049024', '149024') then 'peritondialis_hospital'
-                  when T.term = 2 and (T.service_group is null or T.service_group in (17, 28)) then 'day_hospital'
+                  when T.term = 2 and (T.service_group is null or T.service_group in (17, 28, 30)) then 'day_hospital'
                   when T.is_policlinic_treatment THEN 'policlinic_disease'
                   when ((T.service_group IS NULL or T.service_group = 24)
                        and ((T.term = 3 and T.service_reason in (2, 3, 8))
                             or (T.term = 3 and  T.service_reason = 1
                                    and not T.is_policlinic_treatment)))
                        or T.service_group = 4 THEN 'policlinic_priventive'
-                  when T.term = 3 and T.service_reason = 5 or T.service_group = 31 THEN 'policlinic_ambulance'
+                  when T.term = 3 and T.service_reason = 5 THEN 'policlinic_ambulance'
                   when T.service_group = 9 and T.service_code in ('019214', '019215', '019216' ,'019217',
                                                                   '019212', '019201'
                                                                   ) then 'adult_exam'
@@ -251,7 +258,7 @@ def get_mo_error_statistics(mo):
                         (ms.group_fk is NULL or ms.group_fk = 24)
                         and (select count(ps1.id_pk) FROM provided_service ps1
                              join medical_service ms1 on ms1.id_pk = ps1.code_fk
-                             WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk in (24, 29))
+                             WHERE ps1.event_fk  = ps.event_fk and (ms1.group_fk is NULL or ms1.group_fk in (24))
                              and ms1.reason_fk = 1
                              )>1
                         ) as is_policlinic_treatment,
@@ -322,121 +329,127 @@ def get_mo_error_statistics(mo):
     return MedicalOrganization.objects.raw(query, dict(period=func.PERIOD, year=func.YEAR, organization=mo))
 
 
+def print_defect_act(mo):
+    VISIT = 1
+    TREATMENT = 2
+    COUNT_DAYS = 3
+    UET = 4
+    template = BASE_DIR + r'\templates\excel_pattern\defect.xls'
+    target_dir = REESTR_DIR
+    rules = {
+        'hospital': [(1, VISIT)],
+        'hospital_ambulance': [(2, VISIT)],
+        'coronary_angiography': [(3, VISIT)],
+        'cerebral_angiography': [(4, VISIT)],
+        'gemodialis_hospital': [(5, TREATMENT), (6, COUNT_DAYS)],
+        'peritondialis_hospital': [(7, TREATMENT), (8, COUNT_DAYS)],
+        'day_hospital': [(9, VISIT), (10, COUNT_DAYS)],
+        'policlinic_disease': [(11, VISIT), (12, TREATMENT)],
+        'policlinic_priventive': [(13, VISIT)],
+        'policlinic_ambulance': [(14, VISIT)],
+        'adult_exam': [(15, TREATMENT), (16, VISIT)],
+        'ambulance': [(17, VISIT)],
+        'mrt': [(18, VISIT)],
+        'gemodialis_policlinic': [(19, TREATMENT), (20, COUNT_DAYS)],
+        'peritondialis_policlinic': [(21, TREATMENT), (22, COUNT_DAYS)],
+        'children_exam': [(23, TREATMENT), (24, VISIT)],
+        'prelim_children_exam': [(25, TREATMENT), (26, VISIT)],
+        'period_children_exam': [(27, TREATMENT)],
+        'clinical_exam': [(28, TREATMENT), (29, VISIT)],
+        'stom_disease': [(30, TREATMENT), (31, UET)],
+        'stom_ambulance': [(32, TREATMENT), (33, UET)]
+    }
+
+    error_sequence = [
+        50, 51, 52, 53, 54, 55,
+        133, 56, 57, 58, 59, 60, 61,
+        62, 63, 64, 65, 66, 67, 68,
+        69, 70, 71, 72, 73, 74, 75
+    ]
+
+    target = target_dir % (func.YEAR, func.PERIOD) + ur'\%s_дефекты' % \
+        func.get_mo_info(mo)['name'].replace('"', '').strip()
+    print target
+    with ExcelWriter(target, template=template) as act_book:
+        act_book.set_sheet(0)
+        act_book.write_cella(0, 3, u'Сводная справка  по  дефектам  за %s %s г.'
+                                   % (MONTH_NAME[func.PERIOD], func.YEAR))
+        act_book.write_cella(3, 0, mo+' '+func.get_mo_info(mo)['name'])
+        act_book.set_style(VALUE_STYLE)
+        stat_obj = get_mo_statistics(mo=mo)
+        ignore_services = {}
+        for data in stat_obj:
+            division_term = data.division_term
+            if division_term not in rules:
+                if division_term not in ignore_services:
+                    ignore_services[division_term] = [0, 0, 0, 0]
+                ignore_services[division_term][0] = data.visit_exclude
+                ignore_services[division_term][2] = data.uet_exclude
+            for cell, field_group in rules.get(division_term, []):
+                act_book.set_cursor(4+cell, 2)
+                if field_group == VISIT:
+                    act_book.write_cell(data.visit_all_adult, 'c')
+                    act_book.write_cell(data.visit_all_children, 'c')
+                    act_book.write_cell(data.visit_accept_adult, 'c')
+                    act_book.write_cell(data.visit_accept_children, 'c')
+                    act_book.write_cell(data.visit_exclude, 'c')
+                elif field_group == TREATMENT:
+                    act_book.write_cell(data.treatment_all_adult, 'c')
+                    act_book.write_cell(data.treatment_all_children, 'c')
+                    act_book.write_cell(data.treatment_accept_adult, 'c')
+                    act_book.write_cell(data.treatment_accept_children, 'c')
+                    act_book.write_cell(data.treatment_exclude, 'c')
+                elif field_group == COUNT_DAYS:
+                    act_book.write_cell(data.count_days_all_adult, 'c')
+                    act_book.write_cell(data.count_days_all_children, 'c')
+                    act_book.write_cell(data.count_days_accept_adult, 'c')
+                    act_book.write_cell(data.count_days_accept_children, 'c')
+                    act_book.write_cell(data.count_days_exclude, 'c')
+                elif field_group == UET:
+                    act_book.write_cell(data.uet_all_adult, 'c')
+                    act_book.write_cell(data.uet_all_children, 'c')
+                    act_book.write_cell(data.uet_accept_adult, 'c')
+                    act_book.write_cell(data.uet_accept_children, 'c')
+                    act_book.write_cell(data.uet_exclude, 'c')
+        error_stat_obj = get_mo_error_statistics(mo=mo)
+        for data in error_stat_obj:
+            division_term = data.division_term
+            error = data.failure_cause
+            index = error_sequence.index(error)
+            if division_term not in rules:
+                if division_term not in ignore_services:
+                    ignore_services[division_term] = [0, 0, 0, 0]
+                ignore_services[division_term][1] = data.visit_exclude
+                ignore_services[division_term][3] = data.uet_exclude
+            for cell, field_group in rules.get(division_term, []):
+                act_book.set_cursor(4+cell, 7+index)
+                if field_group == VISIT:
+                    act_book.write_cell(data.visit_exclude, 'c')
+                elif field_group == TREATMENT:
+                    act_book.write_cell(data.treatment_exclude, 'c')
+                elif field_group == COUNT_DAYS:
+                    act_book.write_cell(data.count_days_exclude, 'c')
+                elif field_group == UET:
+                    act_book.write_cell(data.uet_exclude, 'c')
+        act_book.set_sheet(1)
+        act_book.set_cursor(1, 0)
+        for service in ignore_services:
+            act_book.write_cell(service, 'c')
+            act_book.write_cell(MedicalService.objects.get(code=service).name, 'c')
+            group = ''
+            if MedicalService.objects.filter(code=service, group__isnull=False):
+                group = MedicalService.objects.get(code=service).group.name
+            act_book.write_cell(group, 'c')
+            act_book.write_cell(ignore_services[service][0], 'c')
+            act_book.write_cell(ignore_services[service][1], 'c')
+            act_book.write_cell(ignore_services[service][2], 'c')
+            act_book.write_cell(ignore_services[service][3], 'r')
+
+
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        status = args[0]
-        VISIT = 1
-        TREATMENT = 2
-        COUNT_DAYS = 3
-        UET = 4
-        template = BASE_DIR + r'\templates\excel_pattern\defect.xls'
-        target_dir = REESTR_DIR
-        rules = {
-            'hospital': [(1, VISIT)],
-            'gemodialis_hospital': [(2, TREATMENT), (3, COUNT_DAYS)],
-            'peritondialis_hospital': [(4, TREATMENT), (5, COUNT_DAYS)],
-            'day_hospital': [(6, VISIT), (7, COUNT_DAYS)],
-            'policlinic_disease': [(8, VISIT), (9, TREATMENT)],
-            'policlinic_priventive': [(10, TREATMENT)],
-            'policlinic_ambulance': [(11, VISIT)],
-            'adult_exam': [(12, TREATMENT), (13, VISIT)],
-            'ambulance': [(14, VISIT)],
-            'mrt': [(15, VISIT)],
-            'gemodialis_policlinic': [(16, TREATMENT), (17, COUNT_DAYS)],
-            'peritondialis_policlinic': [(18, TREATMENT), (19, COUNT_DAYS)],
-            'children_exam': [(20, TREATMENT), (21, VISIT)],
-            'prelim_children_exam': [(22, TREATMENT), (23, VISIT)],
-            'period_children_exam': [(24, TREATMENT)],
-            'clinical_exam': [(25, TREATMENT), (26, VISIT)],
-            'stom_disease': [(27, TREATMENT), (28, UET)],
-            'stom_ambulance': [(29, TREATMENT), (30, UET)]
-        }
-
-        error_sequence = [
-            50, 51, 52, 53, 54, 55,
-            133, 56, 57, 58, 59, 60, 61,
-            62, 63, 64, 65, 66, 67, 68,
-            69, 70, 71, 72, 73, 74, 75
-        ]
-
-        mo_list = func.get_mo_register(status=status)
-        mo_list = ['280040']
-        for mo in mo_list:
-            target = target_dir % (func.YEAR, func.PERIOD) + ur'\дефекты\%s_дефекты' % \
-                func.get_mo_info(mo)['name'].replace('"', '').strip()
-            print target
-            with ExcelWriter(target, template=template) as act_book:
-                act_book.set_sheet(0)
-                act_book.write_cella(0, 3, u'Сводная справка  по  дефектам  за %s %s г.'
-                                           % (MONTH_NAME[func.PERIOD], func.YEAR))
-                act_book.write_cella(3, 0, mo+' '+func.get_mo_info(mo)['name'])
-                act_book.set_style(VALUE_STYLE)
-                stat_obj = get_mo_statistics(mo=mo)
-                ignore_services = {}
-                for data in stat_obj:
-                    division_term = data.division_term
-                    if division_term not in rules:
-                        if division_term not in ignore_services:
-                            ignore_services[division_term] = [0, 0, 0, 0]
-                        ignore_services[division_term][0] = data.visit_exclude
-                        ignore_services[division_term][2] = data.uet_exclude
-                    for cell, field_group in rules.get(division_term, []):
-                        act_book.set_cursor(4+cell, 2)
-                        if field_group == VISIT:
-                            act_book.write_cell(data.visit_all_adult, 'c')
-                            act_book.write_cell(data.visit_all_children, 'c')
-                            act_book.write_cell(data.visit_accept_adult, 'c')
-                            act_book.write_cell(data.visit_accept_children, 'c')
-                            act_book.write_cell(data.visit_exclude, 'c')
-                        elif field_group == TREATMENT:
-                            act_book.write_cell(data.treatment_all_adult, 'c')
-                            act_book.write_cell(data.treatment_all_children, 'c')
-                            act_book.write_cell(data.treatment_accept_adult, 'c')
-                            act_book.write_cell(data.treatment_accept_children, 'c')
-                            act_book.write_cell(data.treatment_exclude, 'c')
-                        elif field_group == COUNT_DAYS:
-                            act_book.write_cell(data.count_days_all_adult, 'c')
-                            act_book.write_cell(data.count_days_all_children, 'c')
-                            act_book.write_cell(data.count_days_accept_adult, 'c')
-                            act_book.write_cell(data.count_days_accept_children, 'c')
-                            act_book.write_cell(data.count_days_exclude, 'c')
-                        elif field_group == UET:
-                            act_book.write_cell(data.uet_all_adult, 'c')
-                            act_book.write_cell(data.uet_all_children, 'c')
-                            act_book.write_cell(data.uet_accept_adult, 'c')
-                            act_book.write_cell(data.uet_accept_children, 'c')
-                            act_book.write_cell(data.uet_exclude, 'c')
-                error_stat_obj = get_mo_error_statistics(mo=mo)
-                for data in error_stat_obj:
-                    division_term = data.division_term
-                    error = data.failure_cause
-                    index = error_sequence.index(error)
-                    if division_term not in rules:
-                        if division_term not in ignore_services:
-                            ignore_services[division_term] = [0, 0, 0, 0]
-                        ignore_services[division_term][1] = data.visit_exclude
-                        ignore_services[division_term][3] = data.uet_exclude
-                    for cell, field_group in rules.get(division_term, []):
-                        act_book.set_cursor(4+cell, 7+index)
-                        if field_group == VISIT:
-                            act_book.write_cell(data.visit_exclude, 'c')
-                        elif field_group == TREATMENT:
-                            act_book.write_cell(data.treatment_exclude, 'c')
-                        elif field_group == COUNT_DAYS:
-                            act_book.write_cell(data.count_days_exclude, 'c')
-                        elif field_group == UET:
-                            act_book.write_cell(data.uet_exclude, 'c')
-                act_book.set_sheet(1)
-                act_book.set_cursor(1, 0)
-                for service in ignore_services:
-                    act_book.write_cell(service, 'c')
-                    act_book.write_cell(MedicalService.objects.get(code=service).name, 'c')
-                    group = ''
-                    if MedicalService.objects.filter(code=service, group__isnull=False):
-                        group = MedicalService.objects.get(code=service).group.name
-                    act_book.write_cell(group, 'c')
-                    act_book.write_cell(ignore_services[service][0], 'c')
-                    act_book.write_cell(ignore_services[service][1], 'c')
-                    act_book.write_cell(ignore_services[service][2], 'c')
-                    act_book.write_cell(ignore_services[service][3], 'r')
+        #status = args[0]
+        med_organizations = get_mo_register()
+        for mo in med_organizations:
+            print_defect_act(mo)
