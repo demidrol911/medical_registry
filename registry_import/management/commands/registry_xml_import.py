@@ -37,7 +37,10 @@ ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует
 HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103')
 DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
                                   '098770', '98710', '98711', '98712', '98715',
-                                  '98770')
+                                  '98770', '098770', '098770', '198770'
+)
+HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', )
+DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', )
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s28002_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
@@ -405,6 +408,7 @@ def main():
         move_files_to_process(files)
 
     for organization in registries:
+        print organization
         if not is_files_completeness(registries[organization]):
             send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
@@ -735,12 +739,14 @@ def main():
 
                             if new_event.get('USL_OK', '') == '1' \
                                     and new_service[
-                                        'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS:
+                                        'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS\
+                                    and not new_service['CODE_USL'].startswith('A'):
                                 hospital_volume_service.add(new_event['IDCASE'])
 
                             if new_event.get('USL_OK', '') == '2' \
                                     and new_service[
-                                        'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS:
+                                        'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS\
+                                    and not new_service['CODE_USL'].startswith('A'):
                                 day_hospital_volume_service.add(
                                     new_event['IDCASE'])
 
@@ -806,7 +812,8 @@ def main():
         over_volume = volume and (len(hospital_volume_service) > volume.hospital
                                   or len(day_hospital_volume_service) > volume.day_hospital)
 
-        if over_volume:
+        if over_volume and organization not in HOSPITAL_VOLUME_MO_EXCLUSIONS \
+                and organization not in DAY_HOSPITAL_MO_EXCLUSIONS:
             has_insert = False
             message_file = open(TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
