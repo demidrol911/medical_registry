@@ -7,6 +7,7 @@ from tfoms.models import (
     MedicalRegister,
     SanctionStatus
 )
+from django.db import transaction
 from collections import defaultdict
 from dbfpy import dbf
 import os
@@ -70,7 +71,7 @@ def main():
     ERRORS_CODES = get_errors_dict()
 
     pse_dir = 'c:/work/pse'
-    year, period = '2015', '02'
+    year, period = '2015', '03'
     files = os.listdir(pse_dir)
     departments = set([filename[1:-4] for filename in files if '.dbf' in filename])
     registers = []
@@ -137,19 +138,20 @@ def main():
                 print 'delete', to_delete, error_set, pse_error_set, 'rec_id', rec['recid']
                 sanctions = Sanction.objects.filter(
                     service_id=provided_service_pk,
-                    error_old_code__in=to_delete
+                    error__old_code__in=to_delete
                 )
-                for sanction in sanctions:
-                    SanctionStatus.objects.create(
-                        sanction=sanction,
-                        type=SanctionStatus.SANCTION_TYPE_REMOVED_BY_EXPERT
-                    )
-                sanctions.update(is_active=False)
-                print len(to_delete), len(error_set), to_delete, error_set
-                if len(to_delete) == len(error_set):
-                    print 'NULLed'
-                    ProvidedService.objects.filter(pk=provided_service_pk) \
-                                           .update(payment_type=None)
+                with transaction.atomic():
+                    for sanction in sanctions:
+                        SanctionStatus.objects.create(
+                            sanction=sanction,
+                            type=SanctionStatus.SANCTION_TYPE_REMOVED_BY_EXPERT
+                        )
+                    sanctions.update(is_active=False)
+                    print len(to_delete), len(error_set), to_delete, error_set
+                    if len(to_delete) == len(error_set):
+                        print 'NULLed'
+                        ProvidedService.objects.filter(pk=provided_service_pk) \
+                                               .update(payment_type=None)
 
             if to_insert:
                 print 'insert', to_insert
@@ -158,19 +160,21 @@ def main():
                 except:
                     print provided_service_pk, rec['recid']
                     break
-                underpayment = service.accepted_payment
-                service.accepted_payment = 0
-                service.payment_type_id = 3
-                service.save()
+                with transaction.atomic():
+                    underpayment = service.accepted_payment
+                    service.accepted_payment = 0
+                    service.payment_type_id = 3
+                    service.save()
 
-                for err_rec in to_insert:
-                    sanction = Sanction.objects.create(
-                        service=service, type_id=1, underpayment=underpayment,
-                        error_id=ERRORS_CODES.get(err_rec, None))
-                    SanctionStatus.objects.create(
-                        sanction=sanction,
-                        type=SanctionStatus.SANCTION_TYPE_ADDED_BY_EXPERT
-                    )
+                    for err_rec in to_insert:
+                        sanction = Sanction.objects.create(
+                            service=service, type_id=1, underpayment=underpayment,
+                            is_active=True,
+                            error_id=ERRORS_CODES.get(err_rec, None))
+                        SanctionStatus.objects.create(
+                            sanction=sanction,
+                            type=SanctionStatus.SANCTION_TYPE_ADDED_BY_EXPERT
+                        )
         #print not_found_service
         for s in not_found_service:
             file_not_found.write(s.encode('cp866')+'\n')
