@@ -355,7 +355,7 @@ def get_policy_patient_validation(item, registry_type=1):
     if registry_type == 1:
         policy.append(
             Field('NOVOR', item['NOVOR'] or '').append([
-                Regex('(0)|([12]\d{2}\d{2}\d{2}[0-9][0-9])',
+                Regex('(0)|([12]\d{2}\d{2}\d{2}[0-9][0-9]?)',
                       error=ERROR_MESSAGES['wrong format'],
                       pass_on_blank=True)
             ]), )
