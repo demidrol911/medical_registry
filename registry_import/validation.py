@@ -102,7 +102,17 @@ class IsValidDate(rule.Rule):
 
 
 class DiseaseHasPrecision(rule.Rule):
+    def __init__(self, organization, **kwargs):
+        if not kwargs.get('error', None):
+            kwargs['error'] = "???"
+        super(DiseaseHasPrecision, self).__init__(
+            kwargs.get('error', None), kwargs.get('pass_on_blank', False))
+        self.organization = organization
+
     def run(self, field_value):
+        if self.organization == '280043':
+            return True
+
         disease = DISEASES.get(field_value, None)
 
         if disease and disease.is_precision:
@@ -252,16 +262,16 @@ def get_person_patient_validation(item, registry_type=1):
                             error=ERROR_MESSAGES['length exceeded']),
         ]),
         Field('FAM', item['FAM'] or '').append([
-            IsLengthBetween(1, 40,
+            IsLengthBetween(0, 40,
                             error=ERROR_MESSAGES['length exceeded'], ),
         ]),
         Field('IM', item['IM'] or '').append([
-            IsLengthBetween(1, 40,
+            IsLengthBetween(0, 40,
                             error=ERROR_MESSAGES['length exceeded'],
                             pass_on_blank=True),
         ]),
         Field('OT', item['OT'] or '').append([
-            IsLengthBetween(1, 40,
+            IsLengthBetween(0, 40,
                             error=ERROR_MESSAGES['length exceeded'],
                             pass_on_blank=True),
         ]),
@@ -345,7 +355,7 @@ def get_policy_patient_validation(item, registry_type=1):
     if registry_type == 1:
         policy.append(
             Field('NOVOR', item['NOVOR'] or '').append([
-                Regex('(0)|([12]\d{2}\d{2}\d{2}[1-99])',
+                Regex('(0)|([12]\d{2}\d{2}\d{2}[0-9][0-9])',
                       error=ERROR_MESSAGES['wrong format'],
                       pass_on_blank=True)
             ]), )
@@ -414,7 +424,8 @@ def get_event_validation(item, registry_type=1):
         Field('DS1', item['DS1'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-            DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+            DiseaseHasPrecision(organization=item['LPU'],
+                                error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True),
         ]),
         Field('IDSP', item['IDSP'] or '').append([
@@ -458,7 +469,8 @@ def get_event_validation(item, registry_type=1):
             ]),
             Field('DS0', item['DS0'] or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value'], pass_on_blank=True),
-                DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+                DiseaseHasPrecision(organization=item['LPU'],
+                                    error=ERROR_MESSAGES['is precision'],
                                     pass_on_blank=True),
             ]),
             Field('RSLT', item['RSLT'] or '').append([
@@ -549,7 +561,8 @@ def get_complicated_disease_validation(item, registry_type=1):
         disease.append([
             Field('DS3', item or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-                DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+                DiseaseHasPrecision(organization=item['LPU'],
+                                    error=ERROR_MESSAGES['is precision'],
                                     pass_on_blank=True)
             ])
         ])
@@ -564,7 +577,8 @@ def get_concomitant_disease_validation(item, registry_type=1):
     disease.append([
         Field('DS2', item or '').append([
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-            DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+            DiseaseHasPrecision(organization=item['LPU'],
+                                error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True)
         ])
     ])
@@ -619,7 +633,8 @@ def get_service_validation(item, registry_type=1, event={}):
         Field('DS', item['DS'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-            DiseaseHasPrecision(error=ERROR_MESSAGES['is precision'],
+            DiseaseHasPrecision(organization=item['LPU'],
+                                error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True),
         ]),
         Field('CODE_MD', item['CODE_MD'] or '').append([
