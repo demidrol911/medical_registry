@@ -37,8 +37,10 @@ ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует
 HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103')
 DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
                                   '098770', '98710', '98711', '98712', '98715',
-                                  '98770')
+                                  '98770', '098770', '098770', '198770'
+)
 HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', )
+DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', )
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s28002_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
@@ -406,6 +408,7 @@ def main():
         move_files_to_process(files)
 
     for organization in registries:
+        print organization
         if not is_files_completeness(registries[organization]):
             send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
@@ -719,11 +722,13 @@ def main():
                             new_service_list.append(new_service)
                             #print '*', _type
 
-                            if new_event.get('USL_OK',
-                                             '') == '1' and new_service.get(
-                                    'CODE_USL', '').startswith(
-                                    'A') and _type == 'H':
-                                has_surgery = True
+
+                            #if new_event.get('USL_OK',
+                            #                '') == '1' and new_service.get(
+                            #     'CODE_USL', '').startswith(
+                            #      'A') and _type == 'H':
+                            #  has_surgery = True
+
 
                             services_errors += handle_errors(
                                 raw_service.errors() or [], parent='USL',
@@ -732,14 +737,17 @@ def main():
                                 service_uid=new_service['IDSERV']
                             )
 
-                            if new_event.get('USL_OK', None) == '1' \
-                                    and new_service['CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS:
+                            if new_event.get('USL_OK', '') == '1' \
+                                    and new_service[
+                                        'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS\
+                                    and not new_service['CODE_USL'].startswith('A'):
                                 hospital_volume_service.add(new_event['IDCASE'])
 
-                            if new_event.get('USL_OK', None) == '2' \
+                            if new_event.get('USL_OK', '') == '2' \
                                     and new_service[
-                                        'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS:
-                                print new_service['CODE_USL'], new_event['IDCASE']
+                                        'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS\
+                                    and not new_service['CODE_USL'].startswith('A'):
+
                                 day_hospital_volume_service.add(
                                     new_event['IDCASE'])
 
@@ -805,10 +813,11 @@ def main():
         over_volume = volume and (len(hospital_volume_service) > volume.hospital
                                   or len(day_hospital_volume_service) > volume.day_hospital)
 
-        if over_volume and organization not in HOSPITAL_VOLUME_MO_EXCLUSIONS:
-            print day_hospital_volume_service
+        if over_volume and organization not in HOSPITAL_VOLUME_MO_EXCLUSIONS \
+                and organization not in DAY_HOSPITAL_MO_EXCLUSIONS:
+
             has_insert = False
-            message_file = open(TEMP_DIR+u'Ошибка обработки {0} - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
+            message_file = open(TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
                        u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
@@ -817,14 +826,20 @@ def main():
                        u'разработке территориальной программы обязательного медицинского страхования Амурской области.\n'
                        u'\n'
                        u'В текущем реестре выполнено:\n'
-                       u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'
-                       u'Дневной стационар - {2}, запланировано решением тарифной комисси - {3}\n'
-                       u'\n'
-                       u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n')
-            message_file.write(message.format(len(hospital_volume_service),
-                                              volume.hospital,
-                                              len(day_hospital_volume_service),
-                                              volume.day_hospital).encode('cp1251'))
+                       )
+            message += \
+                (u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
+                 len(hospital_volume_service), volume.hospital)) \
+                if len(hospital_volume_service) > volume.hospital \
+                else u''
+            message += \
+                (u'Дневной стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
+                 len(day_hospital_volume_service), volume.day_hospital)) \
+                if len(day_hospital_volume_service) > volume.day_hospital \
+                else u''
+            message += u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n'
+            print len(hospital_volume_service), volume.hospital, len(day_hospital_volume_service), volume.day_hospital
+            message_file.write(message.encode('cp1251'))
             message_file.close()
 
         if has_insert:

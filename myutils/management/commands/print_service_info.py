@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 
 from report_printer.excel_style import VALUE_STYLE
 from tfoms.func import get_patients
-from tfoms.models import ProvidedService
+from main.models import ProvidedService
 from report_printer.excel_writer import ExcelWriter
 from medical_service_register.path import REESTR_EXP
 from helpers.correct import date_correct
