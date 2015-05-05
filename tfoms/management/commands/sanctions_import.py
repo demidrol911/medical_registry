@@ -17,8 +17,8 @@ S_POL, K_U, DS, TN1, SUM_USL, FFOMS, TFOMS, S_PPP, S_SNK, SNILS, SANK_TYPE,\
 DOC_NUMBER, STATUS, S_SNT, S_SNF, SANCTION_DATE,\
 ANAMNESIS_NUMBER, LPU_NUMBER = range(0, 28)
 
-sanction_start_date = '2015-01-01'
-sanction_end_date = '2015-01-31'
+sanction_start_date = '2015-02-01'
+sanction_end_date = '2015-02-28'
 z = csv.writer(open('d:/work/duplicates_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
 
 

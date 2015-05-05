@@ -17,6 +17,8 @@ from validator.rules import Regex, IsInList, IsLengthBetween, IsRequired
 from validator.rules import IsLength
 from validator import rule
 from datetime import datetime
+import re
+
 
 ERROR_MESSAGES = {
     'length exceeded': (u'904;Количество символов в поле не соответствует '
@@ -67,7 +69,7 @@ HITECH_KINDS = queryset_to_dict(MedicalServiceHiTechKind.objects.all())
 HITECH_METHODS = queryset_to_dict(MedicalServiceHiTechMethod.objects.all())
 EXAMINATION_RESULTS = queryset_to_dict(ExaminationResult.objects.all())
 
-ADULT_EXAMINATION_COMMENT_PATTERN = r'^F(0|1)(0|1)[0-3]{1}(0|1)$'
+ADULT_EXAMINATION_COMMENT_PATTERN = ur'^F(?P<student>[01])(?P<second_level>[01])(?P<veteran>[01])(?P<health_group>[123][аб]?)$'
 ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
 KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
@@ -76,38 +78,8 @@ KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
                   '4': ['1', '2', '3', '4', '11', '12', '21', '22', '31', '32']
 }
 
-NEW_EXAMINATION_CHILDREN_HARD_LIFE = (
-    '119020', '119021', '119022', '119023', '119024',
-    '119025', '119026', '119027', '119028', '119029',
-    '119030', '119031'
-)
-
-OLD_EXAMINATION_CHILDREN_HARD_LIFE = ('119001', )
-
-NEW_EXAMINATION_CHILDREN_ADOPTED = (
-    '119220', '119221', '119222', '119223', '119224',
-    '119225', '119226', '119227', '119228', '119229',
-    '119230', '119231'
-)
-
-OLD_EXAMINATION_CHILDREN_ADOPTED = ('119001', )
-
-NEW_EXAMINATION_CHILDREN_PREVENTIVE = (
-    '119080', '119081', '119082', '119083', '119084',
-    '119085', '119086', '119087', '119088', '119089',
-    '119090', '119091'
-)
-
-OLD_EXAMINATION_CHILDREN_PREVENTIVE = (
-    '119051', '119052', '119053', '119054',
-    '119055', '119056'
-)
-
-NEW_EXAMINATION_ADULT_PREVENTIVE = (
-    '019214', '019215', '019216', '019217'
-)
-
-OLD_EXAMINATION_ADULT_PREVENTIVE = ('019201', )
+OLD_ADULT_EXAMINATION = ('019015', '019020')
+NEW_ADULT_EXAMINATION = ('019115', '019116', '019117')
 
 
 class MyCollection(Collection):
@@ -181,6 +153,9 @@ class IsServiceKindCorrespondsToTerm(rule.Rule):
 
         return False
 
+EXAMINATION_HEALTH_GROUP_EQUALITY = {
+    '1': '1', '3': '3', '4':'4', '5':'5', '2': '2', '6':'6', '11': '1',
+    '12': '2', '13': '3', '14': u'3а', '15': u'3б', '31': u'3а', '32': u'3б'}
 
 class IsResultedExaminationComment(rule.Rule):
     def __init__(self, examination_result, **kwargs):
@@ -192,12 +167,16 @@ class IsResultedExaminationComment(rule.Rule):
         self.strip = kwargs.get('strip', False)
 
     def run(self, field_value):
-        if self.examination_result in ['1', '2', '3', '4', '5']:
-            if field_value[3] != str(self.examination_result)[-1]:
+        pattern = re.compile(ADULT_EXAMINATION_COMMENT_PATTERN)
+        matching = pattern.match(field_value)
+        result = EXAMINATION_HEALTH_GROUP_EQUALITY[self.examination_result]
+
+        if self.examination_result in ['1', '2', '3', '4', '5', '31', '32']:
+            if matching['health_group'] != result and matching['second_level'] != '0':
                 return False
 
-        elif self.examination_result in [11, 12, 13]:
-            if str(field_value)[2:4] != str(self.examination_result)[-2:]:
+        elif self.examination_result in ['11', '12', '13', '14', '15']:
+            if matching['health_group'] != result and matching['second_level'] != '1':
                 return False
 
         return True
@@ -252,18 +231,12 @@ class IsExpiredService(rule.Rule):
         except:
             return False
 
-        control_date = datetime.strptime('2014-07-01', '%Y-%m-%d').date()
+        control_date = datetime.strptime('2015-04-01', '%Y-%m-%d').date()
 
-        if field_value in (OLD_EXAMINATION_CHILDREN_ADOPTED +
-                OLD_EXAMINATION_CHILDREN_HARD_LIFE +
-                OLD_EXAMINATION_CHILDREN_PREVENTIVE) \
-                and event_date > control_date:
+        if field_value in OLD_ADULT_EXAMINATION and event_date >= control_date:
             return False
 
-        if field_value in (NEW_EXAMINATION_ADULT_PREVENTIVE + \
-                NEW_EXAMINATION_CHILDREN_ADOPTED +
-                NEW_EXAMINATION_CHILDREN_HARD_LIFE +
-                NEW_EXAMINATION_CHILDREN_PREVENTIVE) \
+        if field_value in NEW_ADULT_EXAMINATION_ADULT \
                 and event_date < control_date:
             return False
 

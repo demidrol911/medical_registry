@@ -84,14 +84,13 @@ def main():
 
         for filename in sorted_files:
             filepath = root+'/'+filename
-
             name, ext = os.path.splitext(filename.lower())
+
             dir_mo_code = filepath[len(INBOX_DIR):len(INBOX_DIR)+6]
             dir_organization = MedicalOrganization.objects.get(
                 code=dir_mo_code, parent=None)
             dir_organization_name = dir_organization.name.replace('"', '')
 
-            #vipnet_path = os.path.join(OTHER_FILES_DIR, dir_organization_name)
             vipnet_path = OTHER_FILES_DIR + dir_organization_name + '/'
             mo_send_path = '%s/%s %s/' % (OUTBOX_DIR, dir_mo_code,
                                           outbox_dict[dir_mo_code])
@@ -101,12 +100,16 @@ def main():
 
             if is_zipfile(filepath) and ext not in ('.docx', '.xlsx', '.xls', '.doc'):
                 archive_name_matching = archive_name.match(filename.lower())
+
                 if archive_name_matching:
                     mo_code = archive_name_matching.group(2)
+
                     print mo_code
+
                     if mo_code not in completed:
                         logging.warning(u'%s не прошли идентификацию' % mo_code)
                         continue
+
                     try:
                         zfile = ZipFile(filepath, )
                     except BadZipfile:
@@ -117,13 +120,18 @@ def main():
                     print zip_file_name_list
 
                     is_include_services_files = False
+
                     for zip_file_name in zfile.namelist():
+
                         if registry_filename.match(zip_file_name.lower()):
                             zfile.extract(zip_file_name,
                                           path=REGISTRY_IMPORT_DIR)
+
                             is_include_services_files = True
+
                             logging.info(
                                 u'%s реестр извлечён из архива' % zip_file_name)
+
                         elif os.path.splitext(zip_file_name)[1] in (
                                 '.doc', 'docx', '.xls', 'xlsx',
                                 '.pdf', '.jpeg', '.jpg'):

@@ -85,6 +85,7 @@ def get_patients(period):
                 and medical_register.year = '2015'
                 and medical_register.period = %s
                 --and medical_register.organization_code in ('280036')
+                --and medical_register.type = 2
             )
         """
     return Patient.objects.raw(query, [attachment_date, period])
@@ -306,7 +307,7 @@ def get_records(register_pk):
             service_worker_speciality.code as service_worker_speciality_code,
             provided_service.worker_code as service_worker_code,
             provided_service.comment as service_comment,
-            provided_service.payment_kind_fk as payment_kind_code
+            coalesce((select max(payment_kind_fk) from provided_service where tariff > 0 and event_fk = provided_event.id_pk), 1) as payment_kind_code
         from
             medical_register
             join medical_register_record
@@ -330,7 +331,7 @@ def get_records(register_pk):
                 on referred.id_pk = provided_event.refer_organization_fk
             left join idc idc_initial
                 on idc_initial.id_pk = provided_event.initial_disease_fk
-            join idc idc_basic
+            LEFT join idc idc_basic
                 on idc_basic.id_pk = provided_event.basic_disease_fk
             LEFT JOIN treatment_result
                 on treatment_result.id_pk = provided_event.treatment_result_fk
@@ -343,7 +344,7 @@ def get_records(register_pk):
 
             left JOIN medical_division service_division
                 on service_division.id_pk = provided_service.division_fk
-            JOIN medical_organization service_department
+            LEFT JOIN medical_organization service_department
                 ON service_department.id_pk = provided_service.department_fk
             LEFT join idc service_idc_basic
                 on service_idc_basic.id_pk = provided_service.basic_disease_fk
@@ -353,7 +354,7 @@ def get_records(register_pk):
                 on service_worker_speciality.id_pk = provided_service.worker_speciality_fk
             JOIN medical_service
                 on provided_service.code_fk = medical_service.id_pk
-            JOIN payment_type
+            LEFT JOIN payment_type
                 on provided_service.payment_type_fk = payment_type.id_pk
             /*
             left join provided_service_sanction
@@ -380,7 +381,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '02'
+    period = '03'
     year = '2015'
     print datetime.datetime.now()
 
@@ -441,6 +442,7 @@ def main():
     lm_xml.end('PERS_LIST')
 
     print 'Patients all down. Starting services...'
+
     XML_TYPES = dict(SERVICE_XML_TYPES)
     EXAMINIATIONS = dict(EXAMINATION_TYPES)
     for register_type in XML_TYPES:
