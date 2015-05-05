@@ -8,7 +8,7 @@ from django.db.models import Sum
 from medical_service_register.path import REESTR_EXP, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
 from report_printer.const import ACT_CELL_POSITION, MONTH_NAME
-from tfoms.models import ProvidedService
+from main.models import ProvidedService
 
 
 ### Печатает сводный акт принятых услуг за месяц

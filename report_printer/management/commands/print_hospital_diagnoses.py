@@ -5,7 +5,7 @@ import time
 from django.core.management.base import BaseCommand
 from django.db import connection
 
-from tfoms.models import MedicalOrganization
+from main.models import MedicalOrganization
 from medical_service_register.path import REESTR_MEC, BASE_DIR
 from report_printer.excel_writer import ExcelWriter
 

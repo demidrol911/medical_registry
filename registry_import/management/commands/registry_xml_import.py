@@ -8,7 +8,7 @@ from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR, \
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender, Patient, \
     MedicalRegisterRecord, ProvidedEventConcomitantDisease, \
     ProvidedEventComplicatedDisease, ProvidedEventSpecial, \
-    ProvidedService, ProvidedEvent, MedicalRegisterStatus
+    ProvidedService, ProvidedEvent, MedicalRegisterStatus, MedicalServiceVolume
 from registry_import.validation import get_person_patient_validation, \
     get_policy_patient_validation, get_record_validation, \
     get_event_validation, get_event_special_validation, \
@@ -34,6 +34,13 @@ from zipfile import ZipFile
 cursor = connection.cursor()
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
+HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103')
+DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
+                                  '098770', '98710', '98711', '98712', '98715',
+                                  '98770', '098770', '098770', '198770'
+)
+HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', )
+DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', )
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s28002_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
@@ -261,7 +268,7 @@ def get_events_objects(events_list):
         division = (rec.get('PODR') or '')[:3]
         if division:
             if len(division) < 3:
-                division = ('0'*(3-len(division))) + division
+                division = ('0' * (3 - len(division))) + division
 
         event = ProvidedEvent(
             id=rec.get('IDCASE', ''),
@@ -355,12 +362,12 @@ def get_services_objects(services_list):
     for rec in services_list:
         code = rec['CODE_USL']
         if code:
-            code = '0'*(6-len(code))+code
+            code = '0' * (6 - len(code)) + code
 
         division = (rec.get('PODR') or '')[:3]
         if division:
             if len(division) < 3:
-                division = ('0'*(3-len(division))) + division
+                division = ('0' * (3 - len(division))) + division
 
         service = ProvidedService(
             id_pk=rec['pk'],
@@ -381,7 +388,7 @@ def get_services_objects(services_list):
             worker_code=rec.get('CODE_MD', ''),
             comment=rec.get('COMENTU', ''),
             event_id=rec['event_id'],
-            #intervention=rec.get('VID_VME', ''),
+            # intervention=rec.get('VID_VME', ''),
         )
 
         objects.append(service)
@@ -401,6 +408,7 @@ def main():
         move_files_to_process(files)
 
     for organization in registries:
+        print organization
         if not is_files_completeness(registries[organization]):
             send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
@@ -433,6 +441,9 @@ def main():
 
         patients_errors = []
         errors_files = []
+
+        hospital_volume_service = set()
+        day_hospital_volume_service = set()
 
         copy_path = '%s%s %s' % (OUTBOX_DIR, organization,
                                  outbox[organization])
@@ -470,7 +481,7 @@ def main():
         for registry in registry_list:
 
             if registry in files_errors:
-                #send_error_file(OUTBOX_DIR, registry, files_errors[registry])
+                # send_error_file(OUTBOX_DIR, registry, files_errors[registry])
                 continue
 
             services_errors = []
@@ -480,13 +491,13 @@ def main():
 
             if current_year \
                     and current_period \
-                    and current_year != '20'+year \
+                    and current_year != '20' + year \
                     and current_period != period:
 
                 raise ValueError('Different periods in one regsitry')
 
             else:
-                current_year = '20'+year
+                current_year = '20' + year
                 current_period = period
 
             old_register_status = MedicalRegister.objects.filter(
@@ -513,6 +524,13 @@ def main():
             service_path = os.path.join(REGISTRY_PROCESSING_DIR, registry)
             service_file = XmlLikeFileReader(service_path)
 
+            try:
+                volume = MedicalServiceVolume.objects.get(
+                    organization__code=organization_code,
+                    date='{0}-{1}-01'.format(current_year, current_period))
+            except:
+                volume = None
+
             invoiced = False
 
             for item in service_file.find(tags=('SCHET', 'ZAP', )):
@@ -521,15 +539,15 @@ def main():
                     invoice = dict(id=item['NSCHET'], date=item['DSCHET'])
 
                     new_registry = MedicalRegister(pk=registry_pk,
-                        timestamp=datetime.now(),
-                        type=registry_type,
-                        filename=registry,
-                        organization_code=organization_code,
-                        is_active=True,
-                        year=current_year,
-                        period=current_period,
-                        status_id=12,
-                        invoice_date=invoice['date'])
+                                                   timestamp=datetime.now(),
+                                                   type=registry_type,
+                                                   filename=registry,
+                                                   organization_code=organization_code,
+                                                   is_active=True,
+                                                   year=current_year,
+                                                   period=current_period,
+                                                   status_id=12,
+                                                   invoice_date=invoice['date'])
 
                     new_registries_pk.append(registry_pk)
                     registries_objects.append(new_registry)
@@ -579,13 +597,13 @@ def main():
                         {'VPOLIS': item['PACIENT']['VPOLIS'],
                          'SPOLIS': item['PACIENT']['SPOLIS'],
                          'NPOLIS': item['PACIENT']['NPOLIS'],
-                         'NOVOR':  item['PACIENT']['NOVOR'], })
+                         'NOVOR': item['PACIENT']['NOVOR'], })
 
                     policy = raw_policy.get_dict()
                     new_patient.update(policy)
                     new_record['patient_id'] = new_patient.get('pk', None)
 
-                    #if new_patient not in new_patient_list:
+                    # if new_patient not in new_patient_list:
                     new_patient_list.append(new_patient)
 
                     #if new_record not in new_record_list:
@@ -628,7 +646,8 @@ def main():
                             concomitants = event['DS2'] or []
 
                         for concomitant in concomitants:
-                            raw_concomitant = get_concomitant_disease_validation(concomitant)
+                            raw_concomitant = get_concomitant_disease_validation(
+                                concomitant)
                             new_concomitant = raw_concomitant.get_dict()
                             new_concomitant['event_id'] = new_event['pk']
                             new_concomitant_list.append(new_concomitant)
@@ -645,7 +664,8 @@ def main():
                             complicateds = event['DS3'] or []
 
                         for complicated in complicateds or []:
-                            raw_complicated = get_complicated_disease_validation(complicated)
+                            raw_complicated = get_complicated_disease_validation(
+                                complicated)
                             new_complicated = raw_complicated.get_dict()
                             new_complicated['event_id'] = new_event['pk']
                             new_complicated_list.append(new_complicated)
@@ -702,8 +722,13 @@ def main():
                             new_service_list.append(new_service)
                             #print '*', _type
 
-                            if new_event.get('USL_OK', '') == '1' and new_service.get('CODE_USL', '').startswith('A') and _type == 'H':
-                                has_surgery = True
+
+                            #if new_event.get('USL_OK',
+                            #                '') == '1' and new_service.get(
+                            #     'CODE_USL', '').startswith(
+                            #      'A') and _type == 'H':
+                            #  has_surgery = True
+
 
                             services_errors += handle_errors(
                                 raw_service.errors() or [], parent='USL',
@@ -711,6 +736,19 @@ def main():
                                 event_uid=new_event['IDCASE'],
                                 service_uid=new_service['IDSERV']
                             )
+
+                            if new_event.get('USL_OK', '') == '1' \
+                                    and new_service[
+                                        'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS\
+                                    and not new_service['CODE_USL'].startswith('A'):
+                                hospital_volume_service.add(new_event['IDCASE'])
+
+                            if new_event.get('USL_OK', '') == '2' \
+                                    and new_service[
+                                        'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS\
+                                    and not new_service['CODE_USL'].startswith('A'):
+                                day_hospital_volume_service.add(
+                                    new_event['IDCASE'])
 
             """
             if not has_surgery and has_hospitalization:
@@ -725,7 +763,7 @@ def main():
             if services_errors:
                 registry_has_errors = True
                 errors_files.append("V%s" % registry)
-                hflk = xml_writer.Xml(TEMP_DIR+"V%s" % registry)
+                hflk = xml_writer.Xml(TEMP_DIR + "V%s" % registry)
                 hflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
                 hflk.start('FLK_P')
                 hflk.put('FNAME', "V%s" % registry[:-4])
@@ -737,8 +775,10 @@ def main():
                     hflk.put('IM_POL', rec['field'])
                     hflk.put('BASE_EL', rec['parent'])
                     hflk.put('N_ZAP', rec['record_uid'])
-                    hflk.put('IDCASE', rec.get('event_uid', '').encode('cp1251'))
-                    hflk.put('IDSERV', rec.get('service_uid', '').encode('cp1251'))
+                    hflk.put('IDCASE',
+                             rec.get('event_uid', '').encode('cp1251'))
+                    hflk.put('IDSERV',
+                             rec.get('service_uid', '').encode('cp1251'))
                     hflk.put('COMMENT', rec['comment'].encode('cp1251'))
                     hflk.end('PR')
 
@@ -749,7 +789,7 @@ def main():
             registry_has_errors = True
             errors_files.append("V%s" % person_filename)
             print '#', errors_files
-            lflk = xml_writer.Xml(TEMP_DIR+"V%s" % person_filename)
+            lflk = xml_writer.Xml(TEMP_DIR + "V%s" % person_filename)
             lflk.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
             lflk.start('FLK_P')
             lflk.put('FNAME', "V%s" % person_filename[:-4])
@@ -769,19 +809,51 @@ def main():
             lflk.end('FLK_P')
             lflk.close()
 
+        over_volume = volume and (len(hospital_volume_service) > volume.hospital
+                                  or len(day_hospital_volume_service) > volume.day_hospital)
+
+        if over_volume and organization not in HOSPITAL_VOLUME_MO_EXCLUSIONS \
+                and organization not in DAY_HOSPITAL_MO_EXCLUSIONS:
+            has_insert = False
+            message_file = open(TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
+            message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
+                       u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
+                       u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
+                       u'на 2015 год, страховая компания принимает реестры счетов и счета на оплату \n'
+                       u'медицинской помощи в пределах объемов, утвержденных решением комиссии по \n'
+                       u'разработке территориальной программы обязательного медицинского страхования Амурской области.\n'
+                       u'\n'
+                       u'В текущем реестре выполнено:\n'
+                       )
+            message += \
+                (u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
+                 len(hospital_volume_service), volume.hospital)) \
+                if len(hospital_volume_service) > volume.hospital \
+                else u''
+            message += \
+                (u'Дневной стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
+                 len(day_hospital_volume_service), volume.day_hospital)) \
+                if len(day_hospital_volume_service) > volume.day_hospital \
+                else u''
+            message += u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n'
+            print len(hospital_volume_service), volume.hospital, len(day_hospital_volume_service), volume.day_hospital
+            message_file.write(message.encode('cp1251'))
+            message_file.close()
+
         if has_insert:
             if registry_has_errors:
                 print u'Ошибки ФЛК'
 
-                zipname = TEMP_DIR+'VM%sS28002_%s.zip' % (
-                    organization_code, person_filename[person_filename.index('_')+1:-4]
+                zipname = TEMP_DIR + 'VM%sS28002_%s.zip' % (
+                    organization_code,
+                    person_filename[person_filename.index('_') + 1:-4]
                 )
 
                 print errors_files
                 with ZipFile(zipname, 'w') as zipfile:
                     for filename in errors_files:
-                        zipfile.write(TEMP_DIR+filename, filename, 8)
-                        os.remove(TEMP_DIR+filename)
+                        zipfile.write(TEMP_DIR + filename, filename, 8)
+                        os.remove(TEMP_DIR + filename)
 
                 shutil.copy2(zipname, FLC_DIR)
 

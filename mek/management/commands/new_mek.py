@@ -94,7 +94,7 @@ def get_services(register_element):
                     ) and profile_fk = medical_service.tariff_profile_fk
                         and is_children_profile = provided_service.is_children_profile
                         and (( provided_event.term_fk = 1 and "level" = department.level)
-                            or (provided_event.term_fk = 1)
+                            or (provided_event.term_fk = 2)
                         )
                     order by start_date DESC
                     limit 1
@@ -168,13 +168,21 @@ def get_services(register_element):
             on department.id_pk = provided_service.department_fk
         LEFT join tariff_basic
             on tariff_basic.service_fk = provided_service.code_fk
-                and tariff_basic.group_fk = medical_organization.tariff_group_fk
-                and tariff_basic.start_date = least(
+                and tariff_basic.group_fk = department.tariff_group_fk
+                and tariff_basic.start_date =
+                GREATEST(
                     (select max(start_date)
                      from tariff_basic
                      where start_date <= provided_service.end_date
+                     and group_fk = department.tariff_group_fk
                      and service_fk = provided_service.code_fk),
-                    '2015-01-01'::DATE
+                    (CASE WHEN (medical_service.tariff_profile_fk = 107
+                               and medical_organization.code = '280005')
+                               or medical_service.code = '001203'
+                               or medical_service.tariff_profile_fk in (
+                                                   268, 269,
+                                                   235, 236, 237)
+                        then '2015-03-01' ELSE '2015-01-01' END) :: DATE
                 )
     where medical_register.is_active
         and medical_register.year = %(year)s
@@ -526,7 +534,7 @@ def update_payment_kind(register_element):
             when 3 then
                 CASE
                     ((medical_service.group_fk = 24 and medical_service.reason_fk in (1, 2, 3, 8) and provided_event.term_fk=3)
-                      or ((select count(ps2.id_pk)
+                      or (((select count(ps2.id_pk)
                               from provided_service ps2
                               join medical_service ms2 on ms2.id_pk = ps2.code_fk
                               where ps2.event_fk = ps1.event_fk and
@@ -541,7 +549,7 @@ def update_payment_kind(register_element):
                                 115,
                                 123,
                                 124,
-                                134)
+                                134))
                     )
                     AND ps1.department_fk NOT IN (15, 88, 89)
                 when TRUE THEN
@@ -582,7 +590,7 @@ def update_payment_kind(register_element):
                 on medical_register_record.register_fk = mr1.id_pk
             JOIN patient p1
                 on medical_register_record.patient_fk = p1.id_pk
-            join insurance_policy i1
+            left join insurance_policy i1
                 on i1.version_id_pk = p1.insurance_policy_fk
             LEFT JOIN (
                 select ps.id_pk as pk, i.id as policy, ps.code_fk as code, ps.end_date,
@@ -636,15 +644,23 @@ SERVICE_COMMENT_PATTERN = re.compile(r'^(?P<endovideosurgery>[0-1]?)(?:[0-1]?)'
 def get_payments_sum(service):
     tariff = 0
     accepted_payment = 0
-
     comment_match = SERVICE_COMMENT_PATTERN.match(service.comment)
-    is_endovideosurgery = comment_match.group('endovideosurgery') == '1'
-    is_mobile_brigade = comment_match.group('mobile_brigade') == '1'
-    is_single_visit = comment_match.group('single_visit') == '1'
-    is_curation_coefficient = comment_match.group('curation_coefficient') == '1'
-    is_full_paid_pso = comment_match.group('full_paid_pso') == '1'
-    is_thrombolytic_therapy = comment_match.group('thrombolytic_therapy') == '1'
-    is_aood_x_ray = comment_match.group('aood_x_ray') == '1'
+    if comment_match:
+        is_endovideosurgery = comment_match.group('endovideosurgery') == '1'
+        is_mobile_brigade = comment_match.group('mobile_brigade') == '1'
+        is_single_visit = comment_match.group('single_visit') == '1'
+        is_curation_coefficient = comment_match.group('curation_coefficient') == '1'
+        is_full_paid_pso = comment_match.group('full_paid_pso') == '1'
+        is_thrombolytic_therapy = comment_match.group('thrombolytic_therapy') == '1'
+        is_aood_x_ray = comment_match.group('aood_x_ray') == '1'
+    else:
+        is_endovideosurgery = False
+        is_mobile_brigade = False
+        is_single_visit = False
+        is_curation_coefficient = False
+        is_full_paid_pso = False
+        is_thrombolytic_therapy = False
+        is_aood_x_ray = False
 
     provided_tariff = float(service.tariff)
 
@@ -655,19 +671,6 @@ def get_payments_sum(service):
 
     term = service.service_term
     nkd = service.nkd or 1
-
-    if service.service_code in ('098958', '098959'):
-        nkd = 12
-    elif service.service_code in ('098960', '098961'):
-        nkd = 12
-    elif service.service_code in ('098962', '098963'):
-        nkd = 7
-    elif service.service_code in ('098964', '098965'):
-        nkd = 30
-    elif service.service_code in ('098966', '098967'):
-        nkd = 30
-    elif service.service_code in ('098968', '098969'):
-        nkd = 30
 
     ### Неонатология 11 - я группа
     if service.service_group == 20 and service.vmp_group == 11:
@@ -814,13 +817,13 @@ def get_payments_sum(service):
         single_visit_exception_group = (7, 8, 25, 26, 9, 10, 11, 12,
                                         13, 14, 15, 16)
 
-        if service.service_group in (29, ):
+        if service.service_group in (29, 31):
             accepted_payment = tariff
         else:
             accepted_payment = tariff * float(quantity)
             tariff *= float(quantity)
 
-        if is_mobile_brigade and service.service_group in (7, 25, 26,  11, 15, 16,  12, 13,  4):
+        if is_mobile_brigade and service.service_group in (7,  11, 15, 16,  12, 13,  4, 9):
             accepted_payment += round(accepted_payment * 0.07, 2)
             provided_tariff += round(provided_tariff * 0.07, 2)
             ProvidedServiceCoefficient.objects.get_or_create(
@@ -832,6 +835,14 @@ def get_payments_sum(service):
             ProvidedServiceCoefficient.objects.get_or_create(
                 service=service, coefficient_id=4)
 
+        if service.organization_code == '280005' \
+                and service.service_code in ('001203', '001204'):
+                #and is_aood_x_ray\
+            accepted_payment += round(accepted_payment * 1.9, 2)
+            provided_tariff += round(provided_tariff * 1.9, 2)
+            ProvidedServiceCoefficient.objects.get_or_create(
+                service=service, coefficient_id=19)
+
     elif service.event.term_id == 4:
         quantity = service.quantity or 1
         accepted_payment = tariff * float(quantity)
@@ -841,6 +852,7 @@ def get_payments_sum(service):
 
     return {'tariff': round(tariff, 2),
             'calculated_payment': round(accepted_payment, 2),
+            'accepted_payment': round(accepted_payment, 2),
             'provided_tariff': round(provided_tariff, 2)}
 
 
@@ -873,7 +885,7 @@ def main():
                 service__event__record__register__year=register_element['year'],
                 service__event__record__register__period=register_element['period'],
                 service__event__record__register__organization_code=register_element['organization_code']
-            ).update(is_active=False)
+            ).delete()
 
             ProvidedService.objects.filter(
                 event__record__register__is_active=True,

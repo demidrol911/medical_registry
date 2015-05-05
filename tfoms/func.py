@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from django.db.models import Q
 from django.db import connection
-from tfoms.models import (
+from main.models import (
     MedicalError, ProvidedService, MedicalRegister,
     ProvidedEvent,
     TariffFap, PaymentFailureCause,
@@ -25,7 +25,7 @@ cur_date = datetime.now()
 
 YEAR = str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
-PERIOD = '02'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+PERIOD = '03'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -395,6 +395,7 @@ def get_treatment_events(mo_code):
                       join medical_service ms1 on ms1.id_pk = ps1.code_fk
                       WHERE ps1.event_fk  = ps.event_fk
                             and (ms1.group_fk is NULL or ms1.group_fk = 24)
+                            and ms1.reason_fk = 1
                       )>1
                     )
                   )
@@ -447,6 +448,7 @@ def calculate_capitation_tariff(term, mo_code):
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
                 get_attachment_count(DATE_ATTACHMENT)
         elif term == 4:
+            #pass
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
                 get_ambulance_attachment_count(DATE_ATTACHMENT)
     else:
@@ -454,6 +456,7 @@ def calculate_capitation_tariff(term, mo_code):
 
     # Чмсленность
 
+    #if term == 3:
     result[0][1] = population[1]['men']
     result[1][1] = population[1]['fem']
 
@@ -468,8 +471,6 @@ def calculate_capitation_tariff(term, mo_code):
 
     result[8][0] = population[5]['men']
     result[9][0] = population[5]['fem']
-
-    # Тариф основной
 
     result[0][5] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
     result[1][5] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
@@ -493,9 +494,9 @@ def calculate_capitation_tariff(term, mo_code):
         if mo_code == '280029':
             result[idx][8] *= 2
             result[idx][9] *= 2
-        if mo_code == '280064' and term == 3 and idx in (4, 5):
-            result[idx][8] *= Decimal(1.5)
-            result[idx][9] *= Decimal(1.5)
+        if mo_code == '280064' and term == 3:
+            result[idx][8] *= Decimal(1.95)
+            result[idx][9] *= Decimal(1.95)
 
     if term == 3:
         fap = TariffFap.objects.filter(organization__code=mo_code,
@@ -515,10 +516,35 @@ def calculate_capitation_tariff(term, mo_code):
 
 
 ### Устанавливает статус реестру
-def change_register_status(mo_code, register_status):
+def change_register_status(mo_code, status):
     MedicalRegister.objects.filter(
         year=YEAR,
         period=PERIOD,
         organization_code=mo_code,
         is_active=True
-    ).update(status=register_status)
+    ).update(status=status)
+    if status == 4:
+        MedicalRegister.objects.filter(
+            year=YEAR,
+            period=PERIOD,
+            organization_code=mo_code,
+            is_active=True).update(pse_export_date=datetime.now())
+
+
+def get_mo_code(status):
+    organizations = MedicalRegister.objects.filter(
+        year=YEAR,
+        period=PERIOD,
+        is_active=True,
+        type=1,
+        status__pk=status
+    )
+    if organizations:
+        organization_code = organizations[0].organization_code
+    else:
+        organization_code = ''
+    return organization_code
+
+
+def get_mo_name(mo_code):
+    return MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).name
