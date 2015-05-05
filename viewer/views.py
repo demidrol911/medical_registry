@@ -207,7 +207,7 @@ def get_services_json(request):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and (dep.old_code = %(department)s or %(department)s is null)
-        order by p.first_name, p.last_name, p.middle_name, ps.end_date, ms.code
+        order by pe.id, p.first_name, p.last_name, p.middle_name, ps.end_date, ms.code
     """
 
     if not (year and period and organization_code):
@@ -294,15 +294,16 @@ def update_organization_registry_status(request):
         json_data = json.loads(body)
 
         try:
-            status = MedicalRegisterStatus.objects.get(name=json_data['status'])
+            status = MedicalRegisterStatus.objects.get(name=json_data['organization_status'])
         except:
+            print 'non status'
             return HttpResponse(json.dumps({'error': u'Нет такого статуса'}),
                                 mimetype='application/json')
-
-        MedicalRegister.objects.filter(is_active=True, year=json_data['year'],
-                                       period=json_data['period'],
-                                       organization_code=json_data['code'])\
-                               .update(status=status)
+        registries = MedicalRegister.objects.filter(
+            is_active=True, year=json_data['year'], period=json_data['period'],
+            organization_code=json_data['organization_code'])
+        print registries
+        registries.update(status=status)
 
     return HttpResponse(json.dumps({'success': '1'}),
                         mimetype='application/json')
