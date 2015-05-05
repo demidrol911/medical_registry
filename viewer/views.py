@@ -2,7 +2,6 @@
 
 from django.shortcuts import render
 from django.db import connection
-from django.core import serializers
 from main.models import MedicalRegister, ProvidedService, MedicalOrganization
 from main.models import MedicalRegisterStatus
 from forms import PeriodFastSearchForm, RegisterSearchForm, RegisterStatusForm
@@ -11,6 +10,13 @@ from django.http import HttpResponse
 from django.core import serializers
 
 import json
+from django.core.serializers.json import Serializer
+
+
+class CleanSerializer(Serializer):
+
+    def get_dump_object(self, obj):
+        return self._current
 
 
 def index(request):
@@ -147,14 +153,24 @@ def get_services_json(request):
 
     query = """
         select ps.id_pk, p.first_name, p.last_name, p.middle_name,
-            p.birthdate, gender.name gender_name,
+            p.birthdate, gender.name gender,
             trim(BOTH ' ' from format('%%s %%s', coalesce(p.insurance_policy_series, ''), coalesce(p.insurance_policy_number, ''))) policy,
-            ps.end_date, md.code as division_code, md.name as division_name,
-            ms.code service_code, ms.name service_name, pe.anamnesis_number,
-            idc.idc_code disease_code, idc.name disease_name,
-            ps.quantity, ps.accepted_payment, ps.worker_code,
-            pe.id as event_id, pe.comment as event_comment,
-            ps.comment as service_comment, ps.tariff,
+            ps.start_date as "start",
+            ps.end_date as "end",
+            md.code as dvsn_code,
+            md.name as dvsn_name,
+            ms.code srv_code,
+            ms.name srv_name,
+            pe.anamnesis_number as anamnesis,
+            idc.idc_code ds_code,
+            idc.name ds_name,
+            ps.quantity,
+            ps.accepted_payment as accepted,
+            ps.worker_code as wrk_code,
+            pe.id as evt_id,
+            pe.comment as evt_comment,
+            ps.comment as srv_comment,
+            ps.tariff,
             ARRAY(
                 select me.old_code
                 from provided_service_sanction pss
@@ -199,26 +215,27 @@ def get_services_json(request):
                             mimetype='application/json')
 
     services = list(ProvidedService.objects.raw(
-        query, {'year': year, 'period': period,
-                'organization': organization_code,
-                'department': department_code}))
+            query, {'year': year, 'period': period,
+            'organization': organization_code,
+            'department': department_code}))
 
-    total_services = len(services)
+    print 'Ok! Sending...'
+
     services_list = []
 
-    for rec in services:
+    for i, rec in enumerate(services):
         try:
             birthdate = rec.birthdate.strftime('%Y-%m-%d')
         except:
             birthdate = None
 
         try:
-            end_date = rec.end_date.strftime('%Y-%m-%d')
+            end_date = rec.end.strftime('%Y-%m-%d')
         except:
             end_date = None
 
         try:
-            start_date = rec.start_date.strftime('%Y-%m-%d')
+            start_date = rec.start.strftime('%Y-%m-%d')
         except:
             start_date = None
 
@@ -232,31 +249,31 @@ def get_services_json(request):
         service = {'id': rec.pk, 'first_name': rec.first_name,
                    'last_name': rec.last_name, 'middle_name': rec.middle_name,
                    'birthdate': birthdate,
-                   'gender': rec.gender_name,
+                   'gender': rec.gender,
                    'policy': rec.policy,
-                   'start_date': start_date,
-                   'end_date': end_date,
-                   'division_code': rec.division_code,
-                   'division_name': rec.division_name,
-                   'service_code': rec.service_code,
-                   'service_name': rec.service_name,
-                   'disease_name': rec.disease_name,
-                   'disease_code': rec.disease_code,
+                   'start': start_date,
+                   'end': end_date,
+                   'div_code': rec.dvsn_code,
+                   #'div_n': rec.dvsn_name,
+                   'srv_code': rec.srv_code,
+                   #'srv_n': rec.srv_name,
+                   #'ds_n': rec.ds_name,
+                   'ds_code': rec.ds_code,
                    'tariff': tariff,
-                   'accepted_payment': accepted_payment,
+                   'accepted': accepted_payment,
                    'quantity': float(rec.quantity or 0),
-                   'anamnesis_number': rec.anamnesis_number,
-                   'worker_code': rec.worker_code,
-                   'event_id': rec.event_id,
+                   'anamnesis': rec.anamnesis,
+                   'wrk_code': rec.wrk_code,
+                   'event_id': rec.evt_id,
                    'errors': ','.join(rec.errors),
-                   'service_comment': rec.service_comment,
-                   'event_comment': rec.event_comment
+                   'srv_comment': rec.srv_comment,
+                   'evt_comment': rec.evt_comment
         }
 
         services_list.append(service)
+    print 'Ok! Seriealized'
 
-    return HttpResponse(json.dumps({'totalCount': total_services,
-                                    'services': services_list}),
+    return HttpResponse(json.dumps(services_list),
                         mimetype='application/json')
 
 
