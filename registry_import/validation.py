@@ -554,14 +554,14 @@ def get_event_validation(item, registry_type=1):
 
     return event
 
-def get_complicated_disease_validation(item, registry_type=1):
+def get_complicated_disease_validation(item, organization, registry_type=1):
     disease = MyCollection()
 
     if registry_type in (1, 2):
         disease.append([
             Field('DS3', item or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-                DiseaseHasPrecision(organization=item['LPU'],
+                DiseaseHasPrecision(organization=organization,
                                     error=ERROR_MESSAGES['is precision'],
                                     pass_on_blank=True)
             ])
@@ -571,13 +571,13 @@ def get_complicated_disease_validation(item, registry_type=1):
     return disease
 
 
-def get_concomitant_disease_validation(item, registry_type=1):
+def get_concomitant_disease_validation(item, organization, registry_type=1):
     disease = MyCollection()
 
     disease.append([
         Field('DS2', item or '').append([
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-            DiseaseHasPrecision(organization=item['LPU'],
+            DiseaseHasPrecision(organization=organization,
                                 error=ERROR_MESSAGES['is precision'],
                                 pass_on_blank=True)
         ])

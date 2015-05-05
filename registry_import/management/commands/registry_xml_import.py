@@ -647,7 +647,7 @@ def main():
 
                         for concomitant in concomitants:
                             raw_concomitant = get_concomitant_disease_validation(
-                                concomitant)
+                                concomitant, organization_code)
                             new_concomitant = raw_concomitant.get_dict()
                             new_concomitant['event_id'] = new_event['pk']
                             new_concomitant_list.append(new_concomitant)
@@ -665,7 +665,7 @@ def main():
 
                         for complicated in complicateds or []:
                             raw_complicated = get_complicated_disease_validation(
-                                complicated)
+                                complicated, organization_code)
                             new_complicated = raw_complicated.get_dict()
                             new_complicated['event_id'] = new_event['pk']
                             new_complicated_list.append(new_complicated)
