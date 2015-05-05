@@ -69,7 +69,7 @@ HITECH_KINDS = queryset_to_dict(MedicalServiceHiTechKind.objects.all())
 HITECH_METHODS = queryset_to_dict(MedicalServiceHiTechMethod.objects.all())
 EXAMINATION_RESULTS = queryset_to_dict(ExaminationResult.objects.all())
 
-ADULT_EXAMINATION_COMMENT_PATTERN = ur'^F(?P<student>[01])(?P<second_level>[01])(?P<veteran>[01])(?P<health_group>[123][аб]?)$'
+ADULT_EXAMINATION_COMMENT_PATTERN = ur'^F(?P<student>[01])(?P<second_level>[01])(?P<veteran>[01])(?P<health_group>[123][абАБ]?)$'
 ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
 KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
@@ -172,11 +172,11 @@ class IsResultedExaminationComment(rule.Rule):
         result = EXAMINATION_HEALTH_GROUP_EQUALITY[self.examination_result]
 
         if self.examination_result in ['1', '2', '3', '4', '5', '31', '32']:
-            if matching['health_group'] != result and matching['second_level'] != '0':
+            if matching.group('health_group') != result and matching.group('second_level') != '0':
                 return False
 
         elif self.examination_result in ['11', '12', '13', '14', '15']:
-            if matching['health_group'] != result and matching['second_level'] != '1':
+            if matching.group('health_group') != result and matching.group('second_level') != '1':
                 return False
 
         return True
@@ -236,7 +236,7 @@ class IsExpiredService(rule.Rule):
         if field_value in OLD_ADULT_EXAMINATION and event_date >= control_date:
             return False
 
-        if field_value in NEW_ADULT_EXAMINATION_ADULT \
+        if field_value in NEW_ADULT_EXAMINATION \
                 and event_date < control_date:
             return False
 
@@ -512,7 +512,7 @@ def get_event_validation(item, registry_type=1):
         event.append([
             Field('COMENTSL', item['COMENTSL'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
-                Regex(r'^F(0|1)(0|1)[0-3]{1}(0|1)$',
+                Regex(ADULT_EXAMINATION_COMMENT_PATTERN,
                       error=ERROR_MESSAGES['wrong format']),
                 IsResultedExaminationComment(
                     item['RSLT_D'],

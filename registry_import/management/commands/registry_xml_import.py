@@ -732,11 +732,11 @@ def main():
                                 service_uid=new_service['IDSERV']
                             )
 
-                            if new_event['USL_OK'] == '1' \
+                            if new_event.get('USL_OK', None) == '1' \
                                     and new_service['CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS:
                                 hospital_volume_service.add(new_event['IDCASE'])
 
-                            if new_event['USL_OK'] == '2' \
+                            if new_event.get('USL_OK', None) == '2' \
                                     and new_service[
                                         'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS:
                                 print new_service['CODE_USL'], new_event['IDCASE']
