@@ -47,6 +47,12 @@ def get_services(register_element):
 
     query = """
     select DISTINCT provided_service.id_pk,
+        provided_service.tariff,
+        provided_service.quantity,
+        provided_service.payment_type_fk as payment_type_code,
+        provided_service.start_date,
+        provided_service.end_date,
+
         medical_service.code as service_code,
         (
             select min(ps2.start_date)
@@ -117,6 +123,7 @@ def get_services(register_element):
         insurance_policy.type_fk as policy_type,
         medical_register.organization_code,
         provided_event.comment as event_comment,
+        provided_service.comment as service_comment,
         medical_register_record.is_corrected as record_is_corrected,
         CASE medical_service.group_fk
         when 19 THEN
@@ -644,7 +651,7 @@ SERVICE_COMMENT_PATTERN = re.compile(r'^(?P<endovideosurgery>[0-1]?)(?:[0-1]?)'
 def get_payments_sum(service):
     tariff = 0
     accepted_payment = 0
-    comment_match = SERVICE_COMMENT_PATTERN.match(service.comment)
+    comment_match = SERVICE_COMMENT_PATTERN.match(service.service_comment)
     if comment_match:
         is_endovideosurgery = comment_match.group('endovideosurgery') == '1'
         is_mobile_brigade = comment_match.group('mobile_brigade') == '1'
@@ -936,7 +943,7 @@ def main():
                 if row % 1000 == 0:
                     print row
                 #print '$$$', dir(service), service.payment_type
-                if not service.payment_type_id:
+                if not service.payment_type_code:
 
                     if not service.patient_policy:
                         set_sanction(service, 54)
@@ -966,7 +973,7 @@ def main():
                     service.accepted_payment = payments['accepted_payment']
                     service.invoiced_payment = payments['accepted_payment']
 
-                    if not service.payment_type:
+                    if not service.payment_type_code:
                         service.payment_type_id = 2
 
                 service.save()

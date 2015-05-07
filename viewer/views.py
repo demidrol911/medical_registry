@@ -4,19 +4,18 @@ from django.shortcuts import render
 from django.db import connection
 from main.models import MedicalRegister, ProvidedService, MedicalOrganization
 from main.models import MedicalRegisterStatus
-from forms import PeriodFastSearchForm, RegisterSearchForm, RegisterStatusForm
-from django.db.models import Q
 from django.http import HttpResponse
 from django.core import serializers
 
 import json
-from django.core.serializers.json import Serializer
+import time
 
+from registry_import.validation import PROFILES, DIVISIONS, DISEASES, CODES
+from registry_import.validation import queryset_to_dict
 
-class CleanSerializer(Serializer):
+from main.models import MedicalError
 
-    def get_dump_object(self, obj):
-        return self._current
+ERRORS = {rec.old_code: rec for rec in MedicalError.objects.all()}
 
 
 def index(request):
@@ -179,7 +178,10 @@ def get_services_json(request):
                 WHERE
                     pss.service_fk = ps.id_pk
                 ORDER BY me.weight DESC
-            ) as errors
+            ) as errors,
+            pe.payment_units_number as uet,
+            ps.profile_fk as profile_code,
+            msp.name as profile_name
         from provided_service ps
             JOIN provided_event pe
                 on ps.event_fk = pe.id_pk
@@ -197,6 +199,8 @@ def get_services_json(request):
                 on gender.id_pk = p.gender_fk
             LEFT JOIN medical_division md
                 on md.id_pk = ps.division_fk
+            LEFT JOIN medical_service_profile msp
+                on msp.id_pk = ps.profile_fk
             JOIN medical_service ms
                 on ms.id_pk = ps.code_fk
             LEFT JOIN idc
@@ -214,15 +218,15 @@ def get_services_json(request):
         return HttpResponse(json.dumps({'error': 404}),
                             mimetype='application/json')
 
-    services = list(ProvidedService.objects.raw(
+    services = ProvidedService.objects.raw(
             query, {'year': year, 'period': period,
             'organization': organization_code,
-            'department': department_code}))
+            'department': department_code})
 
     print 'Ok! Sending...'
 
     services_list = []
-
+    """
     for i, rec in enumerate(services):
         try:
             birthdate = rec.birthdate.strftime('%Y-%m-%d')
@@ -244,7 +248,7 @@ def get_services_json(request):
         else:
             accepted_payment = 0
 
-        tariff = float(rec.accepted_payment or 0)
+        tariff = float(rec.tariff or 0)
 
         service = {'id': rec.pk, 'first_name': rec.first_name,
                    'last_name': rec.last_name, 'middle_name': rec.middle_name,
@@ -265,15 +269,52 @@ def get_services_json(request):
                    'anamnesis': rec.anamnesis,
                    'wrk_code': rec.wrk_code,
                    'event_id': rec.evt_id,
-                   'errors': ','.join(rec.errors),
+                   'errors': ','.join(rec.errors) or 'нет',
+                   'uet': float(rec.uet or 0),
                    'srv_comment': rec.srv_comment,
-                   'evt_comment': rec.evt_comment
+                   'evt_comment': rec.evt_comment,
+                   'profile': rec.profile_code,
+                   #'prof_n': rec.profile_name
         }
 
         services_list.append(service)
-    print 'Ok! Seriealized'
+    print 'Ok! Serialized, fire to client'
+    """
+    start = time.clock()
+    services_list = [{'id': rec.pk, 'first_name': rec.first_name,
+                   'last_name': rec.last_name, 'middle_name': rec.middle_name,
+                   'birthdate': rec.birthdate.strftime('%Y-%m-%d'),
+                   'gender': rec.gender,
+                   'policy': rec.policy,
+                   'start': rec.birthdate.strftime('%Y-%m-%d'),
+                   'end': rec.birthdate.strftime('%Y-%m-%d'),
+                   'div_code': rec.dvsn_code,
+                   'div_n': rec.dvsn_name,
+                   'srv_code': rec.srv_code,
+                   'srv_n': rec.srv_name,
+                   'ds_n': rec.ds_name,
+                   'ds_code': rec.ds_code,
+                   'tariff': float(rec.tariff or 0),
+                   'accepted': float(rec.accepted or 0),
+                   'quantity': float(rec.quantity or 0),
+                   'anamnesis': rec.anamnesis,
+                   'wrk_code': rec.wrk_code,
+                   'event_id': rec.evt_id,
+                   'errors': ','.join(rec.errors) or 'нет',
+                   'uet': float(rec.uet or 0),
+                   'srv_comment': rec.srv_comment,
+                   'evt_comment': rec.evt_comment,
+                   'profile': rec.profile_code,
+                   'prof_n': rec.profile_name
+        } for rec in list(services)]
+    elapsed = time.clock() - start
+    print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
 
-    return HttpResponse(json.dumps(services_list),
+    start = time.clock()
+
+    dump = json.dumps(services_list)
+
+    return HttpResponse(dump,
                         mimetype='application/json')
 
 
@@ -307,3 +348,38 @@ def update_organization_registry_status(request):
 
     return HttpResponse(json.dumps({'success': '1'}),
                         mimetype='application/json')
+
+
+def get_additional_info_json(request):
+    info = {}
+
+    profile = request.GET.get('profile', None)
+    division = request.GET.get('division', None)
+    service = request.GET.get('service', None)
+    disease = request.GET.get('disease', None)
+    errors = request.GET.get('errors', None)
+
+    profile_obj = PROFILES.get(profile)
+    info['profile'] = profile_obj.name if profile_obj else None
+
+    division_obj = DIVISIONS.get(division)
+    info['division'] = division_obj.name if division_obj else None
+
+    service_obj = CODES.get(service)
+    info['service'] = service_obj.name if service_obj else None
+
+    disease_obj = DISEASES.get(disease)
+    info['disease'] = disease_obj.name if disease_obj else None
+
+    errors_names = []
+
+    if errors and errors != u'нет':
+
+        for error in errors.split(','):
+            error_obj = ERRORS.get(error, None)
+
+            errors_names.append(error_obj.name if error_obj else '')
+
+    info['errors'] = '; '.join(errors_names)
+
+    return HttpResponse(json.dumps({'info': info}), mimetype='application/json')

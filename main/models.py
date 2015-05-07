@@ -1500,3 +1500,5 @@ class MedicalServiceVolume(models.Model):
 
     class Meta:
         db_table = 'medical_service_volume'
+
+

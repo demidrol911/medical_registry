@@ -11,5 +11,6 @@ urlpatterns = patterns('',
     url(r'^json/department-registries/$',
         views.get_department_registers_json),
     url(r'^json/services/$', views.get_services_json),
-    url(r'^json/statuses/$', views.get_registry_status_json)
+    url(r'^json/statuses/$', views.get_registry_status_json),
+    url(r'^json/additional-info/$', views.get_additional_info_json),
 )
