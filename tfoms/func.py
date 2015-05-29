@@ -23,7 +23,7 @@ from main.models import (
 ### Отчётный год и период
 cur_date = datetime.now()
 
-YEAR = str(cur_date.year)
+YEAR = '2015' #str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
 PERIOD = '04'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
@@ -472,6 +472,59 @@ def calculate_capitation_tariff(term, mo_code):
     result[8][0] = population[5]['men']
     result[9][0] = population[5]['fem']
 
+    if PERIOD == '04' and mo_code == '280088' and term == 4:
+        # 612		597	5608	5441		16481	15586		62705	70787	13738	33976
+        result[0][1] = 612
+        result[1][1] = 597
+
+        result[2][1] = 5608
+        result[3][1] = 5441
+
+        result[4][1] = 16481
+        result[5][1] = 15586
+
+        result[6][0] = 62705
+        result[7][0] = 70787
+
+        result[8][0] = 13738
+        result[9][0] = 33976
+
+    if PERIOD == '04' and mo_code == '280017' and term == 4:
+        #276		226	2187	2108		6272	6114		20168	19960	5757	13167
+
+        result[0][1] = 276
+        result[1][1] = 226
+
+        result[2][1] = 2187
+        result[3][1] = 2108
+
+        result[4][1] = 6272
+        result[5][1] = 6114
+
+        result[6][0] = 20168
+        result[7][0] = 19960
+
+        result[8][0] = 5757
+        result[9][0] = 13167
+
+    if PERIOD == '04' and mo_code == '280001' and term == 4:
+        #307		297	1931	1819		5607	5311		14133	15279	4679	11306
+
+        result[0][1] = 307
+        result[1][1] = 297
+
+        result[2][1] = 1931
+        result[3][1] = 1819
+
+        result[4][1] = 5607
+        result[5][1] = 5311
+
+        result[6][0] = 14133
+        result[7][0] = 15279
+
+        result[8][0] = 4679
+        result[9][0] = 11306
+
     result[0][5] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
     result[1][5] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
 
@@ -495,8 +548,8 @@ def calculate_capitation_tariff(term, mo_code):
             result[idx][8] *= 2
             result[idx][9] *= 2
         if mo_code == '280064' and term == 3:
-            result[idx][8] *= Decimal(1.95)
-            result[idx][9] *= Decimal(1.95)
+            result[idx][8] = Decimal(round(float(result[idx][8])*1.95, 2))
+            result[idx][9] = Decimal(round(float(result[idx][9])*1.95, 2))
 
     if term == 3:
         fap = TariffFap.objects.filter(organization__code=mo_code,
@@ -508,9 +561,107 @@ def calculate_capitation_tariff(term, mo_code):
                 result[idx][16] = Decimal(round(float(result[idx][8])*float(coeff-1), 2))
                 result[idx][17] = Decimal(round(float(result[idx][9])*float(coeff-1), 2))
 
+            '''
+            if mo_code == '280024':
+                result[9][16] = Decimal(192037.24)
+            '''
+
+            if mo_code == '280067':
+                result[1][17] = Decimal(4019.58)
+                result[8][16] = Decimal(77460.08)
+
     for idx in xrange(0, 10):
         result[idx][26] = Decimal(round(result[idx][8] + result[idx][16], 2))
         result[idx][27] = Decimal(round(result[idx][9] + result[idx][17], 2))
+
+    return True, result
+
+
+def calculate_capitation(term, mo_code):
+    tariff = TariffCapitation.objects.filter(
+        term=term, organization__code=mo_code,
+        start_date__lte=DATE_ATTACHMENT,
+        is_children_profile=True
+    )
+    result = {
+        'men1': {},
+        'fem1': {},
+        'men2': {},
+        'fem2': {},
+        'men3': {},
+        'fem3': {},
+        'men4': {},
+        'fem4': {},
+        'men5': {},
+        'fem5': {}
+    }
+
+    if tariff and mo_code not in ('280070', ):
+        if term == 3:
+            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
+                get_attachment_count(DATE_ATTACHMENT)
+        elif term == 4:
+            population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
+                get_ambulance_attachment_count(DATE_ATTACHMENT)
+    else:
+        return False, result
+
+    # Чмсленность
+
+    #if term == 3:
+    result['men1']['population'] = population[1]['men']
+    result['fem1']['population'] = population[1]['fem']
+
+    result['men2']['population'] = population[2]['men']
+    result['fem2']['population'] = population[2]['fem']
+
+    result['men3']['population'] = population[3]['men']
+    result['fem3']['population'] = population[3]['fem']
+
+    result['men4']['population'] = population[4]['men']
+    result['fem4']['population'] = population[4]['fem']
+
+    result['men5']['population'] = population[5]['men']
+    result['fem5']['population'] = population[5]['fem']
+
+    result['men1']['basic_tariff'] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
+    result['fem1']['basic_tariff'] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
+
+    result['men2']['basic_tariff'] = tariff.filter(age_group=2, gender=1).order_by('-start_date')[0].value
+    result['fem2']['basic_tariff'] = tariff.filter(age_group=2, gender=2).order_by('-start_date')[0].value
+
+    result['men3']['basic_tariff'] = tariff.filter(age_group=3, gender=1).order_by('-start_date')[0].value
+    result['fem3']['basic_tariff'] = tariff.filter(age_group=3, gender=2).order_by('-start_date')[0].value
+
+    result['men4']['basic_tariff'] = tariff.filter(age_group=4, gender=1).order_by('-start_date')[0].value
+    result['fem4']['basic_tariff'] = tariff.filter(age_group=4, gender=2).order_by('-start_date')[0].value
+
+    result['men5']['basic_tariff'] = tariff.filter(age_group=5, gender=1).order_by('-start_date')[0].value
+    result['fem5']['basic_tariff'] = tariff.filter(age_group=5, gender=2).order_by('-start_date')[0].value
+
+    for key in result:
+        result[key]['tariff'] = Decimal(round(result[key]['population']*result[key]['basic_tariff'], 2))
+        # Повышающий коэффициент для Магдагачей
+        if mo_code == '280029':
+            result[key]['tariff'] *= 2
+        # Повышающий коэффициент для ДГКБ
+        if mo_code == '280064' and term == 3:
+            result[key]['tariff'] = Decimal(round(float(result[key]['tariff'])*1.95, 2))
+
+    for key in result:
+        result[key]['coeff'] = 0
+
+    if term == 3:
+        fap = TariffFap.objects.filter(organization__code=mo_code,
+                                       start_date__lte=DATE_ATTACHMENT,
+                                       is_children_profile=True)
+        if fap:
+            coeff = fap.order_by('-start_date')[0].value
+            for key in result:
+                result[key]['coeff'] = Decimal(round(float(result[key]['tariff'])*float(coeff-1), 2))
+
+    for key in result:
+        result[key]['accepted'] = Decimal(round(result[key]['tariff'] + result[key].get('coeff', 0), 2))
 
     return True, result
 

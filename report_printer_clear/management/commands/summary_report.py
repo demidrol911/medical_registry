@@ -9,7 +9,7 @@ from summary_report_pages.services_by_division import (
 from summary_report_pages.services_by_sanctions import SanctionsPage
 from summary_report_pages.sogaz_mek_detailed import SogazMekDetailedPage
 from summary_report_pages.sogaz_mek_general import SogazMekGeneralPage
-from report_printer_clear.utils.report import Report, ReportParameters
+from report_printer_clear.utils.report import Report
 from report_printer_clear.utils.wizard import AutomaticReportsWizard
 
 ACCEPTED_SERVICES_PAGE = 1
@@ -21,10 +21,7 @@ REPORT_TYPE = ACCEPTED_SERVICES_PAGE
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        parameters = ReportParameters()
-        parameters.template = 'reestr_201501.xls'
-
-        report = Report()
+        report = Report('reestr_201501.xls')
         if REPORT_TYPE == ACCEPTED_SERVICES_PAGE:
             report.add_page(AcceptedServicesPage())
         elif REPORT_TYPE == INVOICED_SERVICES_PAGE:
@@ -38,5 +35,5 @@ class Command(BaseCommand):
         report.add_page(SogazMekDetailedPage())
         report.add_page(SogazMekGeneralPage())
 
-        report_wizard = AutomaticReportsWizard(report, parameters)
+        report_wizard = AutomaticReportsWizard(report)
         report_wizard.create_reports(600)

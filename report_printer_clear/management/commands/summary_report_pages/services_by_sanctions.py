@@ -1,5 +1,6 @@
 #! -*- coding: utf-8 -*-
 from copy import deepcopy
+from main.funcs import howlong
 
 from main.models import MedicalOrganization
 from report_printer_clear.utils.excel_style import VALUE_STYLE
@@ -38,6 +39,7 @@ class SanctionsPage(ReportPage):
         self.data = ''
         self.page_number = 1
 
+    @howlong
     def calculate(self, parameters):
         query = '''
                 SELECT

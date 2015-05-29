@@ -1,4 +1,5 @@
 #! -*- coding: utf-8 -*-
+from decimal import Decimal
 
 from name_generator import NameGenerator
 import xlsxwriter
@@ -88,18 +89,46 @@ class ExcelSheet():
     def __init__(self, book, index):
         self.book = book
         self.sheet = book.worksheets()[index]
+        self.style_map = {}
         self.style = None
         self.position = {'row': 0, 'column': 0}
 
     def set_style(self, style_map):
-        self.style = self.book.add_format(style_map)
+        self.style_map = style_map
+        self.style = self.book.add_format(self.style_map)
+
+    def add_style(self, property_name, value):
+        self.style_map[property_name] = value
+        self.style = self.book.add_format(self.style_map)
 
     def set_position(self, row_index, column_index):
         self.position['row'] = row_index
         self.position['column'] = column_index
 
-    def write(self, value, shift_code=''):
-        self.sheet.write(self.position['row'], self.position['column'], value, self.style)
+    def get_row_index(self):
+        return self.position['row']
+
+    def get_column_index(self):
+        return self.position['column']
+
+    def write(self, value, shift_code='', merge_len=0):
+        if isinstance(value, Decimal) or isinstance(value, float):
+            self.add_style('num_format', '0.'+'0'*2)
+            value_cell = round(value, 2)
+        else:
+            self.add_style('num_format', '0')
+            value_cell = value
+
+        if merge_len:
+            self.sheet.merge_range(
+                self.position['row'], self.position['column'],
+                self.position['row'], self.position['column'] + merge_len,
+                value_cell,
+                self.style
+            )
+            self.position['column'] += merge_len
+        else:
+            self.sheet.write(self.position['row'], self.position['column'], value_cell, self.style)
         if shift_code == 'rc':
             self.position['row'] += 1
             self.position['column'] += 1

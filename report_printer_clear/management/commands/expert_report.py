@@ -8,14 +8,11 @@ from report_printer_clear.utils.wizard import AutomaticReportsWizard
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        parameters = ReportParameters()
-        parameters.template = 'summary_1.xls'
-
-        report = Report()
+        report = Report('summary_1.xls')
         report.add_page(RegistryCheckSumsPage())
         report.add_page(SanctionCheckSumsPage())
 
-        report_wizard = AutomaticReportsWizard(report, parameters)
+        report_wizard = AutomaticReportsWizard(report)
         report_wizard.create_reports(600)
 
 

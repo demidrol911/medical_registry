@@ -7,7 +7,8 @@ from report_printer.const import MONTH_NAME
 
 class Report():
 
-    def __init__(self):
+    def __init__(self, template=''):
+        self.template = template
         self.pages = []
 
     def add_page(self, page):
@@ -15,7 +16,7 @@ class Report():
 
     def print_pages(self, parameters):
         book = ExcelBook(parameters.path_to_dir, parameters.report_name)
-        book.create_book(parameters.template)
+        book.create_book(self.template)
         for page in self.pages:
             sheet = book.get_sheet(page.page_number)
             page.calculate(parameters)

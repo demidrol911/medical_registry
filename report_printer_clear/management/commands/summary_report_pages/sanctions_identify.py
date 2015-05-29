@@ -1,3 +1,4 @@
+from main.funcs import howlong
 from main.models import MedicalOrganization
 from report_printer_clear.utils.excel_style import VALUE_STYLE
 from report_printer_clear.utils.page import ReportPage
@@ -9,6 +10,7 @@ class SanctionsIdentifyPage(ReportPage):
         self.data = ''
         self.page_number = 3
 
+    @howlong
     def calculate(self, parameters):
         query = '''
                 SELECT
