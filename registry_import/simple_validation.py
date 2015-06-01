@@ -11,6 +11,13 @@ from main.models import (
     MedicalServiceHiTechKind, MedicalServiceHiTechMethod, ExaminationResult)
 
 from main.funcs import safe_int, queryset_to_dict
+from main.data_cache import (
+    GENDERS, POLICY_TYPES, DEPARTMENTS, ORGANIZATIONS, TERMS, KINDS, FORMS,
+    HOSPITALIZATIONS, PROFILES, OUTCOMES, RESULTS, SPECIALITIES_NEW,
+    SPECIALITIES_OLD, METHODS, TYPES, FAILURE_CUASES, DISEASES, DIVISIONS,
+    SPECIALS, CODES, PERSON_ID_TYPES, HITECH_KINDS, HITECH_METHODS,
+    EXAMINATION_RESULTS, ADULT_EXAMINATION_COMMENT_PATTERN)
+
 from validator.collection import Collection
 from validator.field import Field
 from validator.rules import Regex, IsInList, IsLengthBetween, IsRequired
@@ -39,47 +46,6 @@ ERROR_MESSAGES = {
                                  u'случая',
     'kind term mismatch': u'904;Вид помощи не соответствует условиям оказания',
 }
-
-GENDERS = queryset_to_dict(Gender.objects.all())
-POLICY_TYPES = queryset_to_dict(InsurancePolicyType.objects.all())
-DEPARTMENTS = {rec.old_code: rec for rec in MedicalOrganization.objects.all()}
-ORGANIZATIONS = queryset_to_dict(MedicalOrganization.objects.filter(parent=None))
-TERMS = queryset_to_dict(MedicalServiceTerm.objects.all())
-KINDS = queryset_to_dict(MedicalServiceKind.objects.all())
-FORMS = queryset_to_dict(MedicalServiceForm.objects.all())
-HOSPITALIZATIONS = queryset_to_dict(MedicalHospitalization.objects.all())
-PROFILES = queryset_to_dict(MedicalServiceProfile.objects.filter(is_active=True))
-OUTCOMES = queryset_to_dict(TreatmentOutcome.objects.all())
-RESULTS = queryset_to_dict(TreatmentResult.objects.all())
-SPECIALITIES_OLD = queryset_to_dict(MedicalWorkerSpeciality.objects.filter(
-    is_active=False
-))
-SPECIALITIES_NEW = queryset_to_dict(MedicalWorkerSpeciality.objects.filter(
-    is_active=True
-))
-METHODS = queryset_to_dict(PaymentMethod.objects.all())
-TYPES = queryset_to_dict(PaymentType.objects.all())
-FAILURE_CUASES = queryset_to_dict(PaymentFailureCause.objects.all())
-DISEASES = {rec.idc_code: rec for rec in IDC.objects.all() if rec.idc_code or rec.idc_code != u'НЕТ'}
-DIVISIONS = queryset_to_dict(MedicalDivision.objects.all())
-SPECIALS = queryset_to_dict(Special.objects.all())
-CODES = queryset_to_dict(MedicalService.objects.all())
-PERSON_ID_TYPES = queryset_to_dict(PersonIDType.objects.all())
-HITECH_KINDS = queryset_to_dict(MedicalServiceHiTechKind.objects.all())
-HITECH_METHODS = queryset_to_dict(MedicalServiceHiTechMethod.objects.all())
-EXAMINATION_RESULTS = queryset_to_dict(ExaminationResult.objects.all())
-
-ADULT_EXAMINATION_COMMENT_PATTERN = ur'^F(?P<student>[01])(?P<second_level>[01])(?P<veteran>[01])(?P<health_group>[123][абАБ]?)$'
-ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
-
-KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
-                  '2': ['1', '2', '3', '21', '22', '31', '32', '4'],
-                  '3': ['1', '11', '12', '13', '4'],
-                  '4': ['1', '2', '3', '4', '11', '12', '21', '22', '31', '32']
-}
-
-OLD_ADULT_EXAMINATION = ('019015', '019020')
-NEW_ADULT_EXAMINATION = ('019115', '019116', '019117')
 
 
 class MyCollection(Collection):
@@ -245,7 +211,6 @@ def get_event_validation(item, registry_type=1):
         Field('VIDPOM', item['VIDPOM'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(list(KINDS), error=ERROR_MESSAGES['wrong value']),
-            IsServiceKindCorrespondsToTerm(item['USL_OK'], error=ERROR_MESSAGES['kind term mismatch'])
         ]),
         Field('LPU', item['LPU'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
@@ -272,9 +237,6 @@ def get_event_validation(item, registry_type=1):
         Field('DS1', item['DS1'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-            DiseaseHasPrecision(organization=item['LPU'],
-                                error=ERROR_MESSAGES['is precision'],
-                                pass_on_blank=True),
         ]),
         Field('IDSP', item['IDSP'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
@@ -317,9 +279,6 @@ def get_event_validation(item, registry_type=1):
             ]),
             Field('DS0', item['DS0'] or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value'], pass_on_blank=True),
-                DiseaseHasPrecision(organization=item['LPU'],
-                                    error=ERROR_MESSAGES['is precision'],
-                                    pass_on_blank=True),
             ]),
             Field('RSLT', item['RSLT'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
@@ -374,9 +333,6 @@ def get_event_validation(item, registry_type=1):
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 Regex(ADULT_EXAMINATION_COMMENT_PATTERN,
                       error=ERROR_MESSAGES['wrong format']),
-                IsResultedExaminationComment(
-                    item['RSLT_D'],
-                    error=ERROR_MESSAGES['wrong exam result'])
             ])
         ])
 
@@ -409,9 +365,6 @@ def get_complicated_disease_validation(item, organization, registry_type=1):
         disease.append([
             Field('DS3', item or '').append([
                 IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-                DiseaseHasPrecision(organization=organization,
-                                    error=ERROR_MESSAGES['is precision'],
-                                    pass_on_blank=True)
             ])
         ])
     disease.run()
@@ -425,9 +378,6 @@ def get_concomitant_disease_validation(item, organization, registry_type=1):
     disease.append([
         Field('DS2', item or '').append([
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-            DiseaseHasPrecision(organization=organization,
-                                error=ERROR_MESSAGES['is precision'],
-                                pass_on_blank=True)
         ])
     ])
     disease.run()
@@ -481,9 +431,6 @@ def get_service_validation(item, registry_type=1, event={}):
         Field('DS', item['DS'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(DISEASES, error=ERROR_MESSAGES['wrong value']),
-            DiseaseHasPrecision(organization=item['LPU'],
-                                error=ERROR_MESSAGES['is precision'],
-                                pass_on_blank=True),
         ]),
         Field('CODE_MD', item['CODE_MD'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
@@ -492,14 +439,6 @@ def get_service_validation(item, registry_type=1, event={}):
         Field('CODE_USL', item['CODE_USL'] or '').append([
             IsRequired(error=ERROR_MESSAGES['missing value']),
             IsInList(CODES, error=ERROR_MESSAGES['wrong value']),
-            IsCorrespondsToRegistryType(
-                registry_type,
-                error=ERROR_MESSAGES['registry type mismatch']),
-            IsExpiredService(event['DATE_2'],
-                             error=ERROR_MESSAGES['expired service']),
-            IsCorrespondsToHitechMethod(
-                event.get('METOD_HMP', ''), registry_type,
-                error=ERROR_MESSAGES['hitech method mismatch']),
         ]),
         Field('KOL_USL', item['KOL_USL'] or ''),
         Field('TARIF', item['TARIF'] or ''),
@@ -520,9 +459,6 @@ def get_service_validation(item, registry_type=1, event={}):
             Field('DET', item['DET'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),
                 IsInList(list(['0', '1']), error=ERROR_MESSAGES['wrong value']),
-                IsMatchedToEvent(
-                    event['DET'],
-                    error=ERROR_MESSAGES['children profile mismatch'])
             ]),
             Field('PRVS', item['PRVS'] or '').append([
                 IsRequired(error=ERROR_MESSAGES['missing value']),

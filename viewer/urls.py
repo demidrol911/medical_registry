@@ -13,4 +13,7 @@ urlpatterns = patterns('',
     url(r'^json/services/$', views.get_services_json),
     url(r'^json/statuses/$', views.get_registry_status_json),
     url(r'^json/additional-info/$', views.get_additional_info_json),
+    url(r'^json/service-divisions/$', views.get_service_divisions_json),
+    url(r'^json/service-profiles/$', views.get_service_profiles_json),
+    url(r'^excel-export/$', views.get_excel_export),
 )

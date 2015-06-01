@@ -646,6 +646,7 @@ SERVICE_COMMENT_PATTERN = re.compile(r'^(?P<endovideosurgery>[0-1]?)(?:[0-1]?)'
                                      r'(?P<full_paid_pso>[0-1]?)'
                                      r'(?P<thrombolytic_therapy>[0-1]?)'
                                      r'(?P<aood_x_ray>[0-1]?)$')
+                                        # Родовспоможение в 11 разряде с 01.06.2015
 
 
 def get_payments_sum(service):
