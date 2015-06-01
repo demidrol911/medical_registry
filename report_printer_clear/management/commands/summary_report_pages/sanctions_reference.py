@@ -9,7 +9,7 @@ from tfoms.func import FAILURE_CAUSES
 class SanctionsReferencePage(ReportPage):
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 2
 
     @howlong
@@ -59,6 +59,7 @@ class SanctionsReferencePage(ReportPage):
                                    END
                           ) AS policlinic_services,
                     COUNT(DISTINCT CASE WHEN T.is_policlinic
+                                             AND T.is_treatment
                                           THEN T.event_id
                                    END
                           ) AS policlinic_treatments,
@@ -96,6 +97,7 @@ class SanctionsReferencePage(ReportPage):
                                         END
                           ) AS stomatology_services,
                     COUNT(DISTINCT CASE WHEN T.is_stomatology
+                                             AND T.is_treatment
                                           THEN T.event_id
                                    END
                           ) AS stomatology_treatments,
@@ -117,7 +119,10 @@ class SanctionsReferencePage(ReportPage):
 
 
                     COUNT(DISTINCT T.service_id) AS total_services,
-                    COUNT(DISTINCT T.event_id) AS total_treatments,
+                    COUNT(DISTINCT CASE WHEN T.is_treatment
+                                          THEN T.event_id
+                                   END
+                          ) AS total_treatments,
                     SUM(T.tariff) AS total_tariff,
                     SUM(T.provided_tariff) AS total_provided_tariff
 
@@ -126,6 +131,7 @@ class SanctionsReferencePage(ReportPage):
                        mo.id_pk AS organization_id,
                        ps.id_pk AS service_id,
                        pe.id_pk AS event_id,
+                       ps.department_fk AS service_department,
                        ps.tariff AS tariff,
                        pfc.number AS failure_cause_number,
                        me.failure_cause_fk AS failure_cause_id,
@@ -149,7 +155,22 @@ class SanctionsReferencePage(ReportPage):
                                THEN 1
                              ELSE ps.quantity
                         END) *
-                        COALESCE(ms.uet, 0) AS uet
+                        COALESCE(ms.uet, 0) AS uet,
+
+                       (ms.group_fk = 19 AND ms.subgroup_fk = 12)
+                        OR (pe.term_fk = 3 AND ms.reason_fk = 1 AND
+                           (ms.group_fk is NULL OR ms.group_fk = 24)
+                            AND (
+                                  SELECT
+                                      COUNT(DISTINCT ps1.id_pk)
+                                  FROM provided_service ps1
+                                  JOIN medical_service ms1
+                                     ON ms1.id_pk = ps1.code_fk
+                                  WHERE ps1.event_fk  = ps.event_fk
+                                        AND (ms1.group_fk is NULL OR ms1.group_fk = 24)
+                                        AND ms1.reason_fk = 1
+                                )>1
+                        ) AS is_treatment
 
 
                        FROM medical_register mr
@@ -196,16 +217,24 @@ class SanctionsReferencePage(ReportPage):
                          ) AS T
                    JOIN medical_organization mo
                       ON mo.id_pk = T.organization_id
+                   JOIN medical_organization dep
+                      ON dep.id_pk = T.service_department
 
-                GROUP BY mo.id_pk, T.failure_cause_id, T.failure_cause_number
-                ORDER BY T.failure_cause_number ASC
                 '''
 
-        self.data = MedicalOrganization.objects.raw(query, dict(
-            period=parameters.registry_period,
-            year=parameters.registry_year,
-            organization=parameters.organization_code
-        ))
+        self.data = MedicalOrganization.objects.raw(
+            query + ((" WHERE dep.old_code = '%s'" % parameters.department)
+                     if parameters.department
+                     else '')
+            + '''
+              GROUP BY mo.id_pk, T.failure_cause_id, T.failure_cause_number
+              ORDER BY T.failure_cause_number ASC
+              ''',
+            dict(
+                period=parameters.registry_period,
+                year=parameters.registry_year,
+                organization=parameters.organization_code
+            ))
 
     def print_page(self, sheet, parameters):
         sheet.set_style({})

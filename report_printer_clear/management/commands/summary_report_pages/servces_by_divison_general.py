@@ -25,13 +25,13 @@ class GeneralServicesPage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
-        query = self.get_query()
+        query = self.get_query(parameters)
         data_services = self.__run_query(query, dict(
             period=parameters.registry_period,
             year=parameters.registry_year,
             organization=parameters.organization_code
         ))
-        query_coeff = self.get_coeff_query()
+        query_coeff = self.get_coeff_query(parameters)
         data_coeff = self.__run_query(query_coeff, dict(
             period=parameters.registry_period,
             year=parameters.registry_year,
@@ -81,11 +81,11 @@ class GeneralServicesPage(ReportPage):
             self.ambulance_capitation = capitation_to_arrays(parameters.ambulance_capitation[1])
 
     @abstractmethod
-    def get_query(self):
+    def get_query(self, parameters):
         pass
 
     @abstractmethod
-    def get_coeff_query(self):
+    def get_coeff_query(self, parameters):
         pass
 
     def print_page(self, sheet, parameters):
@@ -136,7 +136,7 @@ class GeneralServicesPage(ReportPage):
 
         sheet.write_cell(2, 0, parameters.organization_code+' '+parameters.report_name)
         sheet.write_cell(2, 9, u'за ' + parameters.date_string)
-        sheet.write_cell(3, 0, u'Частичный реестр: %s')
+        sheet.write_cell(3, 0, u'Частичный реестр: %s' % ','.join(parameters.partial_register))
         sheet.set_position(7, 0)
 
         for row in self.data:
@@ -160,7 +160,7 @@ class GeneralServicesPage(ReportPage):
                     term_title = get_title(func.MEDICAL_GROUPS, group)
                 if subgroup:
                     if division == 999:
-                        division_title = u'Стоматология'
+                        division_title = u'Стоматология (снятые)'
                     else:
                         division_title = get_title(func.MEDICAL_SUBGROUPS, division)
                 else:
@@ -410,9 +410,13 @@ class GeneralServicesPage(ReportPage):
 
                          ROUND(ps.tariff, 2) AS service_tariff,
                          ROUND(ps.accepted_payment, 2) AS service_accepted_payment,
+                         ROUND(ps.provided_tariff, 2) AS service_provided_tariff,
+
+
                          ps.payment_type_fk AS payment_type,
                          ps.start_date AS start_date,
                          ps.end_date AS end_date,
+                         dep.old_code AS department,
                          ms.group_fk As service_group,
                          ms.subgroup_fk AS service_subgroup,
                          ms.division_fk AS service_division,
@@ -641,16 +645,21 @@ class GeneralServicesPage(ReportPage):
                             1 AS subgroup,
 
                             -- Отделения
-                            (SELECT
-                                 MAX(ms1.subgroup_fk)
-                             FROM provided_service ps1
-                                 JOIN medical_service ms1
-                                    ON ms1.id_pk = ps1.code_fk
-                             WHERE ps1.event_fk = event_id
-                                   AND ps1.payment_type_fk = payment_type
-                                   AND ps1.start_date = start_date
-                                   AND ps1.end_date = end_date
-                            ) AS division,
+                            CASE WHEN payment_type=3
+                                   THEN 999
+                                 ELSE
+                                    (
+                                     SELECT
+                                         MAX(ms1.subgroup_fk)
+                                     FROM provided_service ps1
+                                         JOIN medical_service ms1
+                                            ON ms1.id_pk = ps1.code_fk
+                                     WHERE ps1.event_fk = event_id
+                                           AND ps1.payment_type_fk = payment_type
+                                           AND ps1.start_date = start_date
+                                           AND ps1.end_date = end_date
+                                 )
+                            END AS division,
 
                             -- Пол
                             0 AS gender

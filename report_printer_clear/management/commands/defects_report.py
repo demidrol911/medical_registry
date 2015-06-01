@@ -8,8 +8,8 @@ from report_printer_clear.utils.wizard import AutomaticReportsWizard
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        report = Report('defect.xls')
+        report = Report(template='defect.xls', suffix=u'дефекты')
         report.add_page(DefectsPage())
 
-        report_wizard = AutomaticReportsWizard(report, u'дефекты')
+        report_wizard = AutomaticReportsWizard([report])
         report_wizard.create_reports(600)

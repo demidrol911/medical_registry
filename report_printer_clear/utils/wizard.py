@@ -1,13 +1,13 @@
 from report_printer_clear.utils.report import ReportParameters
-from tfoms.func import get_mo_code, get_mo_name, change_register_status, calculate_capitation
+from tfoms.func import get_mo_code, get_mo_name, change_register_status, calculate_capitation, get_partial_register
 from medical_service_register.path import REESTR_DIR, REESTR_EXP
 
 
 class AutomaticReportsWizard():
 
-    def __init__(self, report, suffix=''):
-        self.report = report
-        self.suffix = suffix
+    def __init__(self, reports):
+        self.reports = reports
+        self.completed_reports = []
 
     def create_reports(self, registry_status):
         parameters = ReportParameters()
@@ -20,24 +20,52 @@ class AutomaticReportsWizard():
             parameters.registry_year,
             parameters.registry_period
         )
+        if registry_status == 3:
+            new_status = 9
+        elif registry_status == 8:
+            new_status = 6
+        else:
+            new_status = 600
 
         while organization_code:
+            print organization_code
+            change_register_status(organization_code, 11)
             parameters.organization_code = organization_code
             parameters.report_name = get_mo_name(organization_code).\
-                replace('"', '').strip() + ('_'+self.suffix if self.suffix else '')
+                replace('"', '').strip()
+            parameters.partial_register = get_partial_register(organization_code)
             parameters.policlinic_capitation = calculate_capitation(3, organization_code)
             parameters.ambulance_capitation = calculate_capitation(4, organization_code)
             parameters.policlinic_capitation_total = self.__calculate_total(parameters.policlinic_capitation[1])
             parameters.ambulance_capitation_total = self.__calculate_total(parameters.ambulance_capitation[1])
-            self.report.print_pages(parameters)
-            #change_register_status(organization_code, 6)
+            parameters.department = None
+            for report in self.reports:
+                report.print_pages(parameters)
+                print '-'*70
+
+            for department in parameters.partial_register:
+                print department
+                parameters.report_name = get_mo_name(organization_code, department).\
+                    replace('"', '').strip()
+                parameters.partial_register = [department]
+                parameters.department = department
+                for report in self.reports:
+                    if report.is_by_department():
+                        report.print_pages(parameters)
+                        print '-'*70
+
+            change_register_status(organization_code, new_status)
+            self.completed_reports.append(get_mo_name(organization_code))
             organization_code = get_mo_code(registry_status)
-            break
+
+    def print_completed_reports(self):
+        for report in self.completed_reports:
+            print report
 
     def __calculate_total(self, capitation):
         result = 0
         for key in capitation:
-            result += capitation[key]['accepted']
+            result += capitation[key].get('accepted', 0)
         return result
 
 

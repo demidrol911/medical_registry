@@ -7,7 +7,7 @@ from main.models import MedicalOrganization
 class SogazMekGeneralPage(ReportPage):
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 6
 
     @howlong
@@ -141,11 +141,11 @@ class SogazMekGeneralPage(ReportPage):
 
     def print_page(self, sheet, parameters):
         sheet.set_style({})
-        sheet.set_style({'align': 'center'})
+        sheet.set_style({'valign': 'center', 'align': 'center', 'text_wrap': True})
         sheet.write_cell(3, 2, u'за %s' % parameters.date_string)
         sheet.write_cell(5, 0, parameters.report_name)
-        sheet.set_style({})
         sheet.write_cell(5, 5, parameters.organization_code)
+        sheet.set_style({})
         sheet.write_cell(10, 5, self.data['count_invoiced'])
         sheet.write_cell(11, 5, self.data['sum_invoiced'])
         if self.data['no_su']:

@@ -7,15 +7,24 @@ from report_printer.const import MONTH_NAME
 
 class Report():
 
-    def __init__(self, template=''):
+    def __init__(self, template='', suffix=''):
         self.template = template
+        self.suffix = suffix
+        self.by_department = False
         self.pages = []
+
+    def set_by_department(self, flag):
+        self.by_department = flag
+
+    def is_by_department(self):
+        return self.by_department
 
     def add_page(self, page):
         self.pages.append(page)
 
     def print_pages(self, parameters):
-        book = ExcelBook(parameters.path_to_dir, parameters.report_name)
+        book = ExcelBook(parameters.path_to_dir + ('/'+self.suffix if self.suffix else ''),
+                         parameters.report_name + ('_'+self.suffix if self.suffix else ''))
         book.create_book(self.template)
         for page in self.pages:
             sheet = book.get_sheet(page.page_number)

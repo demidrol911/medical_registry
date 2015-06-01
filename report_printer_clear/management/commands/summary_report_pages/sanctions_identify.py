@@ -7,7 +7,7 @@ from report_printer_clear.utils.page import ReportPage
 class SanctionsIdentifyPage(ReportPage):
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 3
 
     @howlong
@@ -81,6 +81,7 @@ class SanctionsIdentifyPage(ReportPage):
                        mo.id_pk AS organization_id,
                        ps.id_pk AS service_id,
                        pe.id_pk AS event_id,
+                       ps.department_fk AS service_department,
                        pt.id_pk AS patient_id,
                        ps.tariff AS tariff,
 
@@ -145,15 +146,26 @@ class SanctionsIdentifyPage(ReportPage):
                          ) AS T
                    JOIN medical_organization mo
                       ON mo.id_pk = T.organization_id
-
-                GROUP BY mo.id_pk
+                   JOIN medical_organization dep
+                      ON dep.id_pk = T.service_department
                 '''
 
-        self.data = MedicalOrganization.objects.raw(query, dict(
-            period=parameters.registry_period,
-            year=parameters.registry_year,
-            organization=parameters.organization_code
-        ))[0]
+        self.data = MedicalOrganization.objects.raw(
+            query + ((" WHERE dep.old_code = '%s'" % str(parameters.department))
+                     if parameters.department
+                     else '')
+            + '''
+              GROUP BY mo.id_pk
+              ''',
+            dict(
+                period=parameters.registry_period,
+                year=parameters.registry_year,
+                organization=parameters.organization_code
+            ))
+        if list(self.data):
+            self.data = self.data[0]
+        else:
+            self.data = None
 
     def print_page(self, sheet, parameters):
         sheet.set_style({})
@@ -161,22 +173,23 @@ class SanctionsIdentifyPage(ReportPage):
         sheet.write_cell(2, 5, parameters.date_string)
         sheet.set_style(VALUE_STYLE)
         sheet.set_position(6, 0)
-        item = self.data
-        sheet.write(item.count_patients, 'c')
-        sheet.write(item.hospital_services, 'c')
-        sheet.write(item.hospital_provided_tariff, 'c')
+        if self.data:
+            item = self.data
+            sheet.write(item.count_patients, 'c')
+            sheet.write(item.hospital_services, 'c')
+            sheet.write(item.hospital_provided_tariff, 'c')
 
-        sheet.write(item.day_hospital_services, 'c')
-        sheet.write(item.day_hospital_provided_tariff, 'c')
+            sheet.write(item.day_hospital_services, 'c')
+            sheet.write(item.day_hospital_provided_tariff, 'c')
 
-        sheet.write(item.policlinic_services, 'c')
-        sheet.write(item.policlinic_provided_tariff, 'c')
+            sheet.write(item.policlinic_services, 'c')
+            sheet.write(item.policlinic_provided_tariff, 'c')
 
-        sheet.write(item.ambulance_services, 'c')
-        sheet.write(item.ambulance_provided_tariff, 'c')
+            sheet.write(item.ambulance_services, 'c')
+            sheet.write(item.ambulance_provided_tariff, 'c')
 
-        sheet.write(item.stomatology_services, 'c')
-        sheet.write(item.stomatology_provided_tariff, 'c')
+            sheet.write(item.stomatology_services, 'c')
+            sheet.write(item.stomatology_provided_tariff, 'c')
 
-        sheet.write(item.total_services, 'c')
-        sheet.write(item.total_provided_tariff, 'r')
+            sheet.write(item.total_services, 'c')
+            sheet.write(item.total_provided_tariff, 'r')

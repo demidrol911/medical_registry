@@ -9,7 +9,7 @@ from report_printer_clear.utils.page import ReportPage
 class Order146Page(ReportPage):
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 4
 
     @howlong
