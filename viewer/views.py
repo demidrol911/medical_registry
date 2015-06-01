@@ -257,7 +257,7 @@ def get_services_json(request):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and (%(department)s = '' or dep.old_code = %(department)s)
-        order by p.first_name, p.last_name, p.middle_name, ps.start_date, ps.end_date, ms.code, pe.id
+        order by pe.id, p.first_name, p.last_name, p.middle_name, ps.start_date, ps.end_date, ms.code
     """
 
     if not (year and period and organization_code):
@@ -400,10 +400,10 @@ def get_excel_export(request):
         select ps.id_pk,
             row_number() OVER () as rnum,
             p.first_name, p.last_name, p.middle_name,
-            to_char(p.birthdate, 'YYYY-MM-DD') as birthdate,
+            to_char(p.birthdate, 'DD-MM-YYYY') as birthdate,
             trim(BOTH ' ' from format('%%s %%s', coalesce(p.insurance_policy_series, ''), coalesce(p.insurance_policy_number, ''))) policy,
-            to_char(ps.start_date, 'YYYY-MM-DD') as "start",
-            to_char(ps.end_date, 'YYYY-MM-DD') as "end",
+            to_char(ps.start_date, 'DD-MM-YYYY') as "start",
+            to_char(ps.end_date, 'DD-MM-YYYY') as "end",
             md.name as dvsn_name,
             ms.code srv_code,
             pe.anamnesis_number as anamnesis,
@@ -634,8 +634,8 @@ def get_excel_export(request):
     for j, rec in enumerate(services):
         i = 7 + j
         sheet.write(i, 0, rec.rnum, regular_format)
-        sheet.write(i, 1, rec.first_name, regular_format)
-        sheet.write(i, 2, rec.last_name, regular_format)
+        sheet.write(i, 1, rec.last_name, regular_format)
+        sheet.write(i, 2, rec.first_name, regular_format)
         sheet.write(i, 3, rec.middle_name, regular_format)
         sheet.write(i, 4, rec.anamnesis, regular_format)
         sheet.write(i, 5, ','.join(rec.errors), regular_format)
@@ -667,13 +667,13 @@ def get_excel_export(request):
     e_cell = xl_rowcol_to_cell(i, 18)
     sheet.write_formula(i+1, 18, '=SUM({0}:{1})'.format(s_cell, e_cell), regular_format_bold)
 
-
-
     book.close()
 
     output.seek(0)
 
-    response = HttpResponse(base64.b64encode(output.read()), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response = HttpResponse(base64.b64encode(
+        output.read()),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     response['Content-Disposition'] = "attachment; filename=test.xlsx"
 
     return response
