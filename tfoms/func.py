@@ -23,7 +23,7 @@ from main.models import (
 ### Отчётный год и период
 cur_date = datetime.now()
 
-YEAR = '2015' #str(cur_date.year)
+YEAR = '2015'  # str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
 PERIOD = '04'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
@@ -561,15 +561,6 @@ def calculate_capitation_tariff(term, mo_code):
                 result[idx][16] = Decimal(round(float(result[idx][8])*float(coeff-1), 2))
                 result[idx][17] = Decimal(round(float(result[idx][9])*float(coeff-1), 2))
 
-            '''
-            if mo_code == '280024':
-                result[9][16] = Decimal(192037.24)
-            '''
-
-            if mo_code == '280067':
-                result[1][17] = Decimal(4019.58)
-                result[8][16] = Decimal(77460.08)
-
     for idx in xrange(0, 10):
         result[idx][26] = Decimal(round(result[idx][8] + result[idx][16], 2))
         result[idx][27] = Decimal(round(result[idx][9] + result[idx][17], 2))
@@ -697,5 +688,7 @@ def get_mo_code(status):
     return organization_code
 
 
-def get_mo_name(mo_code):
+def get_mo_name(mo_code, department=None):
+    if department:
+        return MedicalOrganization.objects.get(old_code=department).name
     return MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).name

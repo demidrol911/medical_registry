@@ -180,7 +180,7 @@ def print_registry_sogaz_2(act_book, mo, department=None):
     # Печать итоговой суммы по всем ошибкам
     print_total_sum_error(act_book, u'Итого по всем ошибкам', total_sum)
 
-    act_book.hide_column('N:P')
+    act_book.hide_column('O:P')
     act_book.set_style({'bold': True})
     act_book.write_cell(' ', 'r')
 

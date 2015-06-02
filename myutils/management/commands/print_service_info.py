@@ -151,7 +151,7 @@ class Command(BaseCommand):
 
                 act_book.write_cell(service['name'], 'c')                             # Название услуги
 
-                act_book.write_cell(service['department'], 'c')                         # Ид случая
+                act_book.write_cell(service['event_id'], 'c')                         # Ид случая
 
                 act_book.write_cell(service['xml_id'], 'c')                           # Ид услуги в xml
 

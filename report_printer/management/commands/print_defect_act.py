@@ -61,8 +61,10 @@ def get_mo_statistics(mo):
                                               '119203', '119204', '119205', '119206', '119207',
                                               '119208', '119209', '119210', '119220', '119221',
                                               '119222', '119223', '119224', '119225', '119226',
-                                              '119227', '119228', '119229', '119230', '119231'
-                                                                                ) then 'clinical_exam'
+                                              '119227', '119228', '119229', '119230', '119231',
+                                              '019116', '019115'
+
+                                            ) then 'clinical_exam'
                   when T.service_group = 19 and T.stomatology_reason = 12 then 'stom_disease'
                   when T.service_group = 19 AND (T.stomatology_reason in (13, 14, 17)
                        or T.stomatology_reason is NULL) then 'stom_ambulance'
@@ -222,8 +224,9 @@ def get_mo_error_statistics(mo):
                                               '119203', '119204', '119205', '119206', '119207',
                                               '119208', '119209', '119210', '119220', '119221',
                                               '119222', '119223', '119224', '119225', '119226',
-                                              '119227', '119228', '119229', '119230', '119231'
-                                                                                ) then 'clinical_exam'
+                                              '119227', '119228', '119229', '119230', '119231',
+                                              '019116', '019115'
+                                            ) then 'clinical_exam'
                   when T.service_group = 19 and T.stomatology_reason = 12 then 'stom_disease'
                   when T.service_group = 19 AND (T.stomatology_reason in (13, 14, 17)
                        or T.stomatology_reason is NULL) then 'stom_ambulance'
@@ -337,7 +340,7 @@ def print_defect_act(mo):
     template = BASE_DIR + r'\templates\excel_pattern\defect.xls'
     target_dir = REESTR_DIR
     rules = {
-        'hospital': [(1, VISIT)],
+        'hospital': [(1, TREATMENT)],
         'hospital_ambulance': [(2, VISIT)],
         'coronary_angiography': [(3, VISIT)],
         'cerebral_angiography': [(4, VISIT)],
@@ -345,7 +348,7 @@ def print_defect_act(mo):
         'peritondialis_hospital': [(7, TREATMENT), (8, COUNT_DAYS)],
         'day_hospital': [(9, VISIT), (10, COUNT_DAYS)],
         'policlinic_disease': [(11, VISIT), (12, TREATMENT)],
-        'policlinic_priventive': [(13, VISIT)],
+        'policlinic_priventive': [(13, TREATMENT)],
         'policlinic_ambulance': [(14, VISIT)],
         'adult_exam': [(15, TREATMENT), (16, VISIT)],
         'ambulance': [(17, VISIT)],
@@ -367,7 +370,7 @@ def print_defect_act(mo):
         69, 70, 71, 72, 73, 74, 75
     ]
 
-    target = target_dir % (func.YEAR, func.PERIOD) + ur'\%s_дефекты' % \
+    target = target_dir % (func.YEAR, func.PERIOD) + ur'\дефекты\%s_дефекты' % \
         func.get_mo_info(mo)['name'].replace('"', '').strip()
     print target
     with ExcelWriter(target, template=template) as act_book:
@@ -450,6 +453,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         #status = args[0]
-        med_organizations = get_mo_register()
+        med_organizations = ['280036'] #get_mo_register()
         for mo in med_organizations:
             print_defect_act(mo)
