@@ -79,7 +79,25 @@ Ext.define('MyApp.view.service.AdvancedSearchWindowController', {
 					return false
 				})
 			} else if (fieldValues.service_1) {
-				store.filter('service_code', fieldValues.service_1);
+				var matchingArray = fieldValues.service_1.match(/[0-9]{6}/g);
+				
+				if (matchingArray) {
+					if (matchingArray.length == 1) {
+						store.filter('service_code', fieldValues.service_1);
+					} else if (matchingArray.length > 1) {
+						store.filterBy(function (record, id) {
+							service = record.get('service_code');
+							
+							var is_matching = false;	
+							for (var i = 0; i < matchingArray.length; i++) {
+								if (service == matchingArray[i]) {
+									is_matching = true;
+								}
+							}
+							if (is_matching) {return true}
+						})
+					}
+				}
 			}
 
 			if (fieldValues.start_date_1 && fieldValues.start_date_2) {
