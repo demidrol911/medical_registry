@@ -71,7 +71,7 @@ def main():
     ERRORS_CODES = get_errors_dict()
 
     pse_dir = 'c:/work/pse'
-    year, period = '2015', '03'
+    year, period = '2015', '04'
     files = os.listdir(pse_dir)
     departments = set([filename[1:-4] for filename in files if '.dbf' in filename])
     registers = []

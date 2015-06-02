@@ -15,9 +15,8 @@ class Command(BaseCommand):
             parameters.registry_period
         )
         parameters.report_name = u'сверка'
-        parameters.template = 'recon.xls'
 
-        report = Report()
+        report = Report('recon.xls')
         report.add_page(FinalReportPage())
         report.print_pages(parameters)
 

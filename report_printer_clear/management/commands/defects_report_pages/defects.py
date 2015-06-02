@@ -1,4 +1,5 @@
 #! -*- coding: utf-8 -*-
+from main.funcs import howlong
 from main.models import MedicalOrganization
 from report_printer_clear.utils.page import ReportPage
 from report_printer.excel_style import VALUE_STYLE
@@ -45,6 +46,7 @@ class DefectsPage(ReportPage):
         self.data_detail = None
         self.page_number = 0
 
+    @howlong
     def calculate(self, parameters):
         general_query = DefectsPage.get_general_query()
         self.data_general = MedicalOrganization.objects.raw(general_query, dict(
@@ -357,7 +359,8 @@ class DefectsPage(ReportPage):
                                   '119207', '119208', '119209', '119210', '119220',
                                   '119221', '119222', '119223', '119224', '119225',
                                   '119226', '119227', '119228', '119229', '119230',
-                                  '119231'
+                                  '119231',
+                                  '019116', '019115'
                                )
                              THEN 'clinical_exam'
 
