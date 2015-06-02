@@ -7,5 +7,6 @@
 /collected_static
 *.xml
 *.pyc
+*.zip
 path.py
 settings.py

@@ -10,7 +10,7 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 	},
 	
     height: '95%',
-    width: 1024,	
+    width: 1280,	
 
 	requires: ['MyApp.view.service.ServiceWindowController', 'MyApp.view.service.ServiceViewModel',
 			   'MyApp.view.service.AdvancedSearchWindow'],
@@ -122,31 +122,34 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 						}
 						
 					}
-					
 				}, {
 					text: 'Случай',
 					dataIndex: 'event_id',
-					width: 65
+					width: 65,
+					flex: 1,
 				}, {
 					text: 'Начало',
 					dataIndex: 'start_date',
 					xtype: 'datecolumn',
 					format: 'd-m-Y',
 					width: 100,
-					summaryType: 'min',
-					summaryRenderer: Ext.util.Format.dateRenderer('d-m-Y')
+					//summaryType: 'min',
+					//summaryRenderer: Ext.util.Format.dateRenderer('d-m-Y'),
+					flex: 1,
 				}, {
 					text: 'Окончание',
 					dataIndex: 'end_date',
 					xtype: 'datecolumn',
 					format: 'd-m-Y',
 					width: 100,
-					summaryType: 'max',
-					summaryRenderer: Ext.util.Format.dateRenderer('d-m-Y'),					
+					//summaryType: 'max',
+					//summaryRenderer: Ext.util.Format.dateRenderer('d-m-Y'),					
+					flex: 1,
 				}, {
 					text: 'Отделение',
 					dataIndex: 'division_code',
-					width: 80
+					width: 80,
+					flex: 1,
 				}, {
 					text: 'Услуга',
 					dataIndex: 'service_code',
@@ -154,43 +157,59 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 					filter: {
 						type: 'string',
 					},
-					summaryType: 'count',
-					summaryRenderer: function(value, summaryData, dataIndex) {
-						return  'x ' + value;	
-					}
+					//summaryType: 'count',
+					//summaryRenderer: function(value, summaryData, dataIndex) {
+					//	return  'x ' + value;	
+					//}
+					flex: 1,
 				}, {
 					text: 'Кол-во',
 					dataIndex: 'quantity',
-					width: 60
+					width: 60,
+					flex: 1,
 				}, {
-					text: 'Диагноз',
+					text: 'Осн. дз',
 					dataIndex: 'disease_code',
 					width: 70,
 					filter: {
 						type: 'string'
-					}
+					},
+					flex: 1,
+				}, {
+					text: 'Сопут. дз',
+					dataIndex: 'concomitant_disease',
+					width: 70,
+					filter: {
+						type: 'string'
+					},
+					flex: 1,
 				}, {
 					text: 'Т/н врача',
 					dataIndex: 'worker_code',
-					width: 80
+					width: 80,
+					flex: 1,
 				}, {
 					text: 'Тариф',
 					dataIndex: 'tariff',
 					width: 70,
-					summaryType: 'sum'
+					summaryType: 'sum',
+					flex: 1,
 				}, {
 					text: 'Оплачено',
 					dataIndex: 'accepted',
 					width: 80,
-					summaryType: 'sum'
+					summaryType: 'sum',
+					flex: 1,
 				}, {
 					text: 'Комментарий',
-					dataIndex: 'service_comment'
+					dataIndex: 'service_comment',
+					flex: 1,
 				}, {
 					text: 'Ошибки',
 					dataIndex: 'errors',
 					width: 80,
-					filter: 'list'
+					filter: 'list',
+					flex: 1,
 				}                        
 			],
 			
@@ -199,42 +218,58 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 			xtype: 'grid',
 			store: 'MyApp.store.service.OrganizationEventStore',
 			reference: 'event-grid',
-			height: 109,
+
+			height: 94,
+
 			columns: [
 				{
-					text: 'Случай',
+					text: '№',
 					dataIndex: 'event_id',
-					width: 70
+					flex: 1, //
+					
 				}, {
 					text: 'Полис',
 					dataIndex: 'policy',
-					width: 140,
+					width: 200,
+					tdCls: 'cell-big-font'
 				}, {
 					text: 'Фамилия',
 					dataIndex: 'last_name',
-					width: 140,
+					flex: 3, //width: 140,
+					tdCls: 'cell-big-font'
 				}, {
 					text: 'Имя',
 					dataIndex: 'first_name',
-					width: 140,
+					flex: 3, //width: 140,
+					tdCls: 'cell-big-font'
 				}, {
 					text: 'Отчество',
 					dataIndex: 'middle_name',
-					width: 140,
+					flex: 4, //width: 140,
+					tdCls: 'cell-big-font'
 				}, {
 					text: 'Дата рождения',
 					dataIndex: 'birthdate',
 					xtype: 'datecolumn',
 					format: 'd-m-Y',
-					width: 100
+					width: 125,
+					tdCls: 'cell-big-font'
 				}, {
 					text: 'УЕТ/ЕО',
 					dataIndex: 'uet',
-					width: 60,
+					flex: 1, //width: 60,
+					tdCls: 'cell-big-font'
 				}, {
-					text: 'История болезни',
-					dataIndex: 'anamnesis'
-				},/* {
+					text: '№ карты',
+					dataIndex: 'anamnesis',
+					tdCls: 'cell-big-font',
+					flex: 2, //
+				}, {
+					text: 'Комментарий',
+					dataIndex: 'event_comment',
+					tdCls: 'cell-big-font',
+					flex: 2, //
+				}/* {
 					text: 'Первичный д-з',
 					dataIndex: 'initial_disease',
 					width: 70,
@@ -242,7 +277,9 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 					text: 'Базовый д-з',
 					dataIndex: 'basic_disease',
 					width: 70,
-				}, */{
+				}, 
+				
+				{
 					text: 'Сопутствущий д-з',
 					dataIndex: 'concomitant_disease',
 					width: 70,
@@ -250,11 +287,55 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 					text: 'Осложнённый д-з',
 					dataIndex: 'complicated_disease',
 					width: 70,
-				}, {
-					text: 'Комментарий',
-					dataIndex: 'event_comment'
-				}
-			]
+				}, */
+				
+			]/*
+			xtype: 'form',
+			title: 'пациент',
+			reference: 'patient-info-form',
+			items: [
+				{
+					xtype: 'fieldcontainer',
+					layout: {type: 'hbox'},
+					flex: 1,
+					fieldDefaults: {
+						margin: '0 5 0 0',
+						fieldStyle: 'font-size: 16pt;'
+					},					
+					items: [
+						{
+							xtype: 'textfield',
+							name: 'last_name',
+							//width: 180,
+							flex: 5
+						}, {
+							xtype: 'textfield',
+							name: 'first_name',
+							//width: 160,
+							flex: 4
+						}, {
+							xtype: 'textfield',
+							name: 'middle_name',
+							//width: 204,
+							flex: 5
+						}, {
+							xtype: 'datefield',
+							name: 'birthdate',
+							width: 125,
+							format: 'd-m-Y',
+							hideTrigger: true
+						}, {
+							xtype: 'textfield',
+							name: 'gender',
+							width: 100
+						}, {
+							xtype: 'textfield',
+							name: 'policy',
+							width: 205,
+						}
+					]
+				},			
+			]*/
 		}, {
 			xtype: 'form',
 			title: 'Подробно',
@@ -338,7 +419,36 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 
 						}
 					]
-				}
+				}, 
+				/*{
+					xtype: 'fieldcontainer',
+					layout: {type: 'hbox'},
+					items: [
+						{
+							xtype: 'textfield',
+							fieldLabel: '№ карты',
+							name: 'anamnesis',
+							flex: 1
+						},
+						{
+							xtype: 'textfield',
+							fieldLabel: 'Сопут. д-з',
+							name: 'concomitant_disease',
+							flex: 1
+						}, {
+							xtype: 'textfield',
+							fieldLabel: 'Осложн. д-з',
+							name: 'complicated_disease',
+							flex: 1
+						}, {
+							xtype: 'textfield',
+							fieldLabel: 'Комментарий',
+							name: 'event_comment',
+							flex: 1							
+						}
+							
+					]
+				}*/
 			]
 
 		}

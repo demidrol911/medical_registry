@@ -54,12 +54,17 @@ Ext.define('MyApp.view.service.ServiceWindowController', {
 
 			var additionalInfoView = this.lookupReference('additional-info-form');
 			var additionalInfoForm = additionalInfoView.getForm();
+			
+			//var patientInfoView = this.lookupReference('patient-info-form');
+			//var patientInfoForm = patientInfoView.getForm();			
 
 			if (this.timer) {
 				clearTimeout(this.timer);
 			}
 			this.timer = setTimeout(function () {
 				additionalInfoForm.loadRecord(record);
+				//patientInfoForm.loadRecord(record);
+				console.log(record);
 			}, 60);
 
 		}

@@ -43,3 +43,7 @@
 .x-form-text {
     display: inherit;
 }
+
+.cell-big-font {
+	font-size: 15pt !important; 
+}
