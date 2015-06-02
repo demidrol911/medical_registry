@@ -307,7 +307,10 @@ def get_records(register_pk):
             service_worker_speciality.code as service_worker_speciality_code,
             provided_service.worker_code as service_worker_code,
             provided_service.comment as service_comment,
-            coalesce((select max(payment_kind_fk) from provided_service where tariff > 0 and event_fk = provided_event.id_pk), 1) as payment_kind_code
+            case coalesce((select max(payment_kind_fk) from provided_service where tariff > 0 and event_fk = provided_event.id_pk), 1)
+            when 3 then 1
+            when 2 then 2
+            else 1 end as payment_kind_code
         from
             medical_register
             join medical_register_record
@@ -381,14 +384,14 @@ def get_records(register_pk):
 
 
 def main():
-    period = '03'
+    period = '02'
     year = '2015'
     print datetime.datetime.now()
 
     sumv_usl_sum = 0
     sumv_usl_sum2 = 0
     registers = MedicalRegister.objects.filter(
-        is_active=True, period=period, year=year,
+        is_active=True, period=period, year=year
         #organization_code__in=('280036', )
     ).order_by('organization_code')
     print u'Регистры: ', registers
@@ -417,16 +420,20 @@ def main():
         lm_xml.put('OT', middle_name)
         lm_xml.put('W', safe_int(patient.gender_id))
         birthdate = patient.birthdate
+
         if not birthdate:
             birthdate = ''
+
         lm_xml.put('DR', birthdate)
         lm_xml.put('FAM_P', safe_str(patient.agent_last_name))
         lm_xml.put('IM_P', safe_str(patient.agent_first_name))
         lm_xml.put('OT_P', safe_str(patient.agent_middle_name))
         lm_xml.put('W_P', safe_int(patient.agent_gender_id))
         birthdate = patient.agent_birthdate
+
         if not birthdate:
             birthdate = ''
+
         lm_xml.put('DR_P', birthdate)
         lm_xml.put('MR', safe_str(patient.birthplace))
         lm_xml.put('DOCTYPE', safe_int(patient.id_type))
@@ -445,6 +452,7 @@ def main():
 
     XML_TYPES = dict(SERVICE_XML_TYPES)
     EXAMINIATIONS = dict(EXAMINATION_TYPES)
+
     for register_type in XML_TYPES:
         if register_type == 0:
             continue
@@ -496,6 +504,7 @@ def main():
             hm_xml.put('SANK_MEK', round(float(sanctions_mek or 0), 2))
             hm_xml.put('SANK_MEE', 0)
             hm_xml.put('SANK_EKMP', 0)
+
             if register_type > 2:
                 hm_xml.put('DISP', EXAMINIATIONS[register_type-2].encode('cp1251'))
             hm_xml.end('SCHET')
@@ -540,6 +549,7 @@ def main():
 
                 if record.event_uid != current_event:
                     current_event = record.event_uid
+
                     if event_counter != 0:
                         hm_xml.put('COMENTSL', safe_str(comment))
                         hm_xml.put('PAYMENT_KIND', payment_kind)
@@ -547,24 +557,30 @@ def main():
 
                     hm_xml.start('SLUCH')
                     hm_xml.put('IDCASE', record.event_uid)
+
                     if register_type in (1, 2):
                         hm_xml.put('USL_OK', record.event_term_code or '')
                     hm_xml.put('VIDPOM', record.event_kind_code or '')
+
                     if register_type in (1, 2):
                         hm_xml.put('FOR_POM', record.event_form_code or '')
+
                     if register_type == 2:
                         hm_xml.put('VID_HMP', record.hitech_kind_code or '')
                         hm_xml.put('METOD_HMP', record.hitech_method_code or '')
+
                     if register_type in (1, 2):
                         hm_xml.put('NPR_MO', record.event_referred_organization_code or '')
                         hm_xml.put('EXTR', record.event_hospitalization_code or '')
                     hm_xml.put('LPU', record.event_organization_code or '')
                     hm_xml.put('LPU_1', record.event_department_code or '')
+
                     if register_type in (1, 2):
                         hm_xml.put('PODR', record.event_division_code or '')
                         hm_xml.put('PROFIL', record.event_profile_code or '')
                         hm_xml.put('DET', event_is_children_profile)
                     hm_xml.put('NHISTORY', record.anamnesis_number.encode('cp1251'))
+
                     if register_type in (3, 4, 5, 6, 7, 8, 9, 10, 11):
                         hm_xml.put('P_OTK', record.examination_rejection or '0')
 
@@ -666,7 +682,6 @@ def main():
 
                 if record.service_payment_type_code == 1 and record.service_organization_code == '280003':
                     sumv_usl_sum2 += sumv_usl
-
 
                 hm_xml.put('SUMV_USL', sumv_usl or 0)
                 hm_xml.put('PRVS', record.service_worker_speciality_code or '')

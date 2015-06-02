@@ -32,7 +32,7 @@ def underpay_repeated_service(register_element):
     """
         Санкции на повторно поданные услуги
     """
-    query = """
+    old_query = """
         select distinct ps1.id_pk
         from provided_service ps1
             join provided_event
@@ -74,6 +74,38 @@ def underpay_repeated_service(register_element):
                  where pss.service_fk = ps1.id_pk and pss.error_fk = 64) = 0
     """
 
+    query = """
+        with current_period as (select format('%%s-%%s-01', %(year)s, %(period)s)::DATE as val)
+
+        select DISTINCT service_id from (
+        select ps.id_pk as service_id,
+            ps.event_fk as event_id,
+
+            row_number() over (PARTITION BY i.id, ps.code_fk, ps.end_date, ps.start_date,
+            ps.basic_disease_fk, ps.worker_code order by format('%%s-%%s-01', mr.year, mr.period)::DATE) as rnum_repeated,
+
+            row_number() over (PARTITION BY i.id, ps.code_fk, ps.end_date, ps.start_date,
+            ps.basic_disease_fk, ps.worker_code, mr.year, mr.period order by ps.id_pk) as rnum_duplicate,
+
+            format('%%s-%%s-01', mr.year, mr.period)::DATE as checking_period
+        from provided_service ps
+            join provided_event pe
+                on ps.event_fk = pe.id_pk
+            join medical_register_record mrr
+                on pe.record_fk = mrr.id_pk
+            join medical_register mr
+                on mrr.register_fk = mr.id_pk
+            JOIN patient p
+                on mrr.patient_fk = p.id_pk
+            join insurance_policy i
+                on i.version_id_pk = p.insurance_policy_fk
+        where mr.is_active
+            and mr.organization_code = %(organization)s
+            and format('%%s-%%s-01', mr.year, mr.period)::DATE between (select val from current_period) - interval '4 months' and (select val from current_period)
+        ) as T where checking_period = (select val from current_period) and rnum_repeated > 1 and rnum_duplicate = 1
+            AND (select count(pss.id_pk) from provided_service_sanction pss
+                 where pss.service_fk = T.service_id and pss.error_fk = 64) = 0
+    """
     services = ProvidedService.objects.raw(
         query, dict(year=register_element['year'],
                     period=register_element['period'],

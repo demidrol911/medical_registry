@@ -6,9 +6,9 @@ import shutil
 
 #OUTBOX_DIR = u'd:/work/outbox/'
 OUTBOX_DIR = u'//s01-2800-fs01/vipnet/medical_registry/outbox/'
-ACTS_DIR = u'x:/reestr/g2015/period03/'
+ACTS_DIR = u'x:/reestr/g2015/period04/'
 
-AGMA_DIR = u'x:/reestr/g2015/period03/'
+AGMA_DIR = u'x:/reestr/g2015/period04/'
 custom_file = ''#u'X:/REESTR/G2014/Period10/Больницам октябрь.jpg'
 
 act_name_pattern = re.compile(r'_+\d*$')

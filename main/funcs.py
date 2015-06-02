@@ -24,6 +24,15 @@ def safe_date(string):
     return date
 
 
+def safe_date_to_string(dtime):
+    try:
+        date = dtime.strftime('%Y-%m-%d').date()
+    except:
+        date = None
+
+    return date
+
+
 def safe_float(string):
     try:
         _float = float(string)
