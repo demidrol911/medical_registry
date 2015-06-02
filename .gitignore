@@ -2,6 +2,9 @@
 /static/extjs
 /static/icons
 /static/img
+/extjs
+/media
+/collected_static
 *.xml
 *.pyc
 path.py
