@@ -190,12 +190,13 @@ def get_services_json(request):
             ps.comment as srv_comment,
             ps.tariff,
             ARRAY(
-                select DISTINCT me.old_code
+                select me.old_code
                 from provided_service_sanction pss
                     join medical_error me
                         on me.id_pk = pss.error_fk
                 WHERE
                     pss.service_fk = ps.id_pk and pss.is_active
+                ORDER BY me.weight desc limit 1
             ) as errors,
             array(
                 select idc.idc_code

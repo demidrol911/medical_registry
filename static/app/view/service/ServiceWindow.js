@@ -27,7 +27,7 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 	items: [
 		{
 			xtype: 'grid',
-			plugins: ['gridfilters'],
+			plugins: [{ptype: 'gridfilters', menuFilterText: 'Фильтр'}],
 			requires: [
 				'Ext.grid.column.Action',
 				'Ext.grid.feature.Grouping',
@@ -208,7 +208,8 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 					text: 'Ошибки',
 					dataIndex: 'errors',
 					width: 80,
-					filter: 'list',
+					filter: {type: 'list', labelField: 'Фильтр'},
+
 					flex: 1,
 				}                        
 			],
