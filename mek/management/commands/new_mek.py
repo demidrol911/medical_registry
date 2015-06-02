@@ -2,15 +2,15 @@
 
 from django.core.management.base import BaseCommand
 from django.db import connection, transaction
+from main.funcs import howlong
 from main.models import ProvidedService, MedicalRegister, \
     ProvidedServiceCoefficient, Sanction
 
-from mek.checks import set_sanction, set_sanctions
+from mek.checks import set_sanction
 from mek import checks
 
-from datetime import datetime, timedelta, date
+from datetime import datetime
 
-import time
 import re
 
 
@@ -52,6 +52,13 @@ def get_services(register_element):
         provided_service.payment_type_fk as payment_type_code,
         provided_service.start_date,
         provided_service.end_date,
+
+        (select count(distinct ps2.id_pk)
+                from provided_service ps2
+                    join medical_service ms2
+                        on ms2.id_pk = ps2.code_fk
+                where ps2.event_fk = provided_event.id_pk
+                   and (ms2.group_fk != 27 or ms2.group_fk is null)) AS count_services_in_event,
 
         medical_service.code as service_code,
         (
@@ -638,6 +645,58 @@ def update_payment_kind(register_element):
     transaction.commit()
     cursor.close()
 
+
+@howlong
+def calculate_tariff(register_element):
+    min_date_for_stopped_policy = datetime.strptime('2011-01-01', '%Y-%m-%d').date()
+    with transaction.atomic():
+        for row, service in enumerate(get_services(register_element)):
+            payment_type = service.payment_type_code
+            if row % 1000 == 0:
+                print row
+
+            if not payment_type:
+
+                if not service.patient_policy:
+                    set_sanction(service, 54)
+                    payment_type = 3
+
+                elif service.person_deathdate \
+                        and service.person_deathdate < service.start_date:
+                    set_sanction(service, 56)
+                    payment_type = 3
+
+                elif service.policy_stop_date:
+                    if service.policy_stop_date < service.start_date \
+                            and service.stop_reason in (1, 3, 4):
+                        set_sanction(service, 53)
+                        payment_type = 3
+
+                    if service.policy_type == 1 and service.policy_stop_date < \
+                            min_date_for_stopped_policy:
+                        set_sanction(service, 54)
+                        payment_type = 3
+
+            payments = get_payments_sum(service)
+
+            service.calculated_payment = payments['calculated_payment']
+            service.provided_tariff = payments['provided_tariff']
+
+            if (payments['tariff'] - float(service.tariff)) >= 0.01 or \
+                    (payments['tariff'] - float(service.tariff)) <= -0.01:
+                set_sanction(service, 61)
+                payment_type = 3
+            else:
+                service.accepted_payment = payments['accepted_payment']
+                service.invoiced_payment = payments['accepted_payment']
+
+                if not payment_type:
+                    service.payment_type_id = 2
+                    payment_type = 2
+
+            service.save()
+
+
 SERVICE_COMMENT_PATTERN = re.compile(r'^(?P<endovideosurgery>[0-1]?)(?:[0-1]?)'
                                      r'(?:[0-1]?)(?:[0-1]?)'
                                      r'(?P<mobile_brigade>[0-1]?)'
@@ -843,7 +902,8 @@ def get_payments_sum(service):
                 service=service, coefficient_id=4)
 
         if service.organization_code == '280005' \
-                and service.service_code in ('001203', '001204'):
+                and service.service_code in ('001203', '001204') \
+                and service.count_services_in_event > 1:
                 #and is_aood_x_ray\
             accepted_payment += round(accepted_payment * 1.9, 2)
             provided_tariff += round(provided_tariff * 1.9, 2)
@@ -864,14 +924,10 @@ def get_payments_sum(service):
 
 
 def main():
-    min_date_for_stopped_policy = datetime.strptime('2011-01-01', '%Y-%m-%d').date()
-
     register_element = get_register_element()
 
     while register_element:
-        start = time.clock()
         print register_element
-        errors = []
 
         current_period = '%s-%s-01' % (register_element['year'],
                                        register_element['period'])
@@ -905,78 +961,25 @@ def main():
             update_patient_attachment_code(register_element)
             update_payment_kind(register_element)
 
-            print u'repeated service'
             checks.underpay_repeated_service(register_element)
-            print u'wrong date'
             checks.underpay_wrong_date_service(register_element)
-            print u'duplicate'
             checks.underpay_duplicate_services(register_element)
-            print u'cross dates'
             checks.underpay_cross_dates_services(register_element)
-            print u'disease_gender'
             checks.underpay_disease_gender(register_element)
-            print u'service gender'
             checks.underpay_service_gender(register_element)
-            print u'wrong age'
             checks.underpay_wrong_age_service(register_element)
-            print u'not paid'
             checks.underpay_not_paid_in_oms(register_element)
-            print u'invalid hitech service disease'
             checks.underpay_invalid_hitech_service_diseases(register_element)
-            print u'wrong_age_adult_examination'
             checks.underpay_wrong_age_adult_examination(register_element)
-            print u'wrong_age_examination_age_group'
             checks.underpay_wrong_examination_age_group(register_element)
-            print u'underpay_wrong_age_examination_children_adopted'
             checks.underpay_wrong_age_examination_children_adopted(register_element)
-            print u'underpay_wrong_age_examination_children_difficult'
             checks.underpay_wrong_age_examination_children_difficult(register_element)
             checks.underpay_service_term_mismatch(register_element)
             checks.underpay_service_term_kind_mismatch(register_element)
-
-            print u'underpay_wrong_gender_examination'
             checks.underpay_wrong_gender_examination(register_element)
 
         print 'iterate tariff', register_element
-        with transaction.atomic():
-            for row, service in enumerate(get_services(register_element)):
-                if row % 1000 == 0:
-                    print row
-                #print '$$$', dir(service), service.payment_type
-                if not service.payment_type_code:
-
-                    if not service.patient_policy:
-                        set_sanction(service, 54)
-
-                    elif service.person_deathdate \
-                            and service.person_deathdate < service.start_date:
-                        set_sanction(service, 56)
-
-                    elif service.policy_stop_date:
-                        if service.policy_stop_date < service.start_date \
-                                and service.stop_reason in (1, 3, 4):
-                            set_sanction(service, 53)
-
-                        if service.policy_type == 1 and service.policy_stop_date < \
-                                min_date_for_stopped_policy:
-                            set_sanction(service, 54)
-
-                payments = get_payments_sum(service)
-
-                service.calculated_payment = payments['calculated_payment']
-                service.provided_tariff = payments['provided_tariff']
-
-                if (payments['tariff'] - float(service.tariff)) >= 0.01 or \
-                        (payments['tariff'] - float(service.tariff)) <= -0.01:
-                    set_sanction(service, 61)
-                else:
-                    service.accepted_payment = payments['accepted_payment']
-                    service.invoiced_payment = payments['accepted_payment']
-
-                    if not service.payment_type_code:
-                        service.payment_type_id = 2
-
-                service.save()
+        calculate_tariff(register_element)
 
         print u'stomat, outpatient, examin'
         if register_element['status'] == 500:
@@ -992,6 +995,7 @@ def main():
             checks.underpay_duplicate_examination_in_current_register(register_element)
 
             checks.underpay_second_phase_examination(register_element)
+            checks.underpay_neurologist_first_phase_exam(register_element)
             checks.underpay_outpatient_event(register_element)
 
         print Sanction.objects.filter(
@@ -1005,10 +1009,6 @@ def main():
             set_status(register_element, 3)
         elif register_element['status'] in (5, 500):
             set_status(register_element, 8)
-
-        elapsed = time.clock() - start
-        print register_element['organization_code'], \
-            u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
 
         register_element = get_register_element()
 

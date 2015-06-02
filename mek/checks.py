@@ -2,6 +2,7 @@
 
 from django.db import transaction
 from django.db.models import Q, F
+from main.funcs import howlong
 from main.models import Sanction, SanctionStatus, ProvidedService
 
 
@@ -26,6 +27,7 @@ def set_sanctions(service_qs, error_code):
             set_sanction(service, error_code)
 
 
+@howlong
 def underpay_repeated_service(register_element):
     """
         Санкции на повторно поданные услуги
@@ -78,9 +80,9 @@ def underpay_repeated_service(register_element):
                     organization=register_element['organization_code']))
 
     set_sanctions(services, 64)
-    #return [(rec.pk, 1, rec.invoiced_payment, 64) for rec in services]
 
 
+@howlong
 def underpay_repeated_examination(register_element):
     """
         Санкции на повторно поданную диспансеризацию
@@ -234,6 +236,7 @@ def underpay_repeated_examination(register_element):
     set_sanctions(services2, 64)
 
 
+@howlong
 def underpay_ill_formed_adult_examination(register_element):
     """
         Санкции на взрослую диспансеризацю у которой в случае
@@ -304,6 +307,7 @@ def underpay_ill_formed_adult_examination(register_element):
     set_sanctions(services, 34)
 
 
+@howlong
 def underpay_duplicate_services(register_element):
     """
         Санкции на дубликатные услуги
@@ -377,6 +381,7 @@ def underpay_duplicate_services(register_element):
     set_sanctions(services, 67)
 
 
+@howlong
 def underpay_cross_dates_services(register_element):
     """
         Санкции на пересечения дней в отделениях
@@ -413,7 +418,9 @@ def underpay_cross_dates_services(register_element):
                     and mr1.period = %(period)s
                     and mr1.organization_code = %(organization)s
                     and provided_event.term_fk = 1
-                    and ms.group_fk not in (27, 5, 3)
+                    and (ms.group_fk not in (27, 5, 3)
+                         or ms.group_fk is null
+                         )
                     and ms.code not like 'A%%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
@@ -424,6 +431,7 @@ def underpay_cross_dates_services(register_element):
             and mr.year = %(year)s
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
+            and pss.id_pk is null
             and pe.term_fk = 3
             and ms.code not like 'A%%'
         order by ps.id_pk
@@ -458,7 +466,9 @@ def underpay_cross_dates_services(register_element):
                     and mr1.period = %(period)s
                     and mr1.organization_code = %(organization)s
                     and provided_event.term_fk in (1, 2)
-                    and ms.group_fk not in (27, 5, 3)
+                    and (ms.group_fk not in (27, 5, 3)
+                         or ms.group_fk is null
+                         )
                     and ms.code not like 'A%%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
@@ -489,6 +499,7 @@ def underpay_cross_dates_services(register_element):
     set_sanctions(services2, 73)
 
 
+@howlong
 def underpay_disease_gender(register_element):
     """
         Санкции на несоответствие пола диагнозу
@@ -504,6 +515,7 @@ def underpay_disease_gender(register_element):
     set_sanctions(services, 29)
 
 
+@howlong
 def underpay_service_gender(register_element):
     """
         Санкции на несоответствие пола услуге
@@ -519,6 +531,7 @@ def underpay_service_gender(register_element):
     return set_sanctions(services, 41)
 
 
+@howlong
 def underpay_wrong_date_service(register_element):
     query = """
         select ps.id_pk--, i.id, ps.code_fk
@@ -559,6 +572,7 @@ def underpay_wrong_date_service(register_element):
     set_sanctions(services, 32)
 
 
+@howlong
 def underpay_wrong_age_service(register_element):
     query = """
         select ps.id_pk
@@ -595,6 +609,7 @@ def underpay_wrong_age_service(register_element):
     set_sanctions(services, 35)
 
 
+@howlong
 def underpay_wrong_examination_age_group(register_element):
     query = """
         select ps.id_pk
@@ -638,6 +653,7 @@ def underpay_wrong_examination_age_group(register_element):
     set_sanctions(services, 35)
 
 
+@howlong
 def underpay_not_paid_in_oms(register_element):
     """
         Санкции на диагнозы и услуги не оплачиваемые по ТП ОМС
@@ -662,6 +678,7 @@ def underpay_not_paid_in_oms(register_element):
     set_sanctions(services2, 59)
 
 
+@howlong
 def underpay_examination_event(register_element):
     """
         Санкции на случаи со снятыми услугами
@@ -721,29 +738,12 @@ def underpay_examination_event(register_element):
     ProvidedService.objects.filter(pk__in=errors_pk).update(
         accepted_payment=0, payment_type=3)
 
-    errors_objs = []
-    errors_status = []
     with transaction.atomic():
         for rec in errors:
             set_sanction(ProvidedService.objects.get(pk=rec[0]), rec[3])
 
-    '''
-        sanction = Sanction(
-            service_id=rec[0],
-            type_id=1,
-            is_active=True,
-            underpayment=rec[2],
-            error_id=rec[3]
-        )
-        print rec[0], sanction.id_pk
-        errors_objs.append(sanction)
-        errors_status.append(SanctionStatus(sanction=sanction, type=SanctionStatus.SANCTION_TYPE_ADDED_BY_MEK))
 
-    Sanction.objects.bulk_create(errors_objs)
-    SanctionStatus.objects.bulk_create(errors_status)
-    '''
-
-
+@howlong
 def underpay_invalid_stomatology_event(register_element):
     """
         Санкции на неверно оформленные случаи стоматологии
@@ -822,6 +822,7 @@ def underpay_invalid_stomatology_event(register_element):
     set_sanctions(services, 34)
 
 
+@howlong
 def underpay_invalid_outpatient_event(register_element):
     """
         Санкции на неверно оформленные услуги по поликлинике с заболеванием
@@ -892,6 +893,7 @@ def underpay_invalid_outpatient_event(register_element):
     set_sanctions(services, 34)
 
 
+@howlong
 def underpay_outpatient_event(register_element):
     """
         Санкции на случаи, если хоть одна услуга снята с оплаты
@@ -922,6 +924,7 @@ def underpay_outpatient_event(register_element):
                                 join medical_error mei
                                     on mei.id_pk = pssi.error_fk
                             WHERE pssi.service_fk = ps1.id_pk
+                                  and pssi.is_active
                             ORDER BY mei.weight DESC
                             limit 1
                         )
@@ -935,7 +938,7 @@ def underpay_outpatient_event(register_element):
             on provided_service.event_fk = T.event_id
         LEFT JOIN provided_service_sanction pss
             on pss.service_fk = provided_service.id_pk
-                and error_fk = T.error_code
+                and pss.error_fk = T.error_code AND pss.is_active
         where (ms.group_fk != 27 or ms.group_fk is NULL)
         and pss.id_pk is null
     """
@@ -950,30 +953,12 @@ def underpay_outpatient_event(register_element):
     ProvidedService.objects.filter(pk__in=errors_pk).update(
         accepted_payment=0, payment_type=3)
 
-    errors_objs = []
-    errors_status = []
-
     with transaction.atomic():
         for rec in errors:
             set_sanction(ProvidedService.objects.get(pk=rec[0]), rec[3])
 
-    '''
-        sanction = Sanction(
-            service_id=rec[0],
-            type_id=1,
-            is_active=True,
-            underpayment=rec[2],
-            error_id=rec[3]
-        )
-        print rec[0], sanction.id_pk
-        errors_objs.append(sanction)
-        errors_status.append(SanctionStatus(sanction=sanction, type=SanctionStatus.SANCTION_TYPE_ADDED_BY_MEK))
 
-    Sanction.objects.bulk_create(errors_objs)
-    SanctionStatus.objects.bulk_create(errors_status)
-    '''
-
-
+@howlong
 def underpay_invalid_hitech_service_diseases(register_element):
     query1 = """
         select ps.id_pk
@@ -1036,6 +1021,7 @@ def underpay_invalid_hitech_service_diseases(register_element):
     set_sanctions(services2, 78)
 
 
+@howlong
 def underpay_wrong_age_adult_examination(register_element):
     query = """
         select id_pk from provided_service where event_fk in (
@@ -1071,6 +1057,7 @@ def underpay_wrong_age_adult_examination(register_element):
     set_sanctions(services, 35)
 
 
+@howlong
 def underpay_adult_examination_service_count(register_element):
     query1 = """
         select id_pk from provided_service where event_fk in (
@@ -1208,6 +1195,7 @@ def underpay_adult_examination_service_count(register_element):
     set_sanctions(services2, 34)
 
 
+@howlong
 def underpay_ill_formed_children_examination(register_element):
     query = """
     select id_pk from provided_service where event_fk in (
@@ -1276,6 +1264,7 @@ def underpay_ill_formed_children_examination(register_element):
     set_sanctions(services, 34)
 
 
+@howlong
 def underpay_wrong_examination_attachment(register_element):
     query = """
         select distinct ps1.id_pk--, 1, ps1.invoiced_payment, 1
@@ -1339,6 +1328,7 @@ def underpay_wrong_examination_attachment(register_element):
     set_sanctions(services, 1)
 
 
+@howlong
 def underpay_wrong_age_examination_children_adopted(register_element):
     query = """
         select ps.id_pk
@@ -1376,6 +1366,7 @@ def underpay_wrong_age_examination_children_adopted(register_element):
     set_sanctions(services, 35)
 
 
+@howlong
 def underpay_wrong_age_examination_children_difficult(register_element):
     query = """
         select ps.id_pk
@@ -1411,6 +1402,7 @@ def underpay_wrong_age_examination_children_difficult(register_element):
     return set_sanctions(services, 35)
 
 
+@howlong
 def underpay_wrong_gender_examination(register_element):
     """
     Санкции на несоответствие услуги полу
@@ -1433,8 +1425,9 @@ def underpay_wrong_gender_examination(register_element):
                  and mr.year = %(year)s
                  and mr.period = %(period)s
                  and mr.organization_code = %(organization)s
-                 and ms.group_fk in (11, 12, 13, 9, 7)
-                 and (ms.examination_primary or ms.examination_final)
+                 and ((ms.group_fk IN (9, 7) AND ms.examination_final)
+                       or (ms.group_fk IN (11, 12, 13) AND ms.examination_primary)
+                     )
                  and ms.is_cost
                  and pt.gender_fk != ms.gender_fk
                  and ps.payment_type_fk = 2
@@ -1448,6 +1441,7 @@ def underpay_wrong_gender_examination(register_element):
     return set_sanctions(services, 41)
 
 
+@howlong
 def underpay_duplicate_examination_in_current_register(register_element):
     query = """
         select ps.id_pk
@@ -1493,6 +1487,7 @@ def underpay_duplicate_examination_in_current_register(register_element):
     set_sanctions(services, 64)
 
 
+@howlong
 def underpay_service_term_kind_mismatch(register_element):
     query = """
         select ps.id_pk
@@ -1528,6 +1523,7 @@ def underpay_service_term_kind_mismatch(register_element):
     set_sanctions(services, 79)
 
 
+@howlong
 def underpay_service_term_mismatch(register_element):
     query = """
         select ps.id_pk
@@ -1561,6 +1557,7 @@ def underpay_service_term_mismatch(register_element):
     set_sanctions(services, 76)
 
 
+@howlong
 def underpay_second_phase_examination(register_element):
     query = """
         select ps.id_pk
@@ -1608,3 +1605,46 @@ def underpay_second_phase_examination(register_element):
                     organization=register_element['organization_code']))
 
     set_sanctions(services, 34)
+
+
+@howlong
+def underpay_neurologist_first_phase_exam(register_element):
+    query = """
+            select ps2.id_pk
+            FROM provided_service ps2
+            where ps2.event_fk in (
+                select DISTINCT ps1.event_fk
+                from (
+                    select pe.id_pk AS event_id
+                    FROM medical_register mr
+                        JOIN medical_register_record mrr
+                           ON mr.id_pk = mrr.register_fk
+                        JOIN provided_event pe
+                           ON mrr.id_pk = pe.record_fk
+                        JOIN provided_service ps
+                           ON ps.event_fk = pe.id_pk
+                        JOIN medical_service ms
+                           ON ms.id_pk = ps.code_fk
+                    WHERE mr.is_active
+                       AND mr.period = %(period)s
+                       AND mr.year = %(year)s
+                       AND mr.organization_code = %(organization)s
+                       AND ps.payment_type_fk = 2
+                       AND ms.code = '019001'
+                       AND ps.start_date >= '2015-04-01'
+                 ) as T
+                 JOIN provided_service ps1
+                    ON ps1.event_fk = T.event_id
+                 JOIN medical_service ms1
+                    ON ms1.id_pk = ps1.code_fk
+                 where
+                     ms1.code = '019020'
+                     and ps1.start_date <= '2015-04-01'
+                     AND ps1.payment_type_fk = 2)
+            """
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 78)
