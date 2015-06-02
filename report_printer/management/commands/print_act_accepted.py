@@ -103,6 +103,8 @@ def print_first_page(act_book, mo, data, data_coefficient,
     last_capitation = 0
     is_print_capit = True
     is_print_unit = True
+    is_print_examination_till_1_04_2015 = True
+    is_print_examination_since_1_04_2015 = True
     is_print_ambulance = True
     last_division_id = 0
     act_book.set_sheet(0)
@@ -120,8 +122,14 @@ def print_first_page(act_book, mo, data, data_coefficient,
     sum_term = None
     total_sum = None
     sum_policlinic = None
+    sum_adult_exam = None
     is_policlinic = False
     is_ambulance = False
+
+    is_exam_till_1_04_2015 = False
+    is_exam_since_1_04_2015 = False
+    is_exam_all_1_04_2015 = False
+
     for row in data:
         term = row[0]
         capitation = row[1]
@@ -209,8 +217,11 @@ def print_first_page(act_book, mo, data, data_coefficient,
                 total_sum = calc_sum(total_sum, sum_term)
                 last_title_division = None
                 last_division_id = 0
-            if is_policlinic or is_ambulance:
+            if is_policlinic or is_ambulance or is_exam_till_1_04_2015 or is_exam_since_1_04_2015:
                 sum_policlinic = calc_sum(sum_policlinic, sum_term)
+
+            if is_exam_all_1_04_2015:
+                sum_adult_exam = calc_sum(sum_adult_exam, sum_term)
 
             sum_term = None
 
@@ -225,6 +236,24 @@ def print_first_page(act_book, mo, data, data_coefficient,
                 print_division(act_book, u'Итого по скорой помощи', sum_policlinic)
                 act_book.row_inc()
                 is_ambulance = False
+
+            if is_exam_till_1_04_2015 and not(term == 4 and capitation == 23):
+                act_book.set_style(TOTAL_STYLE)
+                print_division(act_book, u'Итого по взр. диспансер. до 1 апреля', sum_policlinic)
+                act_book.row_inc()
+                is_exam_till_1_04_2015 = False
+
+            if is_exam_since_1_04_2015 and not(term == 4 and capitation == 24):
+                act_book.set_style(TOTAL_STYLE)
+                print_division(act_book, u'Итого по взр. диспансер. после 1 апреля', sum_policlinic)
+                act_book.row_inc()
+                is_exam_since_1_04_2015 = False
+
+            if is_exam_all_1_04_2015 and not(term == 4 and capitation in [23, 24]):
+                act_book.set_style(TOTAL_STYLE)
+                print_division(act_book, u'Итого по взр. диспансер.', sum_adult_exam)
+                act_book.row_inc()
+                is_exam_all_1_04_2015 = False
 
             if term == 3:
                 if capitation == 0 and is_print_capit:
@@ -245,6 +274,24 @@ def print_first_page(act_book, mo, data, data_coefficient,
                     last_title_division = None
                     last_division_id = 0
                     is_print_unit = False
+
+            # Разбивка диспансеризации взрослых относительно 1.04.2015
+            # В следующем периоде будет не нужна (надеюсь)
+            if term == 4 and capitation == 23 and is_print_examination_till_1_04_2015:
+                act_book.set_style(TITLE_STYLE)
+                act_book.write_cell(u'Диспансеризация взрослых до 1.04.2015', 'r', ACT_WIDTH+1)
+                is_print_examination_till_1_04_2015 = False
+                is_exam_till_1_04_2015 = True
+                is_exam_all_1_04_2015 = True
+                sum_policlinic = None
+            if term == 4 and capitation == 24 and is_print_examination_since_1_04_2015:
+                act_book.set_style(TITLE_STYLE)
+                act_book.write_cell(u'Диспансеризация взрослых после 1.04.2015', 'r', ACT_WIDTH+1)
+                is_print_examination_since_1_04_2015 = False
+                is_exam_since_1_04_2015 = True
+                is_exam_all_1_04_2015 = True
+                sum_policlinic = None
+
             if term == 5 and is_print_ambulance:
                 act_book.set_style(TITLE_STYLE)
                 act_book.write_cell(u'Скорая помощь', 'r', ACT_WIDTH+1)
@@ -290,7 +337,7 @@ def print_first_page(act_book, mo, data, data_coefficient,
         u'18 - 59 год мужчина',
         u'18 - 54 год женщина',
         u'60 лет и старше мужчина',
-        u'60 лет и старше год женщина',
+        u'55 лет и старше год женщина',
     ]
 
     act_book.row_inc()
@@ -1038,7 +1085,14 @@ def print_accepted_services(act_book, mo, sum_capitation_policlinic,
                 4 as term,
 
                 -- Подушевое
-                1 AS capitation,
+                CASE WHEN (select ps1.start_date from
+                       provided_service ps1
+                       JOIN medical_service ms1 on ps1.code_fk = ms1.id_pk
+                       WHERE ps1.event_fk = ps.event_fk
+                             and ps1.payment_type_fk = 2
+                             and ms1.code = '019001') >= '2015-04-01' THEN 24
+                       ELSE 23
+                END AS capitation,
 
                 -- Место или причина
                 (select ms1.subgroup_fk from
@@ -2938,6 +2992,8 @@ class Command(BaseCommand):
                     sum_capitation_amb=sum_capitation_ambulance
                 )
 
+                registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo)
+
                 print_errors_page(act_book, mo, capitation_events,
                                   treatment_events, data)
 
@@ -2946,20 +3002,19 @@ class Command(BaseCommand):
                     capitation_events, treatment_events,
                     data
                 )
-                print_order_146(
-                    act_book, mo,
-                    sum_capitation_policlinic,
-                    sum_capitation_ambulance
-                )
-
-                #print_error_fund(act_book, mo, data, handbooks)
-
-                ### Согазовские отчёты
-                registry_sogaz_1.print_registry_sogaz_2(act_book=act_book, mo=mo)
-                registry_sogaz_new.print_registry_sogaz_1(act_book=act_book, mo=mo)
-                registry_sogaz_2.print_registry_sogaz_3(act_book=act_book, mo=mo)
 
                 if status == 8:
+                    print_order_146(
+                        act_book, mo,
+                        sum_capitation_policlinic,
+                        sum_capitation_ambulance
+                    )
+
+                    #print_error_fund(act_book, mo, data, handbooks)
+
+                    ### Согазовские отчёты
+                    registry_sogaz_new.print_registry_sogaz_1(act_book=act_book, mo=mo)
+                    registry_sogaz_2.print_registry_sogaz_3(act_book=act_book, mo=mo)
                     PseExporter().handle(*[mo, 6])
                 if status == 3:
                     func.change_register_status(mo, 9)

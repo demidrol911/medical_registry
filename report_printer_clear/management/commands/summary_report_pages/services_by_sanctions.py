@@ -1,5 +1,6 @@
 #! -*- coding: utf-8 -*-
 from copy import deepcopy
+from main.funcs import howlong
 
 from main.models import MedicalOrganization
 from report_printer_clear.utils.excel_style import VALUE_STYLE
@@ -35,9 +36,10 @@ class SanctionsPage(ReportPage):
     }
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 1
 
+    @howlong
     def calculate(self, parameters):
         query = '''
                 SELECT
@@ -96,6 +98,8 @@ class SanctionsPage(ReportPage):
                        ON mrr.patient_fk = pt.id_pk
                     JOIN medical_service ms
                        ON ms.id_pk = ps.code_fk
+                    JOIN medical_organization dep
+                       ON dep.id_pk = ps.department_fk
                     LEFT JOIN idc
                        ON ps.basic_disease_fk = idc.id_pk
                     JOIN provided_service_sanction pss
@@ -128,14 +132,21 @@ class SanctionsPage(ReportPage):
                    AND (ms.group_fk != 27
                         OR ms.group_fk is null
                        )
-                  ORDER BY failure_cause_number ASC, error_id ASC,
-                           patient_fullname, event_id, service_code
                 '''
-        self.data = MedicalOrganization.objects.raw(query, dict(
-            period=parameters.registry_period,
-            year=parameters.registry_year,
-            organization=parameters.organization_code
-        ))
+
+        self.data = MedicalOrganization.objects.raw(
+            query + (("AND dep.old_code = '%s'" % str(parameters.department))
+                     if parameters.department
+                     else '')
+            + '''
+              ORDER BY failure_cause_number ASC, error_id ASC,
+              patient_fullname, event_id, service_code
+              ''',
+            dict(
+                period=parameters.registry_period,
+                year=parameters.registry_year,
+                organization=parameters.organization_code
+            ))
 
     def print_page(self, sheet, parameters):
         zero_sum = {
@@ -214,7 +225,7 @@ class SanctionsPage(ReportPage):
             sheet.write(u'Итого по ошибкам', 'c')
             SanctionsPage.print_sum(sheet, total_amount)
 
-        sheet.hide_column('N:P')
+        sheet.hide_column('O:P')
 
         sheet.set_style({})
         sheet.write('', 'r')
@@ -272,8 +283,7 @@ class SanctionsPage(ReportPage):
         sheet.write('', 'c')
         sheet.write('', 'c')
         sheet.set_style({'bottom': 1})
-        sheet.write('', 'c')
-        sheet.write('', 'c')
+        sheet.write('', 'c', 1)
         sheet.set_style({})
         sheet.write(u'подпись', 'c')
         sheet.write('()', 'c')
@@ -286,8 +296,7 @@ class SanctionsPage(ReportPage):
         sheet.write('', 'c')
         sheet.write('', 'c')
         sheet.set_style({'bottom': 1})
-        sheet.write('', 'c')
-        sheet.write('', 'c')
+        sheet.write('', 'c', 1)
         sheet.set_style({})
         sheet.write(u'подпись', 'c')
         sheet.write('()', 'c')
@@ -301,8 +310,7 @@ class SanctionsPage(ReportPage):
         sheet.write('', 'c')
         sheet.write('', 'c')
         sheet.set_style({'bottom': 1})
-        sheet.write('', 'c')
-        sheet.write('', 'c')
+        sheet.write('', 'c', 1)
         sheet.set_style({})
         sheet.write(u'подпись', 'c')
         sheet.write(u'(Е.Л.Дьячкова)', 'c')
@@ -312,7 +320,7 @@ class SanctionsPage(ReportPage):
         sheet.write('', 'r')
         sheet.write(u'Должность, подпись руководителя '
                     u'медицинской организации, ознакомившегося с Актом', 'r')
-        sheet.write('', 'r')
+        sheet.write('', 'r', 2)
         sheet.write(u'Дата'+'_'*30, 'c')
 
 

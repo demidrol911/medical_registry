@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 from tfoms.models import (
     ProvidedEvent, ProvidedService, MedicalRegister, IDC, MedicalService,
     MedicalOrganization, Address, Patient)
+from django.db import connection
 
 from dbfpy import dbf
 
@@ -14,6 +15,7 @@ def unicode_to_cp866(string):
 
 def get_department_services(year, period, department_code):
     query = """
+        -- Выборка услуг для выгрузки Т-файлов экспертам --
         select DISTINCT ps.id_pk,
             md.code as division_code,
             ms.code as service_code,
@@ -40,32 +42,10 @@ def get_department_services(year, period, department_code):
             pe.hospitalization_fk as hospitalization_code,
             pe.worker_code,
             tro.code as outcome_code,
-            COALESCE((
-                WITH RECURSIVE adm_temp(id_pk, name, parent_fk) AS (
-                 SELECT aa.id_pk, aa.name, aa.parent_fk FROM administrative_area aa WHERE aa.id_pk = adr.administrative_area_fk
-                union all
-                 select aa1.id_pk, aa1.name, aa1.parent_fk from adm_temp adt, administrative_area aa1 where aa1.id_pk = adt.parent_fk
-                )
-                SELECT name FROM adm_temp where parent_fk != 1 or parent_fk is not null
-                order by id_pk limit 1
-            ), '') || ', ' ||
-            Coalesce((
-                WITH RECURSIVE adm_temp(id_pk, name, parent_fk) AS (
-                 SELECT aa.id_pk, aa.name, aa.parent_fk FROM administrative_area aa WHERE aa.id_pk = adr.administrative_area_fk
-                union all
-                 select aa1.id_pk, aa1.name, aa1.parent_fk from adm_temp adt, administrative_area aa1 where aa1.id_pk = adt.parent_fk
-                )
-                SELECT name FROM adm_temp where parent_fk != 1 or parent_fk is not null
-                order by id_pk limit 1 offset 1
-            ), '') || ', ' ||
-            COALESCE(aa.name, '') || ', ' ||
-            coalesce(adr.street, '') || ', ' || coalesce(adr.house_number, '') || ', ' ||
-            COALESCE(adr.extra_number, '') || ', ' || coalesce(adr.room_number) as address,
-            case
-                when pe.term_fk = 4 or ((ms.group_fk = 24 and ms.reason_fk = 1 AND ps.department_fk NOT IN (15, 88, 89))
-                    and medOrg.code = mr.organization_code) THEN 'P'
-                ELSE 'T'
-            END as funding_type,
+            concat_ws(', ', COALESCE(aa2.name, ''), Coalesce(aa1.name, ''), COALESCE(aa.name, ''),
+            coalesce(adr.street, ''), coalesce(adr.house_number, ''),
+            COALESCE(adr.extra_number, ''), coalesce(adr.room_number)) as address,
+            case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
             dep.old_code
         from provided_service ps
             JOIN medical_service ms
@@ -90,24 +70,6 @@ def get_department_services(year, period, department_code):
                         where version_id_pk = i.person_fk
                     ) and is_active
                 )
-            left join attachment
-                on attachment.id_pk = (
-                    select max(id_pk)
-                    from attachment
-                    where
-                        person_fk = per.version_id_pk
-                        and status_fk = 1
-                        and date <= (mr.year || '-' || mr.period || '-' || '01')::DATE
-                        and attachment.is_active)
-            LEFT join medical_organization medOrg
-                on (
-                    medOrg.id_pk = attachment.medical_organization_fk
-                    and medOrg.parent_fk is null
-                ) or medOrg.id_pk = (
-                    select parent_fk
-                    from medical_organization
-                    where id_pk = attachment.medical_organization_fk
-                )
             LEFT JOIN medical_division md
                 on ps.division_fk = md.id_pk
             LEFT JOIN idc
@@ -128,6 +90,10 @@ def get_department_services(year, period, department_code):
                 on dep.id_pk = ps.department_fk
             LEFT JOIN administrative_area aa
                 on aa.id_pk = adr.administrative_area_fk
+            LEFT join administrative_area aa1
+                on aa1.id_pk = aa.parent_fk
+            LEFT join administrative_area aa2
+                on aa2.id_pk = aa1.parent_fk
         WHERE mr.is_active
             and ps.payment_type_fk in (2, 4)
             and mr.year = %s
@@ -142,7 +108,7 @@ def get_department_services(year, period, department_code):
 
 def main():
     year = '2015'
-    period = '02'
+    period = '04'
     path = 'd:/work/expertiza_export/%s/%s' % (year, period)
 
     departments = ProvidedService.objects.filter(
@@ -223,7 +189,7 @@ def main():
             new["EMPL_NUM"] = unicode_to_cp866(service.worker_code or '')
             new.store()
         db.close()
-
+        print connection.queries
 
 class Command(BaseCommand):
     help = 'export big XML'

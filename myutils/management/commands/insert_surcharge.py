@@ -12,6 +12,7 @@ class Command(BaseCommand):
         for id_service_str in file_service:
             id_service = int(id_service_str.replace('\n', ''))
             service = ProvidedService.objects.get(id_pk=id_service)
+
             if service:
                 Sanction.objects.create(
                     type_id=4,
@@ -19,4 +20,5 @@ class Command(BaseCommand):
                     is_active=True,
                     underpayment=service.provided_tariff,
                     date=current_data)
+
         file_service.close()

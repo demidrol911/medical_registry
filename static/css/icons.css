@@ -1,0 +1,45 @@
+.accept-icon {
+    background-image: url("/static/icons/accept.png");
+}
+
+.decline-icon {
+    background-image: url("/static/icons/cross.gif");
+}
+
+.select-period-icon {
+    background-image: url("/static/icons/16x16/calendar.png");
+}
+
+.filter-icon {
+    background-image: url("/static/icons/16x16/filter.png");
+}
+
+.filter-add-icon {
+    background-image: url("/static/icons/16x16/filter_add.png");
+}
+
+.filter-delete-icon {
+	background-image: url("/static/icons/16x16/filter_delete.png");
+}
+
+.export-excel-icon {
+	background-image: url("/static/icons/16x16/export_excel.png");
+}
+
+.stripe-first-row {
+	background-color: #333333;
+}
+
+.stripe-second-row {
+	background-color: #E8EDF0;
+}
+
+.x-grid-row-summary  > .x-grid-cell{
+	font-weight: bold !important;
+	font-style: italic;
+	color: gray;
+}
+
+.x-form-text {
+    display: inherit;
+}

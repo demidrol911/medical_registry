@@ -5,24 +5,36 @@ from django.db import connection
 
 from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR, \
     FLC_DIR, OUTBOX_DIR, OUTBOX_SUCCESS, REGISTRY_PROCESSING_DIR
+
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender, Patient, \
     MedicalRegisterRecord, ProvidedEventConcomitantDisease, \
     ProvidedEventComplicatedDisease, ProvidedEventSpecial, \
     ProvidedService, ProvidedEvent, MedicalRegisterStatus, MedicalServiceVolume
-from registry_import.validation import get_person_patient_validation, \
+
+from registry_import.simple_validation import get_person_patient_validation, \
     get_policy_patient_validation, get_record_validation, \
     get_event_validation, get_event_special_validation, \
     get_complicated_disease_validation, get_concomitant_disease_validation, \
     get_service_validation
+
+from registry_import.complex_validation import (
+    is_disease_has_precision, is_examination_result_matching_comment,
+    is_expired_service, is_service_code_matching_hitech_method,
+    is_service_children_profile_matching_event_children_profile,
+    is_event_kind_corresponds_term, is_service_corresponds_registry_type )
+
 from registry_import.xml_parser import XmlLikeFileReader
 from helpers import xml_writer
+
 from file_handler.funcs import get_outbox_dict, move_files_to_process, \
     move_files_to_archive, send_error_file
-from registry_import.validation import GENDERS, PERSON_ID_TYPES, \
+
+from main.data_cache import GENDERS, PERSON_ID_TYPES, \
     POLICY_TYPES, DEPARTMENTS, ORGANIZATIONS, TERMS, KINDS, FORMS, \
     HOSPITALIZATIONS, PROFILES, OUTCOMES, RESULTS, SPECIALITIES_OLD, \
     SPECIALITIES_NEW, METHODS, TYPES, FAILURE_CUASES, DISEASES, DIVISIONS, \
     SPECIALS, CODES, HITECH_KINDS, HITECH_METHODS, EXAMINATION_RESULTS
+
 from main.funcs import safe_int, safe_date, safe_float
 import os
 import re
@@ -640,6 +652,43 @@ def main():
                         if new_event.get('USL_OK', '') == '1' and _type == 'H':
                             has_hospitalization = True
 
+                        if not is_event_kind_corresponds_term(
+                                new_event['VIDPOM'], new_event['USL_OK']):
+                            services_errors.append(set_error(
+                                '904', field='SLUCH', parent='ZAP',
+                                record_uid=new_record['N_ZAP'],
+                                event_uid=event['IDCASE'],
+                                comment=(u'Указанный вид помощи не может быть'
+                                         u' оказанным в текущих условиях')))
+
+                        if new_event['LPU'] != '280043':
+                            if not is_disease_has_precision(new_event['DS0']):
+                                services_errors.append(set_error(
+                                    '904', field='DS0', parent='SLUCH',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=event['IDCASE'],
+                                    comment=(u'Диагноз указан без уточняющей '
+                                             u'подрубрики')))
+
+                            if not is_disease_has_precision(new_event['DS1']):
+                                services_errors.append(set_error(
+                                    '904', field='DS1', parent='SLUCH',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=event['IDCASE'],
+                                    comment=(u'Диагноз указан без уточняющей '
+                                             u'подрубрики')))
+
+                        if registry_type in list(range(3, 11)) and \
+                            not is_examination_result_matching_comment(
+                                new_event['RSLT_D'], new_event['COMENTSL']):
+                                services_errors.append(set_error(
+                                    '904', field='RSLT_D', parent='SLUCH',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=event['IDCASE'],
+                                    comment=(u'Указанный код результата диспанс'
+                                             u'еризации не совпадает с указанны'
+                                             u'м комментарием')))
+
                         if event['DS2'] and type(event['DS2']) != list:
                             concomitants = [event['DS2']]
                         else:
@@ -647,10 +696,20 @@ def main():
 
                         for concomitant in concomitants:
                             raw_concomitant = get_concomitant_disease_validation(
-                                concomitant)
+                                concomitant, organization_code)
                             new_concomitant = raw_concomitant.get_dict()
                             new_concomitant['event_id'] = new_event['pk']
                             new_concomitant_list.append(new_concomitant)
+
+                            if new_event['LPU'] != '280043':
+                                if not is_disease_has_precision(new_event['DS2']):
+                                    services_errors.append(set_error(
+                                        '904', field='DS2', parent='SLUCH',
+                                        record_uid=new_record['N_ZAP'],
+                                        event_uid=event['IDCASE'],
+                                        comment=(u'Диагноз указан без уточняющей '
+                                                 u'подрубрики')))
+
 
                             services_errors += handle_errors(
                                 raw_concomitant.errors() or [], parent='SLUCH',
@@ -665,10 +724,20 @@ def main():
 
                         for complicated in complicateds or []:
                             raw_complicated = get_complicated_disease_validation(
-                                complicated)
+                                complicated, organization_code)
                             new_complicated = raw_complicated.get_dict()
                             new_complicated['event_id'] = new_event['pk']
                             new_complicated_list.append(new_complicated)
+
+                            if new_event['LPU'] != '280043':
+                                if not is_disease_has_precision(new_event['DS3']):
+                                    services_errors.append(set_error(
+                                        '904', field='DS3', parent='SLUCH',
+                                        record_uid=new_record['N_ZAP'],
+                                        event_uid=event['IDCASE'],
+                                        comment=(u'Диагноз указан без уточняющей '
+                                                 u'подрубрики')))
+
 
                             services_errors += handle_errors(
                                 raw_complicated.errors() or [], parent='SLUCH',
@@ -737,6 +806,48 @@ def main():
                                 service_uid=new_service['IDSERV']
                             )
 
+                            if not is_service_corresponds_registry_type(
+                                    new_service['CODE_USL'], registry_type):
+                                services_errors.append(set_error(
+                                    '904', field='CODE_USL', parent='USL',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid=new_service['IDSERV'],
+                                    comment=(u'Услуга не соответсвует типу '
+                                             u'файла')))
+
+                            if not is_expired_service(new_service['CODE_USL']):
+                                services_errors.append(set_error(
+                                    '904', field='CODE_USL', parent='USL',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid=new_service['IDSERV'],
+                                    comment=(u'Код услуги не может быть при'
+                                             u'менён в текущем периоде')))
+
+                            if not is_service_code_matching_hitech_method(
+                                    new_service['CODE_ISL'],
+                                    new_event['METOD_HMP']):
+                                services_errors.append(set_error(
+                                    '904', field='CODE_USL', parent='USL',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid=new_service['IDSERV'],
+                                    comment=(u'Код услуги не соответствует мето'
+                                             u'ду ВМП')))
+
+                            if not is_service_children_profile_matching_event_children_profile(
+                                    new_service['DET'], new_event['DET']):
+                                services_errors.append(set_error(
+                                    '904', field='CODE_USL', parent='USL',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid=new_service['IDSERV'],
+                                    comment=(u'Признак детского профиля случая '
+                                             u'не совпадает с признаком детског'
+                                             u'о профиля услуги')))
+
+
                             if new_event.get('USL_OK', '') == '1' \
                                     and new_service[
                                         'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS\
@@ -747,6 +858,7 @@ def main():
                                     and new_service[
                                         'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS\
                                     and not new_service['CODE_USL'].startswith('A'):
+
                                 day_hospital_volume_service.add(
                                     new_event['IDCASE'])
 
@@ -814,6 +926,7 @@ def main():
 
         if over_volume and organization not in HOSPITAL_VOLUME_MO_EXCLUSIONS \
                 and organization not in DAY_HOSPITAL_MO_EXCLUSIONS:
+
             has_insert = False
             message_file = open(TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
