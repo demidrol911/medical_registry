@@ -1,5 +1,7 @@
 /.idea/
-/static/
+/static/extjs
+/static/icons
+/static/img
 *.xml
 *.pyc
 path.py
