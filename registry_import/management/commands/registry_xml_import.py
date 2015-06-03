@@ -9,7 +9,8 @@ from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR, \
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender, Patient, \
     MedicalRegisterRecord, ProvidedEventConcomitantDisease, \
     ProvidedEventComplicatedDisease, ProvidedEventSpecial, \
-    ProvidedService, ProvidedEvent, MedicalRegisterStatus, MedicalServiceVolume
+    ProvidedService, ProvidedEvent, MedicalRegisterStatus, \
+    MedicalServiceVolume, MedicalRegisterImport
 
 from registry_import.simple_validation import get_person_patient_validation, \
     get_policy_patient_validation, get_record_validation, \
@@ -969,11 +970,24 @@ def main():
             message_file.close()
 
             shutil.copy2(message_file_name, copy_path)
-
+            MedicalRegisterImport.objects.create(
+                period='{0}-{1}-01'.format(current_year, current_period),
+                organization=organization_code,
+                filename=person_filename[2:],
+                status=u'Сверхъобёмы',
+                timestamp=datetime.now()
+            )
         if has_insert:
             if registry_has_errors:
                 print u'Ошибки ФЛК'
 
+                MedicalRegisterImport.objects.create(
+                    period='{0}-{1}-01'.format(current_year, current_period),
+                    organization=organization_code,
+                    filename=person_filename[2:],
+                    status=u'Не пройден ФЛК',
+                    timestamp=datetime.now()
+                )
                 zipname = TEMP_DIR + 'VM%sS28002_%s.zip' % (
                     organization_code,
                     person_filename[person_filename.index('_') + 1:-4]
@@ -994,7 +1008,13 @@ def main():
 
             else:
                 print u'ФЛК пройден. Вставка данных...'
-
+                MedicalRegisterImport.objects.create(
+                    period='{0}-{1}-01'.format(current_year, current_period),
+                    organization=organization_code,
+                    filename=person_filename[2:],
+                    status=u'Принят',
+                    timestamp=datetime.now()
+                )
                 MedicalRegister.objects.filter(
                     is_active=True, year=current_year, period=current_period,
                     organization_code=organization_code).update(is_active=False)

@@ -1502,3 +1502,12 @@ class MedicalServiceVolume(models.Model):
         db_table = 'medical_service_volume'
 
 
+class MedicalRegisterImport(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    organization = models.CharField(max_length=10)
+    filename = models.CharField(max_length=30)
+    status = models.CharField(max_length=20)
+    timestamp = models.DateTimeField
+
+    class Meta:
+        db_table = 'medical_register_import'
