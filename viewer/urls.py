@@ -16,4 +16,5 @@ urlpatterns = patterns('',
     url(r'^json/service-divisions/$', views.get_service_divisions_json),
     url(r'^json/service-profiles/$', views.get_service_profiles_json),
     url(r'^excel-export/$', views.get_excel_export),
+    url(r'^json/registries-import/$', views.get_registers_import_json),
 )
