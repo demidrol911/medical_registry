@@ -12,6 +12,9 @@ import re
 
 
 def is_disease_has_precision(field_value):
+    if not field_value:
+        return True
+
     disease = DISEASES.get(field_value, None)
 
     if disease and disease.is_precision:
@@ -36,6 +39,12 @@ def is_service_corresponds_registry_type(field_value, registry_type):
 
 
 def is_event_kind_corresponds_term(kind, term):
+    if not kind:
+        return True
+
+    if not term:
+        return True
+
     kinds = KIND_TERM_DICT.get(term, [])
 
     if not kinds or not term:
@@ -48,6 +57,12 @@ def is_event_kind_corresponds_term(kind, term):
 
 
 def is_examination_result_matching_comment(examination_result, event_comment):
+    if not examination_result:
+        return True
+
+    if not event_comment:
+        return True
+
     pattern = re.compile(ADULT_EXAMINATION_COMMENT_PATTERN)
     matching = pattern.match(event_comment)
     result = EXAMINATION_HEALTH_GROUP_EQUALITY[examination_result]
@@ -72,7 +87,11 @@ def is_service_code_matching_hitech_method(code, method):
 
 def is_service_children_profile_matching_event_children_profile(
         service_children_profile, event_children_profile):
+    if service_children_profile is None and event_children_profile is None:
+        return True
+
     if event_children_profile != service_children_profile:
+
         return False
 
     return True

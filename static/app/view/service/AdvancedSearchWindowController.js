@@ -90,9 +90,7 @@ Ext.define('MyApp.view.service.AdvancedSearchWindowController', {
 							
 							var is_matching = false;	
 							for (var i = 0; i < matchingArray.length; i++) {
-								if (service == matchingArray[i]) {
-									is_matching = true;
-								}
+								if (service == matchingArray[i]) {is_matching = true;}
 							}
 							if (is_matching) {return true}
 						})
