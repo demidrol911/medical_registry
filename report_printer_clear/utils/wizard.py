@@ -41,6 +41,7 @@ class AutomaticReportsWizard():
             parameters.department = None
             for report in self.reports:
                 report.print_pages(parameters)
+                self.completed_reports.append(report.get_filename())
                 print '-'*70
 
             for department in parameters.partial_register:
@@ -55,7 +56,6 @@ class AutomaticReportsWizard():
                         print '-'*70
 
             change_register_status(organization_code, new_status)
-            self.completed_reports.append(get_mo_name(organization_code))
             organization_code = get_mo_code(registry_status)
 
     def print_completed_reports(self):

@@ -80,6 +80,9 @@ class ExcelBook():
     def get_sheet(self, index):
         return ExcelSheet(self.book, index)
 
+    def get_filename(self):
+        return self.filename
+
     def close(self):
         self.book.close()
 
