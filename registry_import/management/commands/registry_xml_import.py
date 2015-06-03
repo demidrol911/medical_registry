@@ -943,7 +943,7 @@ def main():
 
             has_insert = False
 
-            message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization)
+            message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.format(organization)
             message_file = open(message_file_name, 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
@@ -975,7 +975,6 @@ def main():
                 organization=organization_code,
                 filename=person_filename[2:],
                 status=u'Сверхъобёмы',
-                timestamp=datetime.now()
             )
         if has_insert:
             if registry_has_errors:
@@ -986,7 +985,6 @@ def main():
                     organization=organization_code,
                     filename=person_filename[2:],
                     status=u'Не пройден ФЛК',
-                    timestamp=datetime.now()
                 )
                 zipname = TEMP_DIR + 'VM%sS28002_%s.zip' % (
                     organization_code,
@@ -1013,7 +1011,6 @@ def main():
                     organization=organization_code,
                     filename=person_filename[2:],
                     status=u'Принят',
-                    timestamp=datetime.now()
                 )
                 MedicalRegister.objects.filter(
                     is_active=True, year=current_year, period=current_period,
