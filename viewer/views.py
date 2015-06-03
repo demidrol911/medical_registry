@@ -177,16 +177,19 @@ def get_registers_import_json(request):
     else:
         period = '{0}-{1}-01'.format(year, period)
 
-    records = MedicalRegisterImport.objects.filter(period=period)
+    records = MedicalRegisterImport.objects.filter(period=period).extra(
+        select={'organization_name': 'select name from medical_organization where parent_fk is null and code = organization'}
+    )
 
     registries = []
 
     for rec in records:
-        registry = {'year': rec.year, 'period': rec.period,
+        registry = {'period': rec.period,
                     'organization': rec.organization,
+                    'name': rec.organization_name,
                     'filename': rec.filename,
                     'status': rec.status,
-                    'timestamp': rec.timestamp.date().strftime('%d-%m-%Y')}
+                    'timestamp': rec.timestamp.strftime('%d-%m-%Y %H:%M')}
 
         registries.append(registry)
 

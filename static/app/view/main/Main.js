@@ -82,6 +82,19 @@ Ext.define('MyApp.view.main.Main', {
 					listeners: {
 						itemdblclick: 'onDepartmentListDblClick'
 					}
+				},
+				{
+					title: 'Журнал импорта',
+					xtype: 'grid',
+					plugins: ['gridfilters'],
+					store: 'MyApp.store.main.RegistryImportStore',
+					columns: [
+						{text: 'Организация', dataIndex: 'organization', width: 130},
+						{text: 'Имя', dataIndex: 'name', width: 480},
+						{text: 'Файл', dataIndex: 'filename', width: 200},
+						{text: 'Статус', dataIndex: 'status', width: 120},
+						{text: 'Таймстамп', dataIndex: 'timestamp', width: 120},
+					]
 				}
 			],
 			
