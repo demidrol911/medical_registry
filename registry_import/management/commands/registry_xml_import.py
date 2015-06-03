@@ -941,7 +941,9 @@ def main():
                 and organization not in DAY_HOSPITAL_MO_EXCLUSIONS:
 
             has_insert = False
-            message_file = open(TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
+
+            message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization)
+            message_file = open(message_file_name, 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
                        u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
@@ -966,6 +968,8 @@ def main():
             message_file.write(message.encode('cp1251'))
             message_file.close()
 
+            shutil.copy2(message_file_name, copy_path)
+
         if has_insert:
             if registry_has_errors:
                 print u'Ошибки ФЛК'
@@ -981,12 +985,12 @@ def main():
                         zipfile.write(TEMP_DIR + filename, filename, 8)
                         os.remove(TEMP_DIR + filename)
 
-                #shutil.copy2(zipname, FLC_DIR)
+                shutil.copy2(zipname, FLC_DIR)
 
-                #if os.path.exists(copy_path):
-                #    shutil.copy2(zipname, copy_path)
+                if os.path.exists(copy_path):
+                    shutil.copy2(zipname, copy_path)
 
-                #os.remove(zipname)
+                os.remove(zipname)
 
             else:
                 print u'ФЛК пройден. Вставка данных...'
@@ -1015,12 +1019,12 @@ def main():
 
                 print u'...ок'
 
-                #if os.path.exists(copy_path):
-                #    shutil.copy2(OUTBOX_SUCCESS, copy_path)
+                if os.path.exists(copy_path):
+                    shutil.copy2(OUTBOX_SUCCESS, copy_path)
 
         print organization, current_year, current_period
 
-        #move_files_to_archive(registry_list + [patient_path])
+        move_files_to_archive(registry_list + [patient_path])
 
     try:
         for rec in patients_errors:
