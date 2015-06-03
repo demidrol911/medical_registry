@@ -7,12 +7,15 @@ Ext.define('MyApp.view.main.PeriodWindowController', {
 		var mainView = Ext.getCmp('MainView');
 		var organizationGrid = mainView.lookupReference('OrganizationRegistryGrid');
 		var departmentGrid = mainView.lookupReference('DepartmentRegistryGrid');
+		var importGrid = mainView.lookupReference('ImportGrid');
 		var organizationStore = organizationGrid.getStore();
 		var departmentStore = departmentGrid.getStore();
+		var registryImportStore = importGrid.getStore();
 		var model = this.getViewModel();
 
-		organizationStore.reload({params: {'year': model.data.year, 'period': model.data.period}})
-		departmentStore.reload({params: {'year': model.data.year, 'period': model.data.period}})
+		organizationStore.reload({params: {'year': model.data.year, 'period': model.data.period}});
+		departmentStore.reload({params: {'year': model.data.year, 'period': model.data.period}});
+		registryImportStore.reload({params: {'year': model.data.year, 'period': model.data.period}});		
 		
 		this.view.destroy();
 	},

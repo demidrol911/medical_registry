@@ -8,7 +8,8 @@ Ext.application({
 	'MyApp.store.main.DepartmentListStore', 'MyApp.store.main.RegistryStatusStore', 
 	'MyApp.store.service.OrganizationServiceStore', 'MyApp.store.service.OrganizationEventStore',
 	'MyApp.store.service.AdditionalServiceInfoStore', 'MyApp.store.service.ServiceTermStore',
-	'MyApp.store.service.ServiceDivisionStore', 'MyApp.store.service.ServiceProfileStore', 'MyApp.store.service.ServiceProfileArrayStore'],
+	'MyApp.store.service.ServiceDivisionStore', 'MyApp.store.service.ServiceProfileStore', 'MyApp.store.service.ServiceProfileArrayStore',
+	'MyApp.store.main.RegistryImportStore'],
 	
     autoCreateViewport: 'MyApp.view.main.Main'
 
