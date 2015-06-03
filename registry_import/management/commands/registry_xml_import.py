@@ -977,7 +977,6 @@ def main():
                 organization=organization_code,
                 filename=person_filename[2:],
                 status=u'Сверхъобёмы',
-                timestamp=datetime.now()
             )
         if has_insert:
             if registry_has_errors:
@@ -988,7 +987,6 @@ def main():
                     organization=organization_code,
                     filename=person_filename[2:],
                     status=u'Не пройден ФЛК',
-                    timestamp=datetime.now()
                 )
                 zipname = TEMP_DIR + 'VM%sS28002_%s.zip' % (
                     organization_code,
@@ -1015,7 +1013,6 @@ def main():
                     organization=organization_code,
                     filename=person_filename[2:],
                     status=u'Принят',
-                    timestamp=datetime.now()
                 )
                 MedicalRegister.objects.filter(
                     is_active=True, year=current_year, period=current_period,

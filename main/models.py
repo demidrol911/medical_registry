@@ -1507,7 +1507,7 @@ class MedicalRegisterImport(models.Model):
     organization = models.CharField(max_length=10)
     filename = models.CharField(max_length=30)
     status = models.CharField(max_length=20)
-    timestamp = models.DateTimeField()
+    timestamp = models.DateTimeField(auto_now_add=True)
     period = models.CharField(max_length=10)
 
     class Meta:
