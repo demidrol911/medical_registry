@@ -10,7 +10,7 @@ from django.core import serializers
 from registry_import.simple_validation import PROFILES, DIVISIONS, DISEASES, CODES
 from registry_import.simple_validation import queryset_to_dict
 from main.funcs import safe_date_to_string, safe_float
-from main.models import MedicalError
+from main.models import MedicalError, MedicalRegisterImport
 
 import json
 import time
@@ -153,6 +153,41 @@ def get_department_registers_json(request):
                     'department_name': rec[5], 'department_code': rec[4],
                     'department_status': rec[6], 'organization_code': rec[2],
                     'department_timestamp': rec[7].date().strftime('%d-%m-%Y')}
+        registries.append(registry)
+
+    registries_json = json.dumps({'root': registries})
+
+    return HttpResponse(registries_json, mimetype='application/json')
+
+
+def get_registers_import_json(request):
+    cursor = connection.cursor()
+    year = request.GET.get('year', None)
+    period = request.GET.get('period', None)
+
+    query_max_period = """
+        select max(format('%s-%s-01', year, period))
+        from medical_register
+        where is_active
+    """
+
+    if not (year and period):
+        cursor.execute(query_max_period)
+        period = cursor.fetchone()[0]
+    else:
+        period = '{0}-{1}-01'.format(year, period)
+
+    records = MedicalRegisterImport.objects.filter(period=period)
+
+    registries = []
+
+    for rec in records:
+        registry = {'year': rec.year, 'period': rec.period,
+                    'organization': rec.organization,
+                    'filename': rec.filename,
+                    'status': rec.status,
+                    'timestamp': rec.timestamp.date().strftime('%d-%m-%Y')}
+
         registries.append(registry)
 
     registries_json = json.dumps({'root': registries})

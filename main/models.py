@@ -1508,6 +1508,7 @@ class MedicalRegisterImport(models.Model):
     filename = models.CharField(max_length=30)
     status = models.CharField(max_length=20)
     timestamp = models.DateTimeField()
+    period = models.CharField(max_length=10)
 
     class Meta:
         db_table = 'medical_register_import'
