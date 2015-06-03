@@ -77,7 +77,7 @@ def underpay_repeated_service(register_element):
     query = """
         with current_period as (select format('%%s-%%s-01', %(year)s, %(period)s)::DATE as val)
 
-        select DISTINCT service_id from (
+        select DISTINCT ps.id_pk from (
         select ps.id_pk as service_id,
             ps.event_fk as event_id,
 
@@ -102,7 +102,10 @@ def underpay_repeated_service(register_element):
         where mr.is_active
             and mr.organization_code = %(organization)s
             and format('%%s-%%s-01', mr.year, mr.period)::DATE between (select val from current_period) - interval '4 months' and (select val from current_period)
-        ) as T where checking_period = (select val from current_period) and rnum_repeated > 1 and rnum_duplicate = 1
+        ) as T
+        join provided_service ps
+            on ps.id_pk = T.service_id
+        where checking_period = (select val from current_period) and rnum_repeated > 1 and rnum_duplicate = 1
             AND (select count(pss.id_pk) from provided_service_sanction pss
                  where pss.service_fk = T.service_id and pss.error_fk = 64) = 0
     """

@@ -942,7 +942,7 @@ def main():
 
             has_insert = False
 
-            message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization)
+            message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.format(organization)
             message_file = open(message_file_name, 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
@@ -967,6 +967,8 @@ def main():
             print len(hospital_volume_service), volume.hospital, len(day_hospital_volume_service), volume.day_hospital
             message_file.write(message.encode('cp1251'))
             message_file.close()
+
+            print message_file_name, copy_path
 
             shutil.copy2(message_file_name, copy_path)
 
