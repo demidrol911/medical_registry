@@ -88,6 +88,7 @@ Ext.define('MyApp.view.main.Main', {
 					xtype: 'grid',
 					plugins: ['gridfilters'],
 					store: 'MyApp.store.main.RegistryImportStore',
+					reference: 'ImportGrid',
 					columns: [
 						{text: 'Организация', dataIndex: 'organization', width: 130},
 						{text: 'Имя', dataIndex: 'name', width: 480},
