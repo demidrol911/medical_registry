@@ -79,6 +79,9 @@ def is_examination_result_matching_comment(examination_result, event_comment):
 
 
 def is_service_code_matching_hitech_method(code, method):
+    if code.startswith('A'):
+        return True
+
     if safe_int(code[-3:]) != safe_int(method):
         return False
 
