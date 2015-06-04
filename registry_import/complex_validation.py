@@ -25,6 +25,10 @@ def is_disease_has_precision(field_value):
 
 def is_service_corresponds_registry_type(field_value, registry_type):
     service = CODES.get(field_value)
+
+    if field_value and field_value.startswith('A'):
+        return True
+
     if registry_type == 1 and \
             service.group_id in list(range(6, 17)) + [20, 25, 26]:
         return False
