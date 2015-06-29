@@ -18,6 +18,12 @@ class SogazMekDetailedPage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data = None
+        self.hospital_services = None
+        self.day_hospital_services = None
+        self.policlinic_services = None
+        self.ambulance_services = None
+        self.pa_services = None
         query = SogazMekDetailedPage.get_query_statistics()
         stat_obj = MedicalOrganization.objects.raw(query, dict(
             period=parameters.registry_period,
@@ -217,7 +223,7 @@ class SogazMekDetailedPage(ReportPage):
 
                     COUNT(DISTINCT CASE WHEN T.is_policlinic AND T.is_event
                                           THEN (
-                                              CASE WHEN T.is_phase_exam
+                                              CASE WHEN T.is_phase_exam OR T.is_stomatology
                                                      THEN T.service_id
                                                    ELSE T.event_id
                                               END
@@ -250,7 +256,7 @@ class SogazMekDetailedPage(ReportPage):
 
                     COUNT(DISTINCT CASE WHEN T.is_paid AND T.is_event
                                           THEN (
-                                              CASE WHEN T.is_phase_exam
+                                              CASE WHEN T.is_phase_exam OR T.is_stomatology
                                                      THEN T.service_id
                                                    ELSE T.event_id
                                               END
@@ -283,7 +289,7 @@ class SogazMekDetailedPage(ReportPage):
                     COUNT(DISTINCT CASE WHEN T.is_paid AND T.is_policlinic
                                              AND T.is_event
                                           THEN (
-                                              CASE WHEN T.is_phase_exam
+                                              CASE WHEN T.is_phase_exam OR T.is_stomatology
                                                      THEN T.service_id
                                                    ELSE T.event_id
                                               END
@@ -335,7 +341,7 @@ class SogazMekDetailedPage(ReportPage):
                     COUNT(DISTINCT CASE WHEN T.is_not_paid AND T.is_not_pa
                                              AND T.is_policlinic AND T.is_event
                                           THEN (
-                                              CASE WHEN T.is_phase_exam
+                                              CASE WHEN T.is_phase_exam OR T.is_stomatology
                                                      THEN T.service_id
                                                    ELSE T.event_id
                                               END
@@ -386,7 +392,7 @@ class SogazMekDetailedPage(ReportPage):
                     -- Не подлежит к оплате (итоговая)
                     COUNT(DISTINCT CASE WHEN T.is_not_paid AND T.is_event
                                           THEN (
-                                              CASE WHEN T.is_phase_exam
+                                              CASE WHEN T.is_phase_exam OR T.is_stomatology
                                                      THEN T.service_id
                                                    ELSE T.event_id
                                               END
@@ -422,6 +428,8 @@ class SogazMekDetailedPage(ReportPage):
                         (ms.group_fk != 19 OR ms.group_fk is NULL) OR
                         (ms.group_fk = 19 AND ms.subgroup_fk is not NULL) AS is_event,
                         (ms.group_fk in (25, 26)) AS is_phase_exam,
+
+                        ms.group_fk = 19 AND ms.subgroup_fk != 12 AS is_stomatology,
 
                         (
                            SELECT
@@ -655,7 +663,7 @@ class SogazMekDetailedPage(ReportPage):
 
         sheet.set_style({})
         sheet.write('', 'r')
-        sheet.write(title, 'c')
+        sheet.write(title, 'c', 4)
         sheet.write(self.data[sanc_sum_key], 'c')
         sheet.write(u'руб.', 'c')
         sheet.write(self.data[sanc_count_key], 'c')

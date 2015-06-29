@@ -14,6 +14,7 @@ class SanctionsReferencePage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data = None
         query = '''
                 SELECT
                     mo.id_pk,

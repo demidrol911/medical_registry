@@ -7,10 +7,11 @@ from report_printer.const import ACT_CELL_POSITION
 class FinalReportPage(ReportPage):
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 0
 
     def calculate(self, parameters):
+        self.data = None
         query = '''
                 SELECT
                     mo.id_pk,
