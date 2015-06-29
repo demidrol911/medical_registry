@@ -60,7 +60,7 @@ class Command(BaseCommand):
                 s_rec['D_BEG'] = date_correct(service['start_date'], service['id'], 'start_date')
                 s_rec['D_U'] = date_correct(service['end_date'], service['id'], 'end_date')
                 s_rec['K_U'] = service['quantity'] or 1
-                s_rec['DS'] = (service['basic_disease'] or '').encode('cp866')
+                s_rec['DS'] = (service['basic_disease'] or service['event_basic_disease']).encode('cp866')
                 s_rec['DS2'] = (concomitant_diseases.get(service['event_id'], '')).encode('cp866')
                 #s_rec['TR'] = ''
                 s_rec['EXTR'] = '0'

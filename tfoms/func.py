@@ -239,6 +239,7 @@ def get_services(mo_code, is_include_operation=False, department_code=None, paym
         'start_date',                                       # Дата начала услуги
         'end_date',                                         # Дата конца услуги
         'basic_disease__idc_code',                          # Основной диагноз
+        'event__basic_disease__idc_code',                   # Основной диагноз случая
         'event__concomitant_disease__idc_code',             # Сопутствующий диагноз
         'code__group__id_pk',                               # Группа
         'code__subgroup__id_pk',                            # Подгруппа услуги
@@ -281,6 +282,7 @@ def get_services(mo_code, is_include_operation=False, department_code=None, paym
          'start_date': service['start_date'],
          'end_date': service['end_date'],
          'basic_disease': service['basic_disease__idc_code'],
+         'event_basic_disease': service['event__basic_disease__idc_code'],
          'concomitant_disease': service['event__concomitant_disease__idc_code'],
          'group': service['code__group__id_pk'],
          'subgroup': service['code__subgroup__id_pk'],
