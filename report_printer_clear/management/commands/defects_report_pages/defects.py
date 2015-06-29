@@ -32,7 +32,7 @@ class DefectsPage(ReportPage):
         'period_children_exam': [(27, TREATMENT)],
         'clinical_exam': [(28, TREATMENT), (29, VISIT)],
         'stom_disease': [(30, TREATMENT), (31, UET)],
-        'stom_ambulance': [(32, TREATMENT), (33, UET)]
+        'stom_ambulance': [(32, VISIT), (33, UET)]
     }
 
     ERRORS_ORDER = [
@@ -48,6 +48,8 @@ class DefectsPage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data_general = None
+        self.data_detail = None
         general_query = DefectsPage.get_general_query()
         self.data_general = MedicalOrganization.objects.raw(general_query, dict(
             period=parameters.registry_period,
@@ -70,12 +72,24 @@ class DefectsPage(ReportPage):
                     T1.division_term,
 
                     COUNT(DISTINCT CASE WHEN not T1.is_children
-                                THEN T1.service_id
-                                END
+                                          THEN (
+                                             CASE WHEN T1.service_group = 19
+                                                     AND T1.service_subgroup is NULL
+                                                    THEN NULL
+                                                  ELSE T1.service_id
+                                             END
+                                          )
+                                          END
                          ) AS visit_all_adult,
                     COUNT(DISTINCT CASE WHEN T1.is_children
-                                THEN T1.service_id
-                                END
+                                          THEN (
+                                             CASE WHEN T1.service_group = 19
+                                                     AND T1.service_subgroup is NULL
+                                                    THEN NULL
+                                                  ELSE T1.service_id
+                                             END
+                                          )
+                                          END
                         ) AS visit_all_children,
 
                     COUNT(DISTINCT CASE WHEN not T1.is_children
@@ -123,13 +137,25 @@ class DefectsPage(ReportPage):
 
                     COUNT(DISTINCT CASE WHEN not T1.is_children
                                              AND T1.is_accepted
-                                THEN T1.service_id
-                                END
+                                          THEN (
+                                             CASE WHEN T1.service_group = 19
+                                                       AND T1.service_subgroup is NULL
+                                                    THEN NULL
+                                                  ELSE T1.service_id
+                                             END
+                                          )
+                                   END
                         ) AS visit_accept_adult,
                     COUNT(DISTINCT CASE WHEN T1.is_children
                                              AND T1.is_accepted
-                                THEN T1.service_id
-                                END
+                                          THEN (
+                                             CASE WHEN T1.service_group = 19
+                                                       AND T1.service_subgroup is NULL
+                                                    THEN NULL
+                                                  ELSE T1.service_id
+                                             END
+                                          )
+                                   END
                         ) AS visit_accept_children,
 
                     COUNT(DISTINCT CASE WHEN not T1.is_children
@@ -175,7 +201,13 @@ class DefectsPage(ReportPage):
 
 
                     COUNT(DISTINCT CASE WHEN T1.is_excluded
-                                          THEN T1.service_id
+                                          THEN (
+                                             CASE WHEN T1.service_group = 19
+                                                     AND T1.service_subgroup is NULL
+                                                    THEN NULL
+                                                  ELSE T1.service_id
+                                             END
+                                          )
                                    END
                         ) AS visit_exclude,
 
@@ -218,7 +250,13 @@ class DefectsPage(ReportPage):
                     T1.failure_cause,
 
                     COUNT(DISTINCT CASE WHEN T1.is_excluded
-                                          THEN T1.service_id
+                                          THEN (
+                                             CASE WHEN T1.service_group = 19
+                                                     AND T1.service_subgroup is NULL
+                                                    THEN NULL
+                                                  ELSE T1.service_id
+                                             END
+                                          )
                                    END
                          ) AS visit_exclude,
 
@@ -360,7 +398,8 @@ class DefectsPage(ReportPage):
                                   '119221', '119222', '119223', '119224', '119225',
                                   '119226', '119227', '119228', '119229', '119230',
                                   '119231',
-                                  '019116', '019115'
+                                  '019116', '019115',
+                                  '019117'
                                )
                              THEN 'clinical_exam'
 
@@ -425,7 +464,7 @@ class DefectsPage(ReportPage):
                         ) AS is_policlinic_treatment,
 
                        (SELECT
-                            DISTINCT inner_ms.subgroup_fk
+                            DISTINCT MIN(inner_ms.subgroup_fk)
                         FROM medical_service inner_ms
                         WHERE
                            inner_ms.id_pk in (
