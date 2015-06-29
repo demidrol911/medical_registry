@@ -73,7 +73,10 @@ class ExcelBook():
                             style['fg_color'] = converter.convert_colour(colour_cell)
 
                         style_cell = self.book.add_format(style)
-                        current_sheet.write(row_index, column_index, cell.value, style_cell)
+                        if unicode(cell.value).startswith('#='):
+                            current_sheet.write_formula(row_index, column_index, cell.value[1:], style_cell)
+                        else:
+                            current_sheet.write(row_index, column_index, cell.value, style_cell)
         else:
             self.book.add_worksheet()
 
@@ -146,11 +149,3 @@ class ExcelSheet():
 
     def hide_column(self, diapason):
         self.sheet.set_column(diapason, 20, None, {'hidden': 1})
-
-
-if __name__ == '__main__':
-    print u'Тест (создание книги)'
-    DIR = u'C:\work'
-    test_book = ExcelBook(DIR, 'test.xlsx')
-    test_book.create_book('ambulance_care.xls')
-    test_book.close()
