@@ -976,7 +976,7 @@ def main():
                 period='{0}-{1}-01'.format(current_year, current_period),
                 organization=organization_code,
                 filename=person_filename[2:],
-                status=u'Сверхъобёмы',
+                status=u'Сверхобъёмы',
             )
         if has_insert:
             if registry_has_errors:
