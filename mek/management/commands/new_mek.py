@@ -1060,6 +1060,7 @@ def main():
 
             checks.underpay_second_phase_examination(register_element)
             checks.underpay_neurologist_first_phase_exam(register_element)
+            checks.underpay_multi_subgrouped_stomatology_events(register_element)
             checks.underpay_outpatient_event(register_element)
 
         print Sanction.objects.filter(
