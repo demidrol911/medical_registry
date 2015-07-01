@@ -3,6 +3,7 @@ from main.funcs import howlong
 from tfoms import func
 from report_printer_clear.utils.page import ReportPage
 from main.models import MedicalOrganization, ProvidedService
+from report_printer_clear.management.commands.defects_report import DefectsPage
 
 
 class SogazMekDetailedPage(ReportPage):
@@ -18,14 +19,76 @@ class SogazMekDetailedPage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data = None
+        self.hospital_services = None
+        self.day_hospital_services = None
+        self.policlinic_services = None
+        self.ambulance_services = None
+        self.pa_services = None
+
+        defects_page = DefectsPage()
+        defects_page.calculate(parameters)
+        defects_data = defects_page.get_data_general_dict()
+
+        hospital = (
+            ('hospital', 'visit'),
+            ('coronary_angiography', 'visit'),
+            ('cerebral_angiography', 'visit'),
+            ('gemodialis_hospital', 'treatment'),
+            ('peritondialis_hospital', 'treatment')
+        )
+
+        day_hospital = (('day_hospital', 'visit'), )
+        policlinic = (
+            ('hospital_ambulance', 'visit'),
+            ('policlinic_disease', 'treatment'),
+            ('policlinic_priventive', 'visit'),
+            ('policlinic_ambulance', 'visit'),
+            ('adult_exam', 'treatment'),
+            ('mrt', 'visit'),
+            ('gemodialis_policlinic', 'treatment'),
+            ('peritondialis_policlinic', 'treatment'),
+            ('children_exam', 'treatment'),
+            ('prelim_children_exam', 'treatment'),
+            ('period_children_exam', 'treatment'),
+            ('clinical_exam', 'treatment'),
+            ('stom_disease', 'treatment'),
+            ('stom_ambulance', 'visit')
+        )
+        ambulance = (('ambulance', 'visit'), )
+
+        total_fiels = (
+            ('inv_count_hosp', hospital, 'all'),
+            ('inv_count_day_hosp', day_hospital, 'all'),
+            ('inv_count_policlinic', policlinic, 'all'),
+            ('inv_count_ambulance', ambulance, 'all'),
+
+            ('accept_count_hosp', hospital, 'accept'),
+            ('accept_count_day_hosp', day_hospital, 'accept'),
+            ('accept_count_policlinic', policlinic, 'accept'),
+            ('accept_count_ambulance', ambulance, 'accept'),
+
+            ('sanc_count_hosp', hospital, 'exclude'),
+            ('sanc_count_day_hosp', day_hospital, 'exclude'),
+            ('sanc_count_policlinic', policlinic, 'exclude'),
+            ('sanc_count_ambulance', ambulance, 'exclude'),
+        )
+
+        self.data = dict()
+
+        for total_field, terms, payment_type in total_fiels:
+            self.data[total_field] = 0
+            for term, field in terms:
+                if term in defects_data:
+                    self.data[total_field] += defects_data[term][field + '_' + payment_type]
+
         query = SogazMekDetailedPage.get_query_statistics()
         stat_obj = MedicalOrganization.objects.raw(query, dict(
             period=parameters.registry_period,
             year=parameters.registry_year,
             organization=parameters.organization_code
         ))[0]
-        
-        self.data = dict()
+
         self.data['inv_sum_tariff'] = stat_obj.inv_sum_tariff
         self.data['inv_sum_tariff_other_mo'] = 0
     
@@ -39,19 +102,15 @@ class SogazMekDetailedPage(ReportPage):
         self.data['inv_sum_tariff_all'] = self.data['inv_sum_tariff_mo']
     
         # Предъявленные реестры счетов за стационар
-        self.data['inv_count_hosp'] = stat_obj.inv_count_hosp
         self.data['inv_sum_tariff_hosp'] = stat_obj.inv_sum_tariff_hosp
     
         # Предъяыленные реестры счетов за дневной стационар
-        self.data['inv_count_day_hosp'] = stat_obj.inv_count_day_hosp
         self.data['inv_sum_tariff_day_hosp'] = stat_obj.inv_sum_tariff_day_hosp
     
         # Предъявленные реестры счетов за поликлинику
-        self.data['inv_count_policlinic'] = stat_obj.inv_count_policlinic
         self.data['inv_sum_tariff_policlinic'] = stat_obj.inv_sum_tariff_policlinic
     
         # Предъявленные реестры счетов по скорой помощи
-        self.data['inv_count_ambulance'] = stat_obj.inv_count_ambulance
         self.data['inv_sum_tariff_ambulance'] = stat_obj.inv_sum_tariff_ambulance
     
         ### Принятые услуги
@@ -73,23 +132,20 @@ class SogazMekDetailedPage(ReportPage):
             parameters.ambulance_capitation_total
     
         # Количество принятых услуг (в акте)
-        self.data['accept_count_all'] = stat_obj.accept_count_all
+        self.data['accept_count_all'] = self.data['accept_count_hosp'] + self.data['accept_count_day_hosp'] + \
+            self.data['accept_count_policlinic'] + self.data['accept_count_ambulance']
         self.data['accept_sum_tariff_all'] = self.data['accept_sum_tariff_mo']
     
         # Принятые реестры счетов за стационар
-        self.data['accept_count_hosp'] = stat_obj.accept_count_hosp
         self.data['accept_sum_tariff_hosp'] = stat_obj.accept_sum_tariff_hosp
     
         # Принятые реестры отчётов за дневной стационар
-        self.data['accept_count_day_hosp'] = stat_obj.accept_count_day_hosp
         self.data['accept_sum_tariff_day_hosp'] = stat_obj.accept_sum_tariff_day_hosp
     
         # Принятые реестры отчётов за поликлинику
-        self.data['accept_count_policlinic'] = stat_obj.accept_count_policlinic
         self.data['accept_sum_tariff_policlinic'] = stat_obj.accept_sum_tariff_policlinic + \
             parameters.policlinic_capitation_total
-    
-        self.data['accept_count_ambulance'] = stat_obj.accept_count_ambulance
+
         self.data['accept_sum_tariff_ambulance'] = parameters.ambulance_capitation_total
     
         ### Снятые с оплаты
@@ -98,19 +154,15 @@ class SogazMekDetailedPage(ReportPage):
         self.data['sanc_sum_tariff'] = stat_obj.sanc_sum_tariff
     
         # Не принятые реестры счетов за стационар
-        self.data['sanc_count_hosp'] = stat_obj.sanc_count_hosp
         self.data['sanc_sum_tariff_hosp'] = stat_obj.sanc_sum_tariff_hosp
     
         # Не принятые реестры за дневной стационар
-        self.data['sanc_count_day_hosp'] = stat_obj.sanc_count_day_hosp
         self.data['sanc_sum_tariff_day_hosp'] = stat_obj.sanc_sum_tariff_day_hosp
     
         # Не принятые реестры за поликлинику
-        self.data['sanc_count_policlinic'] = stat_obj.sanc_count_policlinic
         self.data['sanc_sum_tariff_policlinic'] = stat_obj.sanc_sum_tariff_policlinic
     
         # Не принятые реестры по скорой помощи
-        self.data['sanc_count_ambulance'] = stat_obj.sanc_count_ambulance
         self.data['sanc_sum_tariff_ambulance'] = 0
     
         # Не принятые услуги сверх объема
@@ -127,7 +179,8 @@ class SogazMekDetailedPage(ReportPage):
         self.data['pa_sum_tariff_policlinic'] = stat_obj.pa_sum_tariff_policlinic
     
         # Не подлежит оплате
-        self.data['sanc_count_all'] = stat_obj.sanc_count_all
+        self.data['sanc_count_all'] = self.data['sanc_count_hosp'] + self.data['sanc_count_day_hosp'] + \
+            self.data['sanc_count_policlinic'] + self.data['sanc_count_ambulance']
         self.data['sanc_sum_tariff_all'] = stat_obj.sanc_sum_tariff_all
 
         self.hospital_services = ProvidedService.objects.raw(
@@ -192,55 +245,25 @@ class SogazMekDetailedPage(ReportPage):
                              ELSE 0
                         END) AS inv_sum_tariff_mo,    -- сумма предъявленная рассчётная
 
-
-                    COUNT(DISTINCT CASE WHEN T.is_hospital
-                                          THEN T.event_id
-                                   END
-                          ) AS inv_count_hosp,      --  кол-во услуг в стационаре
-
                     SUM(CASE WHEN T.is_hospital
                                THEN T.tariff
                              ELSE 0
                         END) AS inv_sum_tariff_hosp,  -- сумма по тарифу в стационаре
-
-
-                    COUNT(DISTINCT CASE WHEN T.is_day_hospital
-                                          THEN T.event_id
-                                   END
-                          ) AS inv_count_day_hosp, --  кол-во услуг в дневном стационаре
 
                     SUM(CASE WHEN T.is_day_hospital
                                THEN T.tariff
                              ELSE 0
                         END) AS inv_sum_tariff_day_hosp, -- сумма по тарифу в дневном стационаре
 
-
-                    COUNT(DISTINCT CASE WHEN T.is_policlinic AND T.is_event
-                                          THEN (
-                                              CASE WHEN T.is_phase_exam
-                                                     THEN T.service_id
-                                                   ELSE T.event_id
-                                              END
-                                          )
-                                   END
-                          ) AS inv_count_policlinic,  -- количество услуг в поликлинике
-
                     SUM(CASE WHEN T.is_policlinic
                                THEN T.tariff
                              ELSE 0
                         END) AS inv_sum_tariff_policlinic, -- сумма по тарифу в поликлинике
 
-
-                    COUNT(DISTINCT CASE WHEN T.is_ambulance
-                                          THEN T.event_id
-                                   END
-                          ) AS inv_count_ambulance, --  кол-во услуг в скорой
-
                     SUM(CASE WHEN T.is_ambulance
                                THEN T.tariff
                              ELSE 0
                         END) AS inv_sum_tariff_ambulance, -- сумма по тарифу в скорой
-
 
                     -- Принятые услуги
                     SUM(CASE WHEN T.is_paid AND T.is_tariff
@@ -248,48 +271,15 @@ class SogazMekDetailedPage(ReportPage):
                              ELSE 0
                         END) AS accept_sum_tariff,
 
-                    COUNT(DISTINCT CASE WHEN T.is_paid AND T.is_event
-                                          THEN (
-                                              CASE WHEN T.is_phase_exam
-                                                     THEN T.service_id
-                                                   ELSE T.event_id
-                                              END
-                                          )
-                                   END
-                          ) AS accept_count_all, -- количество принятых услуг (в акте)
-
-
-                    COUNT(DISTINCT CASE WHEN T.is_paid AND T.is_hospital
-                                          THEN T.event_id
-                                   END
-                          ) AS accept_count_hosp,  -- количество услуг в стационаре
-
                     SUM(CASE WHEN T.is_paid AND T.is_hospital
                                THEN T.accepted_payment
                              ELSE 0
                         END) AS accept_sum_tariff_hosp, -- принятая сумма в стационаре
 
-
-                    COUNT(DISTINCT CASE WHEN T.is_paid AND T.is_day_hospital
-                                          THEN T.event_id
-                                   END
-                          ) AS accept_count_day_hosp,  -- количество услуг в дневном стационаре
-
                     SUM(CASE WHEN T.is_paid AND T.is_day_hospital
                                THEN T.accepted_payment
                              ELSE 0
                         END) AS accept_sum_tariff_day_hosp, -- принятая сумма в дневном стационаре
-
-                    COUNT(DISTINCT CASE WHEN T.is_paid AND T.is_policlinic
-                                             AND T.is_event
-                                          THEN (
-                                              CASE WHEN T.is_phase_exam
-                                                     THEN T.service_id
-                                                   ELSE T.event_id
-                                              END
-                                          )
-                                   END
-                          ) AS accept_count_policlinic, -- количество услуг в поликлинике
 
                     SUM(CASE WHEN T.is_paid AND T.is_tariff
                                   AND T.is_policlinic
@@ -297,22 +287,11 @@ class SogazMekDetailedPage(ReportPage):
                              ELSE 0
                         END) AS accept_sum_tariff_policlinic, -- принятая сумма по поликлинике
 
-                    COUNT(DISTINCT CASE WHEN T.is_paid AND T.is_ambulance
-                                          THEN T.event_id
-                                   END
-                          ) AS accept_count_ambulance, -- количество услуг в скорой помощи
-
                     -- Не принятые услуги
                     SUM(CASE WHEN T.is_not_paid AND T.is_tariff
                                THEN T.provided_tariff
                              ELSE 0
                         END) AS sanc_sum_tariff,   -- сумма санкциий
-
-                    COUNT(DISTINCT CASE WHEN T.is_not_paid AND T.is_not_pa
-                                             AND T.is_hospital
-                                          THEN T.event_id
-                                   END
-                          ) AS sanc_count_hosp, -- количество снятых услуг в стационаре
 
                     SUM(CASE WHEN T.is_not_paid AND T.is_not_pa
                                   AND T.is_hospital
@@ -320,41 +299,17 @@ class SogazMekDetailedPage(ReportPage):
                              ELSE 0
                         END) AS sanc_sum_tariff_hosp, -- сумма снятая по стационару
 
-                    COUNT(DISTINCT CASE WHEN T.is_not_paid AND T.is_not_pa
-                                             AND T.is_day_hospital
-                                          THEN T.event_id
-                                   END
-                          ) AS sanc_count_day_hosp, -- количество снятых услуг в дневном стационаре
-
                     SUM(CASE WHEN T.is_not_paid AND T.is_not_pa
                                   AND T.is_day_hospital
                                THEN T.provided_tariff
                              ELSE 0
                         END) AS sanc_sum_tariff_day_hosp, -- сумма снятая по дневному стационару
 
-                    COUNT(DISTINCT CASE WHEN T.is_not_paid AND T.is_not_pa
-                                             AND T.is_policlinic AND T.is_event
-                                          THEN (
-                                              CASE WHEN T.is_phase_exam
-                                                     THEN T.service_id
-                                                   ELSE T.event_id
-                                              END
-                                          )
-                                   END
-                          ) AS sanc_count_policlinic, -- количество снятых услуг в поликлинике
-
                     SUM(CASE WHEN T.is_not_paid AND T.is_not_pa AND T.is_policlinic
                                   AND T.is_tariff
                                THEN T.provided_tariff
                              ELSE 0
                         END) AS sanc_sum_tariff_policlinic, -- сумма снятая по поликлинике
-
-                    COUNT(DISTINCT CASE WHEN T.is_not_paid AND T.is_not_pa
-                                             AND T.is_ambulance
-                                          THEN T.event_id
-                                   END
-                          ) AS sanc_count_ambulance, -- количество снятых услуг в скорой помощи
-
 
                     -- Услуги сняты сверх объёма
                     COUNT(CASE WHEN T.is_not_paid AND T.is_pa
@@ -384,16 +339,6 @@ class SogazMekDetailedPage(ReportPage):
                         END) AS pa_sum_tariff_policlinic, -- сумма санкций сверх объёма по поликлинике
 
                     -- Не подлежит к оплате (итоговая)
-                    COUNT(DISTINCT CASE WHEN T.is_not_paid AND T.is_event
-                                          THEN (
-                                              CASE WHEN T.is_phase_exam
-                                                     THEN T.service_id
-                                                   ELSE T.event_id
-                                              END
-                                          )
-                                   END
-                          ) AS sanc_count_all,  -- количество санкций (итоговое)
-
                     SUM(CASE WHEN T.is_not_paid AND T.is_tariff
                                THEN T.provided_tariff
                              ELSE 0
@@ -422,6 +367,8 @@ class SogazMekDetailedPage(ReportPage):
                         (ms.group_fk != 19 OR ms.group_fk is NULL) OR
                         (ms.group_fk = 19 AND ms.subgroup_fk is not NULL) AS is_event,
                         (ms.group_fk in (25, 26)) AS is_phase_exam,
+
+                        ms.group_fk = 19 AND ms.subgroup_fk != 12 AS is_stomatology,
 
                         (
                            SELECT
@@ -655,7 +602,7 @@ class SogazMekDetailedPage(ReportPage):
 
         sheet.set_style({})
         sheet.write('', 'r')
-        sheet.write(title, 'c')
+        sheet.write(title, 'c', 4)
         sheet.write(self.data[sanc_sum_key], 'c')
         sheet.write(u'руб.', 'c')
         sheet.write(self.data[sanc_count_key], 'c')

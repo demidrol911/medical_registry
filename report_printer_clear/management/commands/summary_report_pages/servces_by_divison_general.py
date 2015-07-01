@@ -25,6 +25,9 @@ class GeneralServicesPage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data = None
+        self.policlinic_capitation = None
+        self.ambulance_capitation = None
         query = self.get_query(parameters)
         data_services = self.__run_query(query, dict(
             period=parameters.registry_period,

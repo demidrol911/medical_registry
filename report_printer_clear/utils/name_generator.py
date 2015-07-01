@@ -13,7 +13,9 @@ class NameGenerator():
         filename_without_ext, file_ext = path.splitext(filename)
 
         filename_pattern = re.compile(ur'^%s(?:_?)(?P<sequence_number>\d*?)%s$' %
-                                      (filename_without_ext, file_ext))
+                                      (filename_without_ext
+                                       .replace('(', '\(')
+                                       .replace(')', '\)'), file_ext))
         sequence_number = -1
         for file_from_dir in listdir(self.path_to_dir):
             filename_match = filename_pattern.match(file_from_dir)

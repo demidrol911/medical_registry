@@ -41,6 +41,7 @@ class SanctionsPage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data = None
         query = '''
                 SELECT
                     mo.id_pk,
@@ -163,8 +164,8 @@ class SanctionsPage(ReportPage):
         total_amount = deepcopy(zero_sum)
 
         sheet.set_style({})
-        sheet.write_cell(3, 3, parameters.report_name)
-        sheet.set_position(8, 0)
+        sheet.write_cell(6, 5, parameters.report_name)
+        sheet.set_position(13, 0)
         for item in self.data:
             if current_failure_cause != item.failure_cause_id:
                 SanctionsPage.print_total_amount_of_error(sheet, current_error, total_amount_of_error)

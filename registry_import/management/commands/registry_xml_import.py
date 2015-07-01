@@ -9,7 +9,8 @@ from medical_service_register.path import REGISTRY_IMPORT_DIR, TEMP_DIR, \
 from main.models import MedicalRegister, SERVICE_XML_TYPES, Gender, Patient, \
     MedicalRegisterRecord, ProvidedEventConcomitantDisease, \
     ProvidedEventComplicatedDisease, ProvidedEventSpecial, \
-    ProvidedService, ProvidedEvent, MedicalRegisterStatus, MedicalServiceVolume
+    ProvidedService, ProvidedEvent, MedicalRegisterStatus, \
+    MedicalServiceVolume, MedicalRegisterImport
 
 from registry_import.simple_validation import get_person_patient_validation, \
     get_policy_patient_validation, get_record_validation, \
@@ -653,7 +654,7 @@ def main():
                             has_hospitalization = True
 
                         if not is_event_kind_corresponds_term(
-                                new_event['VIDPOM'], new_event['USL_OK']):
+                                new_event.get('VIDPOM', None), new_event.get('USL_OK', None)):
                             services_errors.append(set_error(
                                 '904', field='SLUCH', parent='ZAP',
                                 record_uid=new_record['N_ZAP'],
@@ -662,7 +663,7 @@ def main():
                                          u' оказанным в текущих условиях')))
 
                         if new_event['LPU'] != '280043':
-                            if not is_disease_has_precision(new_event['DS0']):
+                            if not is_disease_has_precision(new_event.get('DS0', None)):
                                 services_errors.append(set_error(
                                     '904', field='DS0', parent='SLUCH',
                                     record_uid=new_record['N_ZAP'],
@@ -670,7 +671,7 @@ def main():
                                     comment=(u'Диагноз указан без уточняющей '
                                              u'подрубрики')))
 
-                            if not is_disease_has_precision(new_event['DS1']):
+                            if not is_disease_has_precision(new_event.get('DS1', None)):
                                 services_errors.append(set_error(
                                     '904', field='DS1', parent='SLUCH',
                                     record_uid=new_record['N_ZAP'],
@@ -678,9 +679,9 @@ def main():
                                     comment=(u'Диагноз указан без уточняющей '
                                              u'подрубрики')))
 
-                        if registry_type in list(range(3, 11)) and \
+                        if registry_type in (3, 4) and \
                             not is_examination_result_matching_comment(
-                                new_event['RSLT_D'], new_event['COMENTSL']):
+                                new_event.get('RSLT_D'), new_event.get('COMENTSL')):
                                 services_errors.append(set_error(
                                     '904', field='RSLT_D', parent='SLUCH',
                                     record_uid=new_record['N_ZAP'],
@@ -702,7 +703,7 @@ def main():
                             new_concomitant_list.append(new_concomitant)
 
                             if new_event['LPU'] != '280043':
-                                if not is_disease_has_precision(new_event['DS2']):
+                                if not is_disease_has_precision(new_event.get('DS2', None)):
                                     services_errors.append(set_error(
                                         '904', field='DS2', parent='SLUCH',
                                         record_uid=new_record['N_ZAP'],
@@ -730,7 +731,7 @@ def main():
                             new_complicated_list.append(new_complicated)
 
                             if new_event['LPU'] != '280043':
-                                if not is_disease_has_precision(new_event['DS3']):
+                                if not is_disease_has_precision(new_event.get('DS3', None)):
                                     services_errors.append(set_error(
                                         '904', field='DS3', parent='SLUCH',
                                         record_uid=new_record['N_ZAP'],
@@ -786,6 +787,7 @@ def main():
                             raw_service = get_service_validation(service,
                                                                  event=event)
                             new_service = raw_service.get_dict()
+                            new_service['CODE_USL'] = new_service['CODE_USL'].rjust(6, '0')
                             new_service['pk'] = service_pk
                             new_service['event_id'] = new_event['pk']
                             new_service_list.append(new_service)
@@ -816,7 +818,8 @@ def main():
                                     comment=(u'Услуга не соответсвует типу '
                                              u'файла')))
 
-                            if not is_expired_service(new_service['CODE_USL']):
+                            if not is_expired_service(new_service['CODE_USL'],
+                                                      new_event['DATE_2']):
                                 services_errors.append(set_error(
                                     '904', field='CODE_USL', parent='USL',
                                     record_uid=new_record['N_ZAP'],
@@ -825,8 +828,9 @@ def main():
                                     comment=(u'Код услуги не может быть при'
                                              u'менён в текущем периоде')))
 
-                            if not is_service_code_matching_hitech_method(
-                                    new_service['CODE_ISL'],
+                            if registry_type == 2 and \
+                                    not is_service_code_matching_hitech_method(
+                                    new_service['CODE_USL'],
                                     new_event['METOD_HMP']):
                                 services_errors.append(set_error(
                                     '904', field='CODE_USL', parent='USL',
@@ -836,8 +840,19 @@ def main():
                                     comment=(u'Код услуги не соответствует мето'
                                              u'ду ВМП')))
 
-                            if not is_service_children_profile_matching_event_children_profile(
-                                    new_service['DET'], new_event['DET']):
+                            if new_event['LPU'] != '280043':
+                                if not is_disease_has_precision(new_service.get('DS', None)):
+                                    services_errors.append(set_error(
+                                        '904', field='DS', parent='USL',
+                                        record_uid=new_record['N_ZAP'],
+                                        event_uid=event['IDCASE'],
+                                        service_uid=new_service['IDSERV'],
+                                        comment=(u'Диагноз указан без уточняющей '
+                                                 u'подрубрики')))
+
+                            if registry_type in (1, 2) and \
+                                    not is_service_children_profile_matching_event_children_profile(
+                                    new_service.get('DET'), new_event.get('DET')):
                                 services_errors.append(set_error(
                                     '904', field='CODE_USL', parent='USL',
                                     record_uid=new_record['N_ZAP'],
@@ -846,7 +861,6 @@ def main():
                                     comment=(u'Признак детского профиля случая '
                                              u'не совпадает с признаком детског'
                                              u'о профиля услуги')))
-
 
                             if new_event.get('USL_OK', '') == '1' \
                                     and new_service[
@@ -928,7 +942,9 @@ def main():
                 and organization not in DAY_HOSPITAL_MO_EXCLUSIONS:
 
             has_insert = False
-            message_file = open(TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.encode('cp1251').format(organization), 'w')
+
+            message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.format(organization)
+            message_file = open(message_file_name, 'w')
             message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
                        u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
@@ -953,10 +969,25 @@ def main():
             message_file.write(message.encode('cp1251'))
             message_file.close()
 
+            print message_file_name, copy_path
+
+            shutil.copy2(message_file_name, copy_path)
+            MedicalRegisterImport.objects.create(
+                period='{0}-{1}-01'.format(current_year, current_period),
+                organization=organization_code,
+                filename=person_filename[2:],
+                status=u'Сверхобъёмы',
+            )
         if has_insert:
             if registry_has_errors:
                 print u'Ошибки ФЛК'
 
+                MedicalRegisterImport.objects.create(
+                    period='{0}-{1}-01'.format(current_year, current_period),
+                    organization=organization_code,
+                    filename=person_filename[2:],
+                    status=u'Не пройден ФЛК',
+                )
                 zipname = TEMP_DIR + 'VM%sS28002_%s.zip' % (
                     organization_code,
                     person_filename[person_filename.index('_') + 1:-4]
@@ -977,7 +1008,12 @@ def main():
 
             else:
                 print u'ФЛК пройден. Вставка данных...'
-
+                MedicalRegisterImport.objects.create(
+                    period='{0}-{1}-01'.format(current_year, current_period),
+                    organization=organization_code,
+                    filename=person_filename[2:],
+                    status=u'Принят',
+                )
                 MedicalRegister.objects.filter(
                     is_active=True, year=current_year, period=current_period,
                     organization_code=organization_code).update(is_active=False)

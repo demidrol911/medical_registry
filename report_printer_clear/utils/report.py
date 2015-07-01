@@ -12,6 +12,7 @@ class Report():
         self.suffix = suffix
         self.by_department = False
         self.pages = []
+        self.filename = ''
 
     def set_by_department(self, flag):
         self.by_department = flag
@@ -30,7 +31,11 @@ class Report():
             sheet = book.get_sheet(page.page_number)
             page.calculate(parameters)
             page.print_page(sheet, parameters)
+        self.filename = book.get_filename()
         book.close()
+
+    def get_filename(self):
+        return self.filename
 
 
 class ReportParameters():

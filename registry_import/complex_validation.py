@@ -12,6 +12,9 @@ import re
 
 
 def is_disease_has_precision(field_value):
+    if not field_value:
+        return True
+
     disease = DISEASES.get(field_value, None)
 
     if disease and disease.is_precision:
@@ -22,6 +25,10 @@ def is_disease_has_precision(field_value):
 
 def is_service_corresponds_registry_type(field_value, registry_type):
     service = CODES.get(field_value)
+
+    if field_value and field_value.startswith('A'):
+        return True
+
     if registry_type == 1 and \
             service.group_id in list(range(6, 17)) + [20, 25, 26]:
         return False
@@ -36,6 +43,12 @@ def is_service_corresponds_registry_type(field_value, registry_type):
 
 
 def is_event_kind_corresponds_term(kind, term):
+    if not kind:
+        return True
+
+    if not term:
+        return True
+
     kinds = KIND_TERM_DICT.get(term, [])
 
     if not kinds or not term:
@@ -48,9 +61,18 @@ def is_event_kind_corresponds_term(kind, term):
 
 
 def is_examination_result_matching_comment(examination_result, event_comment):
+    if not examination_result:
+        return True
+
+    if not event_comment:
+        return True
+
     pattern = re.compile(ADULT_EXAMINATION_COMMENT_PATTERN)
     matching = pattern.match(event_comment)
     result = EXAMINATION_HEALTH_GROUP_EQUALITY[examination_result]
+
+    if not matching:
+        return True
 
     if examination_result in ['1', '2', '3', '4', '5', '31', '32']:
         if matching.group('health_group') != result and matching.group('second_level') != '0':
@@ -64,6 +86,9 @@ def is_examination_result_matching_comment(examination_result, event_comment):
 
 
 def is_service_code_matching_hitech_method(code, method):
+    if code.startswith('A'):
+        return True
+
     if safe_int(code[-3:]) != safe_int(method):
         return False
 
@@ -72,7 +97,11 @@ def is_service_code_matching_hitech_method(code, method):
 
 def is_service_children_profile_matching_event_children_profile(
         service_children_profile, event_children_profile):
+    if service_children_profile is None and event_children_profile is None:
+        return True
+
     if event_children_profile != service_children_profile:
+
         return False
 
     return True

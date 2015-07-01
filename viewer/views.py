@@ -10,7 +10,7 @@ from django.core import serializers
 from registry_import.simple_validation import PROFILES, DIVISIONS, DISEASES, CODES
 from registry_import.simple_validation import queryset_to_dict
 from main.funcs import safe_date_to_string, safe_float
-from main.models import MedicalError
+from main.models import MedicalError, MedicalRegisterImport
 
 import json
 import time
@@ -160,6 +160,44 @@ def get_department_registers_json(request):
     return HttpResponse(registries_json, mimetype='application/json')
 
 
+def get_registers_import_json(request):
+    cursor = connection.cursor()
+    year = request.GET.get('year', None)
+    period = request.GET.get('period', None)
+
+    query_max_period = """
+        select max(format('%s-%s-01', year, period))
+        from medical_register
+        where is_active
+    """
+
+    if not (year and period):
+        cursor.execute(query_max_period)
+        period = cursor.fetchone()[0]
+    else:
+        period = '{0}-{1}-01'.format(year, period)
+
+    records = MedicalRegisterImport.objects.filter(period=period).extra(
+        select={'organization_name': 'select name from medical_organization where parent_fk is null and code = organization'}
+    )
+
+    registries = []
+
+    for rec in records:
+        registry = {'period': rec.period,
+                    'organization': rec.organization,
+                    'name': rec.organization_name,
+                    'filename': rec.filename,
+                    'status': rec.status,
+                    'timestamp': rec.timestamp.strftime('%d-%m-%Y %H:%M')}
+
+        registries.append(registry)
+
+    registries_json = json.dumps({'root': registries})
+
+    return HttpResponse(registries_json, mimetype='application/json')
+
+
 def get_services_json(request):
     year = request.GET.get('year', None)
     period = request.GET.get('period', None)
@@ -180,8 +218,8 @@ def get_services_json(request):
             ms.code srv_code,
             ms.name srv_name,
             pe.anamnesis_number as anamnesis,
-            idc.idc_code ds_code,
-            idc.name ds_name,
+            coalesce(idc.idc_code, idc_peb.idc_code) as  ds_code,
+            coalesce(idc.name, idc_peb.name) as ds_name,
             ps.quantity,
             ps.accepted_payment as accepted,
             ps.worker_code as wrk_code,
@@ -190,12 +228,13 @@ def get_services_json(request):
             ps.comment as srv_comment,
             ps.tariff,
             ARRAY(
-                select DISTINCT me.old_code
+                select me.old_code
                 from provided_service_sanction pss
                     join medical_error me
                         on me.id_pk = pss.error_fk
                 WHERE
                     pss.service_fk = ps.id_pk and pss.is_active
+                ORDER BY me.weight desc limit 1
             ) as errors,
             array(
                 select idc.idc_code

@@ -51,7 +51,6 @@ def howlong(func):
         start = time.clock()
         result = func(*a, **b)
         elapsed = time.clock() - start
-        #print func.__module__.split('.')[-1]
         print u'{0:s}.{1:s} завершилась за {2:d} мин {3:d} сек'.\
             format(
                 func.__module__.split('.')[-1],
@@ -61,3 +60,11 @@ def howlong(func):
             )
         return result
     return wrapper_func
+
+
+def dictfetchall(cursor):
+    desc = cursor.description
+    return [
+        dict(zip([col[0] for col in desc], row))
+        for row in cursor.fetchall()
+    ]

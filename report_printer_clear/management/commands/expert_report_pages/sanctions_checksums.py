@@ -7,10 +7,11 @@ from tfoms.func import FAILURE_CAUSES
 class SanctionCheckSumsPage(ReportPage):
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 1
 
     def calculate(self, parameters):
+        self.data = None
         query = '''
                 SELECT
                     mo.id_pk,

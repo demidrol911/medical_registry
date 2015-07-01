@@ -77,7 +77,7 @@ def underpay_repeated_service(register_element):
     query = """
         with current_period as (select format('%%s-%%s-01', %(year)s, %(period)s)::DATE as val)
 
-        select DISTINCT service_id from (
+        select DISTINCT ps.id_pk from (
         select ps.id_pk as service_id,
             ps.event_fk as event_id,
 
@@ -102,7 +102,11 @@ def underpay_repeated_service(register_element):
         where mr.is_active
             and mr.organization_code = %(organization)s
             and format('%%s-%%s-01', mr.year, mr.period)::DATE between (select val from current_period) - interval '4 months' and (select val from current_period)
-        ) as T where checking_period = (select val from current_period) and rnum_repeated > 1 and rnum_duplicate = 1
+            and (ps.payment_type_fk = 2 or ps.payment_type_fk is NULL)
+        ) as T
+        join provided_service ps
+            on ps.id_pk = T.service_id
+        where checking_period = (select val from current_period) and rnum_repeated > 1 and rnum_duplicate = 1
             AND (select count(pss.id_pk) from provided_service_sanction pss
                  where pss.service_fk = T.service_id and pss.error_fk = 64) = 0
     """
@@ -421,7 +425,7 @@ def underpay_cross_dates_services(register_element):
         И стационар в стационаре
     """
     query1 = """
-        select ps.id_pk, T.id_pk
+        select ps.id_pk
         FROM provided_service ps
             join provided_event pe
                 on ps.event_fk = pe.id_pk
@@ -470,7 +474,7 @@ def underpay_cross_dates_services(register_element):
     """
 
     query2 = """
-        select ps.id_pk, T.id_pk
+        select ps.id_pk
         FROM provided_service ps
             join provided_event pe
                 on ps.event_fk = pe.id_pk
@@ -1673,6 +1677,45 @@ def underpay_neurologist_first_phase_exam(register_element):
                      ms1.code = '019020'
                      and ps1.start_date <= '2015-04-01'
                      AND ps1.payment_type_fk = 2)
+            """
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 78)
+
+
+@howlong
+def underpay_multi_subgrouped_stomatology_events(register_element):
+    query = """
+            select provided_service.id_pk from provided_service join (
+                select
+                    pe.id_pk, count(distinct ps.id_pk) as count_services
+                from medical_register mr JOIN medical_register_record mrr
+                    ON mr.id_pk=mrr.register_fk
+                JOIN provided_event pe
+                    ON mrr.id_pk=pe.record_fk
+                JOIN provided_service ps
+                    ON ps.event_fk=pe.id_pk
+                JOIN medical_organization mo
+                    ON mo.id_pk = ps.organization_fk
+                join patient pt
+                    on pt.id_pk = mrr.patient_fk
+                JOIN medical_service ms
+                    ON ms.id_pk = ps.code_fk
+                where mr.is_active and mr.year = %(year)s
+                    and mr.period = %(period)s
+                    and ms.group_fk = 19
+                    and ps.payment_type_fk = 2
+                    and ms.subgroup_fk is not null
+                    and mr.organization_code = %(organization)s
+                group by 1
+                order by 2
+            ) as T on T.id_pk = event_fk
+            and T.count_services > 1
+            where (select count(*) from provided_service_sanction
+                where service_fk = provided_service.id_pk and error_fk = 78) = 0
             """
     services = ProvidedService.objects.raw(
         query, dict(year=register_element['year'],

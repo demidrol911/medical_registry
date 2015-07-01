@@ -9,10 +9,11 @@ from report_printer.const import MONTH_NAME
 class HospitalDivisionAcceptedPage(ReportPage):
 
     def __init__(self):
-        self.data = ''
+        self.data = None
         self.page_number = 0
 
     def calculate(self, parameters):
+        self.data = None
         query = '''
                 SELECT
                     md.id_pk,
