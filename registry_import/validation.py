@@ -577,7 +577,7 @@ class PersonValidator(object):
         collection.run()
 
         return collection
-
+    """
     def _is_service_registry_corresponding(self):
         self.clean_service['service = CODES.get(field_value)
 
@@ -646,7 +646,7 @@ class PersonValidator(object):
 
         return True
 
-
+    """
     def is_service_children_profile_matching_event_children_profile(
             service_children_profile, event_children_profile):
         if service_children_profile is None and event_children_profile is None:
@@ -658,7 +658,7 @@ class PersonValidator(object):
 
         return True
 
-
+    """
     def is_expired_service(code, event_end_date):
         try:
             event_date = datetime.strptime(event_end_date, '%Y-%m-%d').date()
@@ -675,3 +675,4 @@ class PersonValidator(object):
         return False
 
     return True
+    """

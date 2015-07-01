@@ -1783,45 +1783,6 @@ def underpay_neurologist_first_phase_exam(register_element):
 
     set_sanctions(services, 78)
 
-<<<<<<< HEAD
-@howlong
-def underpay_multi_subgrouped_stomatology_events(register_element):
-    query = """
-        select provided_service.id_pk from provided_service join (
-            select
-                pe.id_pk, count(ps.id_pk)
-            from medical_register mr JOIN medical_register_record mrr
-                ON mr.id_pk=mrr.register_fk
-            JOIN provided_event pe
-                ON mrr.id_pk=pe.record_fk
-            JOIN provided_service ps
-                ON ps.event_fk=pe.id_pk
-            JOIN medical_organization mo
-                ON mo.id_pk = ps.organization_fk
-            join patient pt
-                on pt.id_pk = mrr.patient_fk
-            JOIN medical_service ms
-                ON ms.id_pk = ps.code_fk
-            where mr.is_active and mr.year = %(year)s
-                and mr.period = %(period)s
-                and ms.group_fk = 19
-                and ps.payment_type_fk = 2
-                and ms.subgroup_fk is not null
-                and mr.organization_code in %(organization)s
-            group by 1
-            order by 2
-            having count(ps.id_pk) > 1
-        ) as T on T.id_pk = event_fk
-        where (select count(*) from provided_service_sanction
-            where service_fk = provided_service.id_pk and error_fk = 78) = 0
-
-    """
-    services = ProvidedService.objects.raw(
-        query, dict(year=register_element['year'],
-                    period=register_element['period'],
-                    organization=register_element['organization_code']))
-
-    set_sanctions(services, 78)
 
 @howlong
 def underpay_multi_division_disease_events(register_element):
@@ -1851,7 +1812,13 @@ def underpay_multi_division_disease_events(register_element):
         where (select count(*) from provided_service_sanction where error_fk = 78) = 0
     """
 
-=======
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 78)
+
 
 @howlong
 def underpay_multi_subgrouped_stomatology_events(register_element):
@@ -1884,7 +1851,7 @@ def underpay_multi_subgrouped_stomatology_events(register_element):
             where (select count(*) from provided_service_sanction
                 where service_fk = provided_service.id_pk and error_fk = 78) = 0
             """
->>>>>>> develop
+
     services = ProvidedService.objects.raw(
         query, dict(year=register_element['year'],
                     period=register_element['period'],
