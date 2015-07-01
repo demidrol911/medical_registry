@@ -398,8 +398,8 @@ class DefectsPage(ReportPage):
                                   '119221', '119222', '119223', '119224', '119225',
                                   '119226', '119227', '119228', '119229', '119230',
                                   '119231',
-                                  '019116', '019115',
-                                  '019117'
+                                  '019116', '019115', '019117',
+                                  '019025', '019026', '019027', '019028'
                                )
                              THEN 'clinical_exam'
 
@@ -523,6 +523,24 @@ class DefectsPage(ReportPage):
                     ) AS T
         '''
         return query
+
+    def get_data_general_dict(self):
+        total = {}
+        for data in self.data_general:
+            division = data.division_term
+            total[division] = {}
+            for row_index, services_group in DefectsPage.SERVICES_GROUPS.get(division, []):
+                if services_group == DefectsPage.VISIT:
+                    total[division]['visit_all'] = data.visit_all_adult + data.visit_all_children
+                    total[division]['visit_accept'] = data.visit_accept_adult + data.visit_accept_children
+                    total[division]['visit_exclude'] = data.visit_exclude
+
+                elif services_group == DefectsPage.TREATMENT:
+                    total[division]['treatment_all'] = data.treatment_all_adult + data.treatment_all_children
+                    total[division]['treatment_accept'] = data.treatment_accept_adult + data.treatment_accept_children
+                    total[division]['treatment_exclude'] = data.treatment_exclude
+
+        return total
 
     def print_page(self, sheet, parameters):
         sheet.write_cell(0, 3, u'Сводная справка  по  дефектам за ' + parameters.date_string)
