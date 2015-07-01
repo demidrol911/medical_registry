@@ -18,7 +18,16 @@ class FinalReportPage(ReportPage):
                     mr.organization_code AS organization_code,
                     SUM(ps.tariff) AS tariff,
                     SUM(ps.invoiced_payment) AS invoiced_payment,
-                    SUM(ps.accepted_payment) AS accepted_payment
+                    SUM(ps.accepted_payment) AS accepted_payment,
+                    SUM(CASE WHEN ps.payment_kind_fk = 2
+                                  AND pe.term_fk = 3
+                               THEN ps.accepted_payment
+                             ELSE 0
+                        END) AS policlinic_capitation,
+                    SUM(CASE WHEN pe.term_fk = 4
+                               THEN ps.accepted_payment
+                             ELSE 0
+                        END) AS ambulance_capitation
 
                 FROM medical_register mr
                     JOIN medical_register_record mrr
@@ -37,6 +46,7 @@ class FinalReportPage(ReportPage):
                    AND (ms.group_fk != 27
                         OR ms.group_fk is null
                        )
+                   AND ps.payment_type_fk = 2
                 GROUP BY mo.id_pk, mr.organization_code
                 '''
         self.data = MedicalOrganization.objects.raw(query, dict(
@@ -52,4 +62,6 @@ class FinalReportPage(ReportPage):
             sheet.set_position(ACT_CELL_POSITION[data_on_mo.organization_code], 2)
             sheet.write(data_on_mo.tariff, 'c')
             sheet.write(data_on_mo.invoiced_payment, 'c')
-            sheet.write(data_on_mo.accepted_payment)
+            sheet.write(data_on_mo.accepted_payment, 'c')
+            sheet.write(data_on_mo.policlinic_capitation, 'c')
+            sheet.write(data_on_mo.ambulance_capitation)
