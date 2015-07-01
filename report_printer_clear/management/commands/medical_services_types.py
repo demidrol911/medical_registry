@@ -3,6 +3,12 @@
 from django.core.management.base import BaseCommand
 from main.funcs import howlong
 from medical_service_register.path import REESTR_EXP
+from report_printer_clear.management.commands.medical_services_types_pages.hospital_ambulance import \
+    HospitalAmbulancePage
+from report_printer_clear.management.commands.medical_services_types_pages.hospital_hmc import HospitalHmcPage
+from report_printer_clear.management.commands.medical_services_types_pages.magnetic_resonance_imaging import MriPage
+from report_printer_clear.management.commands.medical_services_types_pages.policlinic import \
+    PoliclinicCapitationVisitOtherPurposesPage, PoliclinicCapitationTreatmentDiseasePage
 from report_printer_clear.utils.report import Report, ReportParameters
 
 from medical_services_types_pages.examination_adult import \
@@ -82,6 +88,26 @@ class Command(BaseCommand):
             {'pattern': 'stomatology.xls',
              'pages': (StomatologyPage, ),
              'title':  u'cтоматология'},
+
+            {'pattern': 'magnetic_resonance_imaging.xls',
+             'pages': (MriPage, ),
+             'title': u'КТ и МРТ'},
+
+            {'pattern': 'hospital_ambulance.xls',
+             'pages': (HospitalAmbulancePage, ),
+             'title': u'приемное отделение стационара (неотложная помощь)'},
+
+            {'pattern': 'hospital_hmc.xls',
+             'pages': (HospitalHmcPage, ),
+             'title': u'круглосуточный стационар ВМП'},
+
+            {'pattern': 'policlinic_capitation_visit_other_purposes.xls',
+             'pages': (PoliclinicCapitationVisitOtherPurposesPage, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (посещения с иными целями) перв.мед.помощь'},
+
+            {'pattern': 'policlinic_capitation_treatment_disease.xls',
+             'pages': (PoliclinicCapitationTreatmentDiseasePage, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (обращения по поводу заболевания) перв.мед.помощь'},
         )
 
         parameters = ReportParameters()

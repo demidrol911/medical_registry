@@ -49,6 +49,8 @@ class MedicalServiceTypePage(ReportPage):
                         pt.gender_fk AS patient_gender,
                         pe.term_fk AS service_term,
                         ms.tariff_profile_fk AS service_tariff_profile,
+                        ms.reason_fk AS service_reason,
+                        ms.division_fk AS service_division,
                         ms.group_fk AS service_group,
                         ms.subgroup_fk AS service_subgroup,
                         ms.code ILIKE '0%%' AS is_adult,
@@ -58,6 +60,9 @@ class MedicalServiceTypePage(ReportPage):
                                THEN ms.uet * ps.quantity
                              ELSE ps.quantity
                         END AS service_quantity,
+
+                        ((pe.term_fk = 3 AND ps.payment_kind_fk = 2)
+                          OR pe.term_fk = 4) AS is_capitation,
 
                         ps.id_pk AS service_id,
                         pe.id_pk AS event_id,
