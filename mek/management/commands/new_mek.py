@@ -664,6 +664,68 @@ def update_payment_kind(register_element):
     cursor.close()
 
 
+def update_wrong_date(register_element):
+    query1 = '''
+             UPDATE
+                 provided_service
+             SET start_date = '1900-01-01'
+             WHERE id_pk in (
+                 SELECT
+                     ps.id_pk
+                 FROM medical_register mr
+                     JOIN medical_register_record mrr
+                        ON mr.id_pk = mrr.register_fk
+                     JOIN provided_event pe
+                        ON mrr.id_pk = pe.record_fk
+                     JOIN provided_service ps
+                        ON ps.event_fk = pe.id_pk
+                 WHERE mr.is_active
+                       AND mr.year = %(year)s
+                       AND mr.period = %(period)s
+                       AND mr.organization_code = %(organization)s
+                       AND ps.start_date < '1900-01-01'
+             )
+             '''
+
+    query2 = '''
+             UPDATE
+                 provided_service
+             SET end_date = '1900-01-01'
+             WHERE id_pk in (
+                 SELECT
+                     ps.id_pk
+                 FROM medical_register mr
+                     JOIN medical_register_record mrr
+                        ON mr.id_pk = mrr.register_fk
+                     JOIN provided_event pe
+                        ON mrr.id_pk = pe.record_fk
+                     JOIN provided_service ps
+                        ON ps.event_fk = pe.id_pk
+                 WHERE mr.is_active
+                       AND mr.year = %(year)s
+                       AND mr.period = %(period)s
+                       AND mr.organization_code = %(organization)s
+                       AND ps.end_date < '1900-01-01'
+             )
+             '''
+
+    cursor = connection.cursor()
+    cursor.execute(query1, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+
+    transaction.commit()
+    cursor.close()
+
+    cursor = connection.cursor()
+    cursor.execute(query2, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+
+    transaction.commit()
+    cursor.close()
+
+
 @howlong
 def calculate_tariff(register_element):
     min_date_for_stopped_policy = datetime.strptime('2011-01-01', '%Y-%m-%d').date()
@@ -982,6 +1044,7 @@ def main():
             identify_patient(register_element)
             update_patient_attachment_code(register_element)
             update_payment_kind(register_element)
+            update_wrong_date(register_element)
 
             checks.underpay_repeated_service(register_element)
             checks.underpay_wrong_date_service(register_element)
@@ -1018,6 +1081,7 @@ def main():
 
             checks.underpay_second_phase_examination(register_element)
             checks.underpay_neurologist_first_phase_exam(register_element)
+            checks.underpay_multi_subgrouped_stomatology_events(register_element)
             checks.underpay_outpatient_event(register_element)
             checks.underpay_multi_subgrouped_stomatology_events(register_element)
 

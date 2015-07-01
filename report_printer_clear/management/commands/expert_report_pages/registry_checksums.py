@@ -9,6 +9,7 @@ class RegistryCheckSumsPage(ReportPage):
         self.page_number = 0
 
     def calculate(self, parameters):
+        self.data = None
         query = '''
                 SELECT
                     mo.id_pk,

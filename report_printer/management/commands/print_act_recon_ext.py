@@ -34,6 +34,8 @@ class Command(BaseCommand):
             values('organization__code').\
             annotate(sum_invoiced=Sum('invoiced_payment'))
 
+        print invoiced_payment
+
         accepted_payment = services_mo.filter(
             payment_type__in=[2, 4]).\
             values('organization__code').\
@@ -52,15 +54,21 @@ class Command(BaseCommand):
             values('organization__code').\
             annotate(sum_capitation=Sum('accepted_payment'))
 
+
+        '''
         surcharge = Sanction.objects.filter(
             type=4,
             date=datetime.date(year=int(year), month=1, day=30),
             is_active=True).\
             values('service__organization__code').\
             annotate(sum_surcharge=Sum('underpayment'))
+        '''
 
         def print_sum(act_book, sum_data, sum_key, mo_key, column):
             for data in sum_data:
+                print data[mo_key]
+                if data[mo_key] == '280086':
+                    print data[sum_key]
                 act_book.set_cursor(ACT_CELL_POSITION_EXT[data[mo_key]], column)
                 act_book.write_cell(data[sum_key])
 
@@ -74,7 +82,7 @@ class Command(BaseCommand):
             print_sum(act_book, accepted_payment, 'sum_accepted', 'organization__code', 4)
             print_sum(act_book, policlinic_capitation, 'sum_capitation', 'organization__code', 5)
             print_sum(act_book, acute_care, 'sum_capitation', 'organization__code', 6)
-            print_sum(act_book, surcharge, 'sum_surcharge', 'service__organization__code', 11)
+            #print_sum(act_book, surcharge, 'sum_surcharge', 'service__organization__code', 11)
 
         finish = time.time()
         print u'Время выполнения: {:.3f} минут'.format((finish - start)/60)

@@ -333,67 +333,40 @@ class MedicalOrganization(models.Model):
         return result
 
     def get_ambulance_attachment_count(self, date):
+        capitation_cache = {}
+        for line in file('capitation_exception_cache.csv'):
+            line_data = line.split(';')
+            if date.year == int(line_data[1]) \
+                    and date.month == int(line_data[2]):
+                capitation_cache[line_data[0]] = [int(popul) for popul in line_data[3:]]
+
+        result = {
+            1: {'men': 0, 'fem': 0},
+            2: {'men': 0, 'fem': 0},
+            3: {'men': 0, 'fem': 0},
+            4: {'men': 0, 'fem': 0},
+            5: {'men': 0, 'fem': 0}
+        }
+
         # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
         # при рассчёт численности для 280017 и 280001 используется следующий запрос
         # 280088 обслуживает 280028
-        if self.code in ('280017', '280001', '280088'):
-            query = """
-            select medical_organization.id_pk, count(*) as attachment_count,
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) < '1 years' then 1 else 0 end) as men1,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) < '1 years' then 1 else 0 end) as fem1,
 
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '1 years' and age(%(date)s, person.birthdate) < '5 years' then 1 else 0 end) as men2,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '1 years' and age(%(date)s, person.birthdate) < '5 years' then 1 else 0 end) as fem2,
+        if self.code in capitation_cache:
+            result[1]['men'] = capitation_cache[self.code][0]
+            result[1]['fem'] = capitation_cache[self.code][1]
 
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '5 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as men3,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '5 years' and age(%(date)s, person.birthdate) < '18 years' then 1 else 0 end) as fem3,
+            result[2]['men'] = capitation_cache[self.code][2]
+            result[2]['fem'] = capitation_cache[self.code][3]
 
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '18 years' and age(%(date)s, person.birthdate) < '59 years' then 1 else 0 end) as men4,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '18 years' and age(%(date)s, person.birthdate) < '54 years' then 1 else 0 end) as fem4,
+            result[3]['men'] = capitation_cache[self.code][4]
+            result[3]['fem'] = capitation_cache[self.code][5]
 
-            sum(case when person.gender_fk = '1' and age(%(date)s, person.birthdate) >= '59 years' then 1 else 0 end) as men5,
-            sum(case when person.gender_fk = '2' and age(%(date)s, person.birthdate) >= '54 years' then 1 else 0 end) as fem5
+            result[4]['men'] = capitation_cache[self.code][6]
+            result[4]['fem'] = capitation_cache[self.code][7]
 
-            from attachment
-            join medical_organization on (medical_organization.id_pk = medical_organization_fk and
-                medical_organization.teritorial_parent_fk is null) or medical_organization.id_pk =
-                (select teritorial_parent_fk from medical_organization where id_pk = medical_organization_fk)
-
-            join medical_organization ambulanceMO on (ambulanceMO.id_pk = medical_organization.ambulance_fk and
-            medical_organization.ambulance_fk is not null)
-            or (ambulanceMO.id_pk = medical_organization.id_pk and medical_organization.ambulance_fk is null)
-
-            join person on attachment.person_fk = person.version_id_pk
-            join insurance_policy on insurance_policy.person_fk = person.version_id_pk
-            join active_insurance_policy on active_insurance_policy.version_fk = insurance_policy.version_id_pk
-
-            where
-            ambulanceMO.code = %(organization)s and attachment.status_fk = '1'
-            and attachment.date <= %(date)s and attachment.is_active = true and
-            attachment.id_pk in (select max(id_pk) from attachment
-            where is_active = true and attachment.date <= %(date)s group by person_fk)
-            group by medical_organization.id_pk
-            """
-
-            result = {
-                1: {'men': 0, 'fem': 0},
-                2: {'men': 0, 'fem': 0},
-                3: {'men': 0, 'fem': 0},
-                4: {'men': 0, 'fem': 0},
-                5: {'men': 0, 'fem': 0}
-            }
-
-            for population_object in MedicalOrganization.objects.raw(query, dict(organization=self.code, date=date)):
-                result[1]['men'] += population_object.men1
-                result[1]['fem'] += population_object.fem1
-                result[2]['men'] += population_object.men2
-                result[2]['fem'] += population_object.fem2
-                result[3]['men'] += population_object.men3
-                result[3]['fem'] += population_object.fem3
-                result[4]['men'] += population_object.men4
-                result[4]['fem'] += population_object.fem4
-                result[5]['men'] += population_object.men5
-                result[5]['fem'] += population_object.fem5
+            result[5]['men'] = capitation_cache[self.code][8]
+            result[5]['fem'] = capitation_cache[self.code][9]
 
         # Для вех остальных больниц используются уже рассчитанные значения численности из
         # таблицы attachment_statistics
@@ -1512,3 +1485,16 @@ class MedicalRegisterImport(models.Model):
 
     class Meta:
         db_table = 'medical_register_import'
+
+
+class ExaminationTariff(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    service = models.ForeignKey(MedicalService, db_column='service_fk')
+    value = models.DecimalField(max_digits=15, decimal_places=2, db_column='value')
+    regional_coefficient = models.DecimalField(max_digits=4, decimal_places=1, db_column='regional_coefficient')
+    gender = models.SmallIntegerField(db_column='gender_fk')
+    age = models.SmallIntegerField(db_column='age')
+    start_date = models.DateField(db_column='start_date')
+
+    class Meta:
+        db_table = 'examination_tariff'

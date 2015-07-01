@@ -71,6 +71,9 @@ def is_examination_result_matching_comment(examination_result, event_comment):
     matching = pattern.match(event_comment)
     result = EXAMINATION_HEALTH_GROUP_EQUALITY[examination_result]
 
+    if not matching:
+        return True
+
     if examination_result in ['1', '2', '3', '4', '5', '31', '32']:
         if matching.group('health_group') != result and matching.group('second_level') != '0':
             return False

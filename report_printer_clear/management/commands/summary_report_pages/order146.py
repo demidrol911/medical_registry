@@ -14,6 +14,7 @@ class Order146Page(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data = None
         query = '''
             SELECT
                 -- Вид помощи

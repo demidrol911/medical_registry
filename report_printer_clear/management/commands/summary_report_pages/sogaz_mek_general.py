@@ -12,6 +12,7 @@ class SogazMekGeneralPage(ReportPage):
 
     @howlong
     def calculate(self, parameters):
+        self.data = None
         query = SogazMekGeneralPage.get_query_statistics()
         stat_obj = MedicalOrganization.objects.raw(query, dict(
             period=parameters.registry_period,
