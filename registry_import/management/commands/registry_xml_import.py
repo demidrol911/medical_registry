@@ -422,6 +422,7 @@ def main():
 
     for organization in registries:
         print organization
+
         if not is_files_completeness(registries[organization]):
             send_error_file(OUTBOX_DIR, registry, u'Не полный пакет файлов')
             continue
@@ -464,7 +465,9 @@ def main():
         person_filename = get_person_filename(registry_list)
         patient_path = os.path.join(REGISTRY_PROCESSING_DIR, person_filename)
         patient_file = XmlLikeFileReader(patient_path)
+
         temp_pk = []
+
         for item in patient_file.find(tags=('PERS', )):
             if patient_pk_list:
                 patient_pk = patient_pk_list.pop()

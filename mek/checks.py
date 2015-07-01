@@ -662,6 +662,7 @@ def underpay_wrong_examination_age_group(register_element):
             and mr.year = %s
             and mr.period = %s
             and mr.organization_code = %s
+            and pe.end_date < '2015-06-01'
             and (date_part('year', ps.end_date) - date_part('year', p.birthdate)) >= 4
             and ((group_fk = 11
                 and ps.tariff > 0
@@ -780,7 +781,7 @@ def underpay_invalid_stomatology_event(register_element):
     """
         Санкции на неверно оформленные случаи стоматологии
     """
-    query = """
+    old_query = """
         select ps1.id_pk
         from provided_service ps1
             join medical_organization
@@ -847,9 +848,63 @@ def underpay_invalid_stomatology_event(register_element):
             and ps1.payment_type_fk <> 3
     """
 
+    query = """
+        select ps.id_pk
+        FROM (
+                select
+                    pe.id_pk as event_id,
+                    ps.end_date,
+                    ps.start_date,
+                    sum(
+                        case when ms.subgroup_fk is NULL
+                                and ms.group_fk = 19
+                                and ms.subgroup_fk is null
+                        THEN 1
+                        ELSE 0
+                        END
+                    ) as service,
+                    sum(
+                        case when ms.subgroup_fk in (12, 13, 14, 17)
+                        then 1
+                        else 0
+                        end
+                    ) as admission
+                from provided_service ps
+                    join medical_service ms
+                        On ps.code_fk = ms.id_pk
+                    left join medical_service_subgroup msg
+                        on ms.subgroup_fk = msg.id_pk
+                    join provided_event pe
+                        on ps.event_fk = pe.id_pk
+                    join medical_register_record
+                        on pe.record_fk = medical_register_record.id_pk
+                    join patient p1
+                        on p1.id_pk = medical_register_record.patient_fk
+                    join medical_register mr1
+                        on medical_register_record.register_fk = mr1.id_pk
+                    LEFT join provided_service_sanction pss
+                        on pss.service_fk = ps.id_pk and pss.error_fk = 34
+                where mr1.is_active
+                    and mr1.year = %(year)s
+                    and mr1.period = %(period)s
+                    and mr1.organization_code = %(organization)s
+                    and (ms.group_fk = 19 or (ms.subgroup_fk in (12, 13, 14, 17) and ms.group_fk is null))
+                GROUP BY pe.id_pk, ps.end_date, ps.start_date
+            ) as T
+            join provided_service ps
+                on ps.event_fk = T.event_id
+        where
+            (admission > 1
+            or service = 0
+            or admission = 0)
+            and (select count(*) from provided_service_sanction
+                 where service_fk = ps.id_pk and error_fk = 34) = 0
+    """
+
     services = ProvidedService.objects.raw(
-        query, [register_element['year'], register_element['period'],
-                register_element['organization_code']])
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
 
     set_sanctions(services, 34)
 
@@ -859,7 +914,7 @@ def underpay_invalid_outpatient_event(register_element):
     """
         Санкции на неверно оформленные услуги по поликлинике с заболеванием
     """
-    query = """
+    old_query = """
         select id_pk from provided_service
         where event_fk in (
             select distinct provided_event.id_pk
@@ -918,6 +973,49 @@ def underpay_invalid_outpatient_event(register_element):
         ) and payment_type_fk != 3
     """
 
+    query = """
+        select ps.id_pk
+        from
+            (
+                select provided_event.id_pk as event_id,
+                    count(case when ms.reason_fk = 1 and provided_service.tariff > 0 then 1 else null end) as on_disease_primary,
+                    count(case when ms.reason_fk = 1 and provided_service.tariff = 0 then 1 else null end) as on_disease_secondary,
+                    count(case when ms.reason_fk = 2 and provided_service.tariff > 0 then 1 else null end) as on_prevention,
+                    count(case when ms.reason_fk = 5 and provided_service.tariff > 0 then 1 else null end) as on_emergency
+                from
+                    provided_service
+                    JOIN medical_service ms
+                        on ms.id_pk = provided_service.code_fk
+                    join provided_event
+                        on provided_event.id_pk = provided_service.event_fk
+                    join medical_register_record
+                        on medical_register_record.id_pk = provided_event.record_fk
+                    join medical_register
+                        on medical_register_record.register_fk = medical_register.id_pk
+                where
+                    medical_register.is_active
+                    and medical_register.year = %s
+                    and medical_register.period = %s
+                    and medical_register.organization_code = %s
+                    and provided_event.term_fk = 3
+                    --and department.level <> 3
+                    and ms.reason_fk in (1, 2, 5) and (ms.group_fk != 19
+                        or ms.group_fk is NUll)
+                    and ms.code not like 'A%%'
+                group by provided_event.id_pk
+            ) as T
+            JOIN provided_service ps
+                on ps.event_fk = T.event_id
+        WHERE
+            NOT (
+                (on_disease_primary = 1 and on_disease_secondary > 0 and on_prevention = 0 and on_emergency = 0)
+                or (on_disease_primary = 1 and on_disease_secondary = 0 and on_prevention = 0 and on_emergency = 0)
+                or (on_disease_primary = 0 and on_disease_secondary = 0 and on_prevention = 1 and on_emergency = 0)
+                or (on_disease_primary = 0 and on_disease_secondary = 0 and on_prevention = 0 and on_emergency = 1)
+            )
+            and (select count(1) from provided_service_sanction where service_fk = ps.id_pk
+                 and error_fk = 34) = 0
+    """
     services = ProvidedService.objects.raw(
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
@@ -1674,6 +1772,80 @@ def underpay_neurologist_first_phase_exam(register_element):
                      and ps1.start_date <= '2015-04-01'
                      AND ps1.payment_type_fk = 2)
             """
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 78)
+
+@howlong
+def underpay_multi_subgrouped_stomatology_events(register_element):
+    query = """
+        select provided_service.id_pk from provided_service join (
+            select
+                pe.id_pk, count(ps.id_pk)
+            from medical_register mr JOIN medical_register_record mrr
+                ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                ON ps.event_fk=pe.id_pk
+            JOIN medical_organization mo
+                ON mo.id_pk = ps.organization_fk
+            join patient pt
+                on pt.id_pk = mrr.patient_fk
+            JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+            where mr.is_active and mr.year = %(year)s
+                and mr.period = %(period)s
+                and ms.group_fk = 19
+                and ps.payment_type_fk = 2
+                and ms.subgroup_fk is not null
+                and mr.organization_code in %(organization)s
+            group by 1
+            order by 2
+            having count(ps.id_pk) > 1
+        ) as T on T.id_pk = event_fk
+        where (select count(*) from provided_service_sanction
+            where service_fk = provided_service.id_pk and error_fk = 78) = 0
+
+    """
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 78)
+
+@howlong
+def underpay_multi_division_disease_events(register_element):
+    query = """
+        SELECT DISTINCT ps.id_pk
+        from (
+            select
+            pe.id_pk AS event_id
+            from medical_register mr JOIN medical_register_record mrr
+                ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+            where mr.is_active and mr.year = %(year)s
+                and mr.period = %(period)s
+                AND mr.organization_code = %(organization)s
+                AND (ms.group_fk != 27 or ms.group_fk is null)
+                AND pe.term_fk = 3
+            group by event_id
+            HAVING count(distinct ms.division_fk) > 1
+            ) AS T
+            join provided_service ps
+                 ON ps.event_fk = T.event_id
+        where (select count(*) from provided_service_sanction where error_fk = 78) = 0
+    """
+
     services = ProvidedService.objects.raw(
         query, dict(year=register_element['year'],
                     period=register_element['period'],

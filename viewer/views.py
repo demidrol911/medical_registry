@@ -6,6 +6,7 @@ from main.models import MedicalRegister, ProvidedService, MedicalOrganization
 from main.models import MedicalRegisterStatus
 from django.http import HttpResponse
 from django.core import serializers
+from django.utils.timezone import utc
 
 from registry_import.simple_validation import PROFILES, DIVISIONS, DISEASES, CODES
 from registry_import.simple_validation import queryset_to_dict
@@ -14,7 +15,7 @@ from main.models import MedicalError, MedicalRegisterImport
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from xlsxwriter.workbook import Workbook
 from xlsxwriter.utility import xl_rowcol_to_cell
 import base64
@@ -189,7 +190,7 @@ def get_registers_import_json(request):
                     'name': rec.organization_name,
                     'filename': rec.filename,
                     'status': rec.status,
-                    'timestamp': rec.timestamp.strftime('%d-%m-%Y %H:%M')}
+                    'timestamp': (rec.timestamp+timedelta(hours=9)).strftime('%d-%m-%Y %H:%M')}
 
         registries.append(registry)
 
@@ -360,20 +361,24 @@ def update_organization_registry_status(request):
     if request.is_ajax() and request.method == 'POST':
         body = request.body
 
-        json_data = json.loads(body)
+        json_datas = json.loads(body)
 
-        try:
-            status = MedicalRegisterStatus.objects.get(
-                name=json_data['organization_status'])
-        except:
-            print 'non status'
-            return HttpResponse(json.dumps({'error': u'Нет такого статуса'}),
-                                mimetype='application/json')
-        registries = MedicalRegister.objects.filter(
-            is_active=True, year=json_data['year'], period=json_data['period'],
-            organization_code=json_data['organization_code'])
-        print registries
-        registries.update(status=status)
+        if type(json_datas) is not list:
+            json_datas = [json_datas]
+
+        for json_data in json_datas:
+            try:
+                status = MedicalRegisterStatus.objects.get(
+                    name=json_data['organization_status'])
+            except:
+                print 'non status'
+                return HttpResponse(json.dumps({'error': u'Нет такого статуса'}),
+                                    mimetype='application/json')
+            registries = MedicalRegister.objects.filter(
+                is_active=True, year=json_data['year'], period=json_data['period'],
+                organization_code=json_data['organization_code'])
+            print registries
+            registries.update(status=status)
 
     return HttpResponse(json.dumps({'success': '1'}),
                         mimetype='application/json')
@@ -642,14 +647,20 @@ def get_excel_export(request):
         except:
             registry = None
 
+    periods = {'01': u'Январь', '02': u'Февраль', '03': u'Март',
+               '04': u'Апрель', '05': u'Май', '06': u'Июнь', '07': u'Июль',
+               '08': u'Август', '09': u'Сентябрь','10': u'Октябрь',
+               '11': u'Ноябрь', '12': u'Декабрь'}
+
     sheet.write(3, 0, u'Наименование МО:')
-    sheet.write(4, 0, u'Дата проверки:')
+    sheet.write(4, 0, u'Отчётный период:')
+    sheet.write(4, 3, u'Дата проверки:')
 
     if organization:
         sheet.write(3, 2, organization.name)
     if registry:
-        print registry.timestamp.date()
-        sheet.write(4, 2, str(registry.timestamp.date() or ''))
+        sheet.write(4, 2, u'{0} {1}'.format(periods[period], year))
+        sheet.write(4, 4, datetime.now().date().strftime('%d-%m-%Y'))
 
     headers = [u'№ п/п', u'Фамилия', u'Имя', u'Отчество', u'Номер карты',
                u'Ош.', u'ЛПУ', u'МКБ-9', u'Дата поступ.', u'Дата выписки',

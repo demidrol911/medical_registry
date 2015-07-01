@@ -136,10 +136,12 @@ def print_data(data):
 def get_equal_filename(path_to_dir, filename):
     filename_pattern_parse = re.compile(ur'^(?P<mo>[\D1234]+?)(?:_?)(?P<sequence_number>\d?)\.xlsx$')
     parse_match = filename_pattern_parse.match(filename)
+
     if parse_match:
         filename_unique = parse_match.group('mo')
     else:
         filename_unique = ''
+
     filename_pattern = re.compile(ur'^%s(?:_?)(?P<sequence_number>\d*?)\.xlsx$' %
                                   (filename_unique, ))
 

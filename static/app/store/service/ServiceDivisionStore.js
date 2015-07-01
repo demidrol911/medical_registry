@@ -1,11 +1,12 @@
 Ext.define('MyApp.store.service.ServiceDivisionStore', {
-	extend: 'Ext.data.Store',
-	requires: ['MyApp.model.service.ServiceDivisionModel'],
-	model: 'MyApp.model.service.ServiceDivisionModel',
+	//extend: 'Ext.data.Store',
+	//requires: ['MyApp.model.service.ServiceDivisionModel'],
+	//model: 'MyApp.model.service.ServiceDivisionModel',
+	extend: 'Ext.data.ArrayStore',
 	alias: 'store.service-division',
 	storeId: 'service-division',
-	sorters: 'name',
-	
+	//sorters: 'name',
+	/*
 	proxy: {
 		type: 'ajax',
 		url: '/viewer/json/service-divisions/',
@@ -16,4 +17,6 @@ Ext.define('MyApp.store.service.ServiceDivisionStore', {
 		}
 	},
 	autoLoad: true
+	*/
+	fields: ['name']
 })

@@ -110,7 +110,7 @@ def is_expired_service(code, event_end_date):
     except:
         return False
 
-    control_date = datetime.strptime('2015-04-01', '%Y-%m-%d').date()
+    control_date = datetime.strptime('2015-06-01', '%Y-%m-%d').date()
 
     if code in OLD_ADULT_EXAMINATION and event_date >= control_date:
         return False

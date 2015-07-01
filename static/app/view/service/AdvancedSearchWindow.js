@@ -14,8 +14,9 @@ Ext.define('MyApp.view.service.AdvancedSearchWindow', {
 	controller: 'advanced-search-window-controller',
 	
 	listeners: {
-		afterrender: 'onAfterRender'
+		afterrender: 'onAfterRender',
 	},
+	id: 'advancedSearchWindow',
 	
 	items: [
 		{
@@ -29,7 +30,7 @@ Ext.define('MyApp.view.service.AdvancedSearchWindow', {
 			width: 500,
 			height: 600,
 			defaultType: 'textfield',
-			
+
 			items: [{
 				fieldLabel: 'Полис',
 				name: 'policy',
@@ -136,12 +137,16 @@ Ext.define('MyApp.view.service.AdvancedSearchWindow', {
 				xtype: 'combobox',
 				fieldLabel: 'Отделение',
 				displayField: 'name',
-				valueField: 'code',
+				valueField: 'name',
 				name: 'division',
 				store: 'MyApp.store.service.ServiceDivisionStore',
 				queryMode: 'local',
 				typeAhead: true,
-				anyMatch: true
+				anyMatch: true,
+				listeners: {
+					afterrender: 'onDivisionComboboxRender'
+				}
+				
 			},	{
 				xtype: 'combobox',
 				fieldLabel: 'Профиль',
@@ -151,6 +156,10 @@ Ext.define('MyApp.view.service.AdvancedSearchWindow', {
 				typeAhead: true,
 				anyMatch: true,
 				store: 'MyApp.store.service.ServiceProfileStore',
+				listeners: {
+					afterrender: 'onProfileComboboxRender'
+				}
+			
 			}			
 			],
 

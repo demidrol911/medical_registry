@@ -3,26 +3,13 @@ Ext.define('MyApp.view.service.AdvancedSearchWindowController', {
 
     alias: 'controller.advanced-search-window-controller',
 	
-	
-	onAfterRender: function () {
-		var model = this.getViewModel();
-		var modelData = model.data;
-		var form = this.lookupReference('advanced-search-form').getForm();
-		
-		form.setValues(modelData.advancedSearchFormData);
-		
+	compare: function (a,b) {
+		if (a[0] < b[0]) return -1;
+		if (a[0] > b[0]) return 1;
+		return 0;
 	},
 	
-	
-	onProfileComboboxRender: function (me, opts) {
-		var model = this.getViewModel();
-		var modelData = model.data;
-		var profile_data = model.data.services.collect('profile_name', false, true);
 
-		me.store.loadData(profile_data.map(function(name) {return [name]}));
-	},
-	
-	
 	onAdvancedSearchRun: function () {
 		console.log('Ok!');
 		var view = this.getView();
@@ -119,7 +106,10 @@ Ext.define('MyApp.view.service.AdvancedSearchWindowController', {
 			}
 			
 			if (fieldValues.division) {
-				store.filter('division_code', fieldValues.division);
+				var arr = fieldValues.division.split(',');
+				var divisionCode = arr[0].trim();
+			
+				store.filter('division_code', divisionCode);
 			}
 			
 			if (fieldValues.profile) {
@@ -129,5 +119,78 @@ Ext.define('MyApp.view.service.AdvancedSearchWindowController', {
 		} else {console.log('Form is not valid');}
 
 		view.destroy();
-	}
+	},
+	
+	onAfterRender: function (me, otps) {
+		var form = this.lookupReference('advanced-search-form');
+		console.log('Start');
+		var model = this.getViewModel();
+		var modelData = model.data;
+		form.getForm().setValues(modelData.advancedSearchFormData);
+		console.log('alert');
+		var keyNav = new Ext.util.KeyNav({
+			target: 'advancedSearchWindow',
+			enter: {
+				fn: function(e) {
+					console.log('Form submit');
+					this.onAdvancedSearchRun();
+				},
+				defaultEventAction: 'stopEvent'
+			},
+			scope: this
+		}); 			
+	},
+	
+	onProfileComboboxRender: function (me, opts) {
+		var model = this.getViewModel();
+		var modelData = model.data;
+		var profile_data = model.data.services.collect('profile_name', false, true);
+		me.store.loadData(profile_data.map(function(name) {return [name]}));
+	},
+
+	onDivisionComboboxRender: function (me, opts) {
+		var model = this.getViewModel();
+		var modelData = model.data;
+		var divisionsData = []
+		var divisionRec = []
+		
+		model.data.services.each(function(rec) {
+			divisionRec = [rec.get('division_code'), rec.get('division_name')]
+			
+			if (divisionsData.length == 0) {divisionsData.push(divisionRec)}
+			var exists = false;
+			for (var i = 0; i < divisionsData.length; i++) {
+				if (divisionsData[i][0] == divisionRec[0]) {
+					exists = true;
+					break;
+				}
+			}
+			
+			if (!exists && divisionRec[0].length > 1) {
+				divisionsData.push(divisionRec);
+			}
+
+		});
+		
+		console.log(divisionsData.length);
+		divisionsData = divisionsData.sort(this.compare);
+
+		me.store.loadData(divisionsData.map(function(name) {return [name]}));
+	},
+	/*
+	onFormAfterRender: function(me) {
+		var form = this.lookupReference('advanced-search-form');
+		console.log(form.id);
+		
+		var keyNav = new Ext.util.KeyNav({
+			target: form.id,
+			enter: {
+				fn: function(e) {
+					console.log('Form submit');
+					me.onAdvancedSearchRun();
+				}
+			},
+			scope: this
+		}); 	
+	}*/
 });
