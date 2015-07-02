@@ -879,6 +879,32 @@ def main():
                                 day_hospital_volume_service.add(
                                     new_event['IDCASE'])
 
+                            if new_service['CODE_USL'] in ('019002', '19002') \
+                                    and new_service['DATE_IN'] != new_event['DATE_1']:
+                                services_errors.append(set_error(
+                                    '904', field='DATE_1', parent='SLUCH',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid='',
+                                    comment=(u'Дата начала случая диспансеризации '
+                                             u'не свопадает с датой начала '
+                                             u'услуги анкетирования')))
+
+                            if new_service['CODE_USL'] in ("019021", "019023",
+                                                           "019022", "019024",
+                                                           "19021", "19023",
+                                                           "19022", "19024",) \
+                                    and new_service['DATE_OUT'] != new_event['DATE_2']:
+                                services_errors.append(set_error(
+                                    '904', field='DATE_2', parent='SLUCH',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid='',
+                                    comment=(u'Дата окончания случая диспансеризации '
+                                             u'не свопадает с датой окончания'
+                                             u'услуги приёма терапевта')))
+
+
             """
             if not has_surgery and has_hospitalization:
                 services_errors.append(set_error(
