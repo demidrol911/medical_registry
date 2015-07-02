@@ -1059,9 +1059,10 @@ def underpay_outpatient_event(register_element):
                                     on mei.id_pk = pssi.error_fk
                             WHERE pssi.service_fk = ps1.id_pk
                                   and pssi.is_active
+                                  and pssi.error_fk <> 70
                             ORDER BY mei.weight DESC
                             limit 1
-                        )
+                        ) 
                 where mr1.is_active
                     and mr1.year = %s
                     and mr1.period = %s
@@ -1859,3 +1860,127 @@ def underpay_multi_subgrouped_stomatology_events(register_element):
                     organization=register_element['organization_code']))
 
     set_sanctions(services, 78)
+
+@howlong
+def underpay_hitech_with_small_duration(register_element):
+    query = """
+
+
+    """
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 78)
+
+@howlong
+def underpay_incorrect_examination_events(register_element):
+    query = """
+        select ps.id_pk from (
+        select event_id, total, required, required_interview, required_therapy, round(total/required::NUMERIC * 100, 0) as service_percentage
+        from (
+            select pe.id_pk event_id,
+                (
+                    select count(provided_service.id_pk)
+                    from provided_service
+                        join examination_tariff aes
+                            on aes.gender_fk = p.gender_fk
+                                and aes.service_fk = provided_service.code_fk
+                                and aes.age = extract(YEAR from (select max(end_date) from provided_service where event_fk = pe.id_pk)) - EXTRACT(YEAR FROM p.birthdate)
+                                and mo.regional_coefficient = aes.regional_coefficient
+                                and aes.start_date =
+                                    GREATEST(
+                                        (select max(start_date)
+                                         from examination_tariff
+                                         where start_date <= pe.end_date
+                                         and service_fk = ps.code_fk),
+                                         '2015-06-01'
+                                    )
+                    WHERE provided_service.event_fk = pe.id_pk
+                ) total,
+                (
+                    select count(1)
+                    from examination_tariff
+                    where gender_fk = p.gender_fk
+                        and age = extract(YEAR from (select max(end_date) from provided_service where event_fk = pe.id_pk)) - EXTRACT(YEAR FROM p.birthdate)
+                        and mo.regional_coefficient = regional_coefficient
+                        and start_date =
+                            GREATEST(
+                                (select max(start_date)
+                                 from examination_tariff
+                                 where start_date <= pe.end_date
+                                 and service_fk = ps.code_fk),
+                                 '2015-06-01'
+                            )
+                ) required,
+                sum(case when ms.code in ('019002') THEN 1 ELSE 0 END) as required_interview,
+                sum(case when ms.code in ('019021', '019023', '019022', '019024') THEN 1 ELSE 0 END) as required_therapy
+
+            from provided_service ps
+                JOIN medical_service ms
+                    on ps.code_fk = ms.id_pk
+                join provided_event pe
+                    on ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                    on mrr.id_pk = pe.record_fk
+                JOIN patient p
+                    on p.id_pk = mrr.patient_fk
+                JOIN medical_register mr
+                    on mr.id_pk = mrr.register_fk
+                join medical_organization mo
+                    on mo.parent_fk is null and mo.code = mr.organization_code
+            WHERE
+                mr.is_active
+                and mr.year = %(year)s
+                and mr.period = %(period)s
+                and mr.organization_code = %(organization)s
+                and ms.group_fk = 7
+                and ms.code <> '019001'
+                and pe.end_date >= '2015-06-01'
+            GROUP BY 1, 2, 3
+        ) as T) as T2
+        join provided_service ps
+            on ps.event_fk = T2.event_id
+        WHERE service_percentage < 85 or required_interview <> 1 or required_therapy <> 1
+            and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 78) = 0
+    """
+
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 78)
+
+@howlong
+def underpay_old_examination_services(register_element):
+    query = """
+        select ps.id_pk
+        from provided_service ps
+            join provided_event pe
+                on pe.id_pk = ps.event_fk
+            JOIN medical_register_record mrr
+                on mrr.id_pk = pe.record_fk
+            JOIN medical_register mr
+                on mr.id_pk = mrr.register_fk
+            JOIN medical_service ms
+                on ms.id_pk = ps.code_fk
+
+        WHERE mr.is_active
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            and mr.organization_code = %(organization)s
+
+            and ms.code not in ('019001')
+            and ps.end_date < (select end_date from provided_service where event_fk = pe.id_pk and code_fk = 8347)
+            and mr.type = 3
+            and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 70) = 0
+    """
+
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 70)

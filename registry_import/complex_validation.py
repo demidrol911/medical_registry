@@ -123,3 +123,10 @@ def is_expired_service(code, event_end_date):
         return False
 
     return True
+
+
+#def is_event_dates_equals_service_dates_examination(event_start_date,
+#                                                    event_end_date,
+#                                                    service_start_date,
+#                                                    service_end_date):
+
