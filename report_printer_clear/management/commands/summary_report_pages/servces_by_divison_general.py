@@ -107,17 +107,17 @@ class GeneralServicesPage(ReportPage):
         signs_title = {
             'can_print_policlinic_capitation': True,
             'can_print_policlinic_unit': True,
-            'can_print_exam_till_1_04_2015': True,
-            'can_print_exam_since_1_04_2015': True,
+            'can_print_exam_till_1_06_2015': True,
+            'can_print_exam_since_1_06_2015': True,
             'can_print_ambulance': True
         }
 
         signs_term = {
             'is_policlinic': False,
             'is_ambulance': False,
-            'is_exam_till_1_04_2015': False,
-            'is_exam_since_1_04_2015': False,
-            'is_exam_all_1_04_2015': False
+            'is_exam_till_1_06_2015': False,
+            'is_exam_since_1_06_2015': False,
+            'is_exam_all_1_06_2015': False
         }
 
         zero_key = {
@@ -231,11 +231,11 @@ class GeneralServicesPage(ReportPage):
                 # Рассчет промежуточных итоговых сумм
                 if signs_term['is_policlinic'] \
                         or signs_term['is_ambulance'] \
-                        or signs_term['is_exam_till_1_04_2015'] \
-                        or signs_term['is_exam_since_1_04_2015']:
+                        or signs_term['is_exam_till_1_06_2015'] \
+                        or signs_term['is_exam_since_1_06_2015']:
                     subtotal = self.__calc_sum(subtotal, sum_by_term)
 
-                if signs_term['is_exam_all_1_04_2015']:
+                if signs_term['is_exam_all_1_06_2015']:
                     sum_adult_exam = self.__calc_sum(sum_adult_exam, sum_by_term)
 
                 sum_by_term = None
@@ -252,15 +252,15 @@ class GeneralServicesPage(ReportPage):
                     signs_term_name = 'is_ambulance'
                     title_subtotal = u'Итого по скорой помощи'
 
-                if signs_term['is_exam_till_1_04_2015'] \
+                if signs_term['is_exam_till_1_06_2015'] \
                         and not(term == 4 and capitation == 23):
-                    signs_term_name = 'is_exam_till_1_04_2015'
-                    title_subtotal = u'Итого по взр. диспансер. до 1 апреля'
+                    signs_term_name = 'is_exam_till_1_06_2015'
+                    title_subtotal = u'Итого по взр. диспансер. до 1 июня'
 
-                if signs_term['is_exam_since_1_04_2015'] \
+                if signs_term['is_exam_since_1_06_2015'] \
                         and not(term == 4 and capitation == 24):
-                    signs_term_name = 'is_exam_since_1_04_2015'
-                    title_subtotal = u'Итого по взр. диспансер. после 1 апреля'
+                    signs_term_name = 'is_exam_since_1_06_2015'
+                    title_subtotal = u'Итого по взр. диспансер. после 1 июня'
 
                 if signs_term_name:
                     sheet.set_style(TOTAL_STYLE)
@@ -268,12 +268,12 @@ class GeneralServicesPage(ReportPage):
                     sheet.set_position(sheet.get_row_index() + 1, 0)
                     signs_term[signs_term_name] = False
 
-                if signs_term['is_exam_all_1_04_2015'] \
+                if signs_term['is_exam_all_1_06_2015'] \
                         and not(term == 4 and capitation in [23, 24]):
                     sheet.set_style(TOTAL_STYLE)
                     print_division(sheet, u'Итого по взр. диспансер.', sum_adult_exam)
                     sheet.set_position(sheet.get_row_index() + 1, 0)
-                    signs_term['is_exam_all_1_04_2015'] = False
+                    signs_term['is_exam_all_1_06_2015'] = False
                 ###
 
                 # Печать разделов, в которых будут рассчитываться промежуточные суммы
@@ -293,18 +293,18 @@ class GeneralServicesPage(ReportPage):
                     title_subtotal = u'Поликлиника (за единицу объёма)'
 
                 elif term == 4 and capitation == 23 \
-                        and signs_title['can_print_exam_till_1_04_2015']:
-                    signs_term_name = 'is_exam_till_1_04_2015'
-                    sings_can_print = 'can_print_exam_till_1_04_2015'
-                    title_subtotal = u'Диспансеризация взрослых до 1.04.2015'
-                    signs_term['is_exam_all_1_04_2015'] = True
+                        and signs_title['can_print_exam_till_1_06_2015']:
+                    signs_term_name = 'is_exam_till_1_06_2015'
+                    sings_can_print = 'can_print_exam_till_1_06_2015'
+                    title_subtotal = u'Диспансеризация взрослых до 1.06.2015'
+                    signs_term['is_exam_all_1_06_2015'] = True
 
                 elif term == 4 and capitation == 24 \
-                        and signs_title['can_print_exam_since_1_04_2015']:
-                    signs_term_name = 'is_exam_since_1_04_2015'
-                    sings_can_print = 'can_print_exam_since_1_04_2015'
-                    title_subtotal = u'Диспансеризация взрослых после 1.04.2015'
-                    signs_term['is_exam_all_1_04_2015'] = True
+                        and signs_title['can_print_exam_since_1_06_2015']:
+                    signs_term_name = 'is_exam_since_1_06_2015'
+                    sings_can_print = 'can_print_exam_since_1_06_2015'
+                    title_subtotal = u'Диспансеризация взрослых после 1.06.2015'
+                    signs_term['is_exam_all_1_06_2015'] = True
 
                 elif term == 5 \
                         and signs_title['can_print_ambulance']:
@@ -338,8 +338,31 @@ class GeneralServicesPage(ReportPage):
                     sheet.set_style(WARNING_STYLE)
                 latest_key['division'] = division
                 latest_key['gender'] = gender
-                print_division(sheet, division_title, values)
-            sum_by_term = self.__calc_sum(sum_by_term, values)
+
+            ### Для диспнсеризации взрослых !!!!!!!!!!!!!!!!!!!!
+                if term == 4 and capitation in (23, 24):
+                    code_service = MedicalService.objects.get(pk=division).code
+                    if (capitation == 23 and code_service in ('019001', '019020', '019021', '019023', '019022', '019024')) \
+                       or (capitation == 24 and code_service in ('019002', '019021', '019023', '019022', '019024')):
+                        print_division(sheet, division_title, values)
+                else:
+                    print_division(sheet, division_title, values)
+
+            if term == 4 and capitation in (23, 24):
+                code_service = MedicalService.objects.get(pk=division).code
+                if capitation == 23 and code_service in ('019001', '019020', '019021', '019023', '019022', '019024'):
+                    sum_by_term = self.__calc_sum(sum_by_term, values)
+                elif capitation == 24:
+                    if not code_service in ('019021', '019023', '019022', '019024'):
+                        values[0] = 0
+                        values[1] = 0
+                        values[4] = 0
+                        values[5] = 0
+                        values[6] = 0
+                        values[7] = 0
+                    sum_by_term = self.__calc_sum(sum_by_term, values)
+            else:
+                sum_by_term = self.__calc_sum(sum_by_term, values)
         if self.data:
             sheet.set_style(TOTAL_STYLE)
             print_division(sheet, u'Итого', sum_by_term)
@@ -589,7 +612,7 @@ class GeneralServicesPage(ReportPage):
                                             ON ps1.code_fk = ms1.id_pk
                                      WHERE ps1.event_fk = event_id
                                            AND ps1.payment_type_fk = 2
-                                           AND ms1.code = '019001') >= '2015-04-01'
+                                           AND ms1.code = '019002') >= '2015-06-01'
                                    THEN 24
                                  ELSE 23
                             END AS capitation,
@@ -623,11 +646,6 @@ class GeneralServicesPage(ReportPage):
                             0 AS gender
                         FROM services_mo
                         WHERE service_group = 7
-                              AND service_code in (
-                                               '019021', '019023',
-                                               '019022', '019024',
-                                               '019001', '019020'
-                                         )
                     )
                     UNION
                     (
