@@ -433,6 +433,8 @@ class GeneralServicesPage(ReportPage):
                          pt.id_pk AS patient_id,
                          pt.gender_fk AS patient_gender,
 
+                         mr.organization_code AS organization,
+
                          CASE WHEN pe.term_fk = 3
                                 THEN (
                                    CASE WHEN ps.payment_kind_fk = 2
