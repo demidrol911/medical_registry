@@ -1062,7 +1062,7 @@ def underpay_outpatient_event(register_element):
                                   and pssi.error_fk <> 70
                             ORDER BY mei.weight DESC
                             limit 1
-                        ) 
+                        )
                 where mr1.is_active
                     and mr1.year = %s
                     and mr1.period = %s
@@ -1863,6 +1863,44 @@ def underpay_multi_subgrouped_stomatology_events(register_element):
 @howlong
 def underpay_hitech_with_small_duration(register_element):
     query = """
+        select ps.id_pk from (
+        select ps.event_fk as event_id, ps.tariff, ps.quantity, ps.end_date - ps.start_date, ms.code, ps.end_date,
+            (
+                case ms.vmp_group
+                when 5 then 20.0
+                when 10 then 45.0
+                when 11 then 70.0
+                when 14 then 30.0
+                when 18 then 25.0
+                when 30 then 12.0
+                else 1 END
+            ) as nkd,
+            ms.vmp_group,
+            ms.tariff_profile_fk
+
+
+        from provided_service ps
+            join provided_event pe
+                on ps.event_fk = pe.id_pk
+            join medical_register_record mrr
+                on mrr.id_pk = pe.record_fk
+            JOIN medical_register mr
+                on mr.id_pk = mrr.register_fk
+            JOIN medical_service ms
+                on ms.id_pk = ps.code_fk
+            JOIN medical_organization department
+                on department.id_pk = ps.department_fk
+        where
+            mr.is_active
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            and mr.organization_code = %(organization)s
+            and mr.type = 2) as T
+            JOIN provided_service ps
+                on ps.event_fk = T.event_id
+        WHERE T.quantity / T.nkd * 100 < 40
+            --and (select count(*) from provided_service_sanction
+            --     where service_fk = ps.id_pk and error_fk = 78) = 0
 
 
     """
@@ -1871,7 +1909,7 @@ def underpay_hitech_with_small_duration(register_element):
                     period=register_element['period'],
                     organization=register_element['organization_code']))
 
-    set_sanctions(services, 78)
+    set_sanctions(services, 61)
 
 @howlong
 def underpay_incorrect_examination_events(register_element):
