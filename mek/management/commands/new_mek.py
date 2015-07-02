@@ -1081,9 +1081,9 @@ def main():
 
             checks.underpay_second_phase_examination(register_element)
             checks.underpay_neurologist_first_phase_exam(register_element)
+            checks.underpay_multi_division_disease_events(register_element)
             checks.underpay_multi_subgrouped_stomatology_events(register_element)
             checks.underpay_outpatient_event(register_element)
-            checks.underpay_multi_subgrouped_stomatology_events(register_element)
 
         print Sanction.objects.filter(
             service__event__record__register__is_active=True,

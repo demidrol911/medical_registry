@@ -1802,7 +1802,8 @@ def underpay_multi_division_disease_events(register_element):
             where mr.is_active and mr.year = %(year)s
                 and mr.period = %(period)s
                 AND mr.organization_code = %(organization)s
-                AND (ms.group_fk != 27 or ms.group_fk is null)
+                AND (ms.group_fk not in (27, 19) or ms.group_fk is null)
+                AND ps.payment_type_fk = 2
                 AND pe.term_fk = 3
             group by event_id
             HAVING count(distinct ms.division_fk) > 1
