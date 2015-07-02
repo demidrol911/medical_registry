@@ -149,16 +149,16 @@ def get_services(register_element):
         END as coefficient_4,
         examination_tariff.value as examination_tariff,
         medical_register.type as register_type,
-        (
-            case medical_service.vmp_group
-            when 5 then 20.0
-            when 10 then 45.0
-            when 11 then 70.0
-            when 14 then 30.0
-            when 18 then 25.0
-            when 30 then 12.0
-            else 1 END
-        ) as vmp_nkd
+        COALESCE(
+            (
+                select "value"
+                from hitech_service_nkd
+                where start_date = (select max(start_date) from hitech_service_nkd where start_date <= provided_service.end_date)
+                    and vmp_group = medical_service.vmp_group
+                order by start_date DESC
+                limit 1
+            ), 1
+        ) as vmp_nkd,
 
     from
         provided_service

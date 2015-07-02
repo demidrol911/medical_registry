@@ -1865,19 +1865,18 @@ def underpay_hitech_with_small_duration(register_element):
     query = """
         select ps.id_pk from (
         select ps.event_fk as event_id, ps.tariff, ps.quantity, ps.end_date - ps.start_date, ms.code, ps.end_date,
-            (
-                case ms.vmp_group
-                when 5 then 20.0
-                when 10 then 45.0
-                when 11 then 70.0
-                when 14 then 30.0
-                when 18 then 25.0
-                when 30 then 12.0
-                else 1 END
+            COALESCE(
+                (
+                    select "value"
+                    from hitech_service_nkd
+                    where start_date = (select max(start_date) from hitech_service_nkd where start_date <= ps.end_date)
+                        and vmp_group = ms.vmp_group
+                    order by start_date DESC
+                    limit 1
+                ), 1
             ) as nkd,
             ms.vmp_group,
             ms.tariff_profile_fk
-
 
         from provided_service ps
             join provided_event pe
