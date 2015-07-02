@@ -101,7 +101,7 @@ def get_services(register_element):
                     where start_date = (
                         select max(start_date)
                         from tariff_nkd
-                        where start_date <= greatest('2015-01-01'::DATE, provided_service.end_date)
+                        where start_date <= greatest('2015-01-01'::DATE, provided_service.end_date) and start_date >= '2015-01-01'::DATE
                             and profile_fk = medical_service.tariff_profile_fk
                             and is_children_profile = provided_service.is_children_profile
                             and "level" = department.level
@@ -148,7 +148,18 @@ def get_services(register_element):
             NULL
         END as coefficient_4,
         examination_tariff.value as examination_tariff,
-        medical_register.type as register_type
+        medical_register.type as register_type,
+        COALESCE(
+            (
+                select "value"
+                from hitech_service_nkd
+                where start_date = (select max(start_date) from hitech_service_nkd where start_date <= provided_service.end_date)
+                    and vmp_group = medical_service.vmp_group
+                order by start_date DESC
+                limit 1
+            ), 1
+        ) as vmp_nkd,
+
     from
         provided_service
         join provided_event
@@ -821,7 +832,8 @@ def get_payments_sum(service):
 
     term = service.service_term
     nkd = service.nkd or 1
-
+    if service.service_group == 20:
+        nkd = service.vmp_nkd
     ### Неонатология 11 - я группа
     if service.service_group == 20 and service.vmp_group == 11:
         nkd = 70
