@@ -158,7 +158,7 @@ def get_services(register_element):
                 order by start_date DESC
                 limit 1
             ), 1
-        ) as vmp_nkd,
+        ) as vmp_nkd
 
     from
         provided_service
@@ -1079,6 +1079,7 @@ def main():
             checks.underpay_wrong_gender_examination(register_element)
             checks.underpay_incorrect_examination_events(register_element)
             checks.underpay_old_examination_services(register_element)
+            checks.underpay_hitech_with_small_duration(register_element)
 
         print 'iterate tariff', register_element
         calculate_tariff(register_element)
