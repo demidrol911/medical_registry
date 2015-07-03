@@ -23,7 +23,8 @@ Ext.define('MyApp.view.service.ServiceWindow', {
 	listeners: {
 		afterrender: 'onAfterRenderWindow'
 	},
-	
+	id: 'serviceWindow',
+	reference: 'serviceWindow',
 	items: [
 		{
 			xtype: 'grid',

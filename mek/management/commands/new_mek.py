@@ -58,7 +58,8 @@ def get_services(register_element):
                     join medical_service ms2
                         on ms2.id_pk = ps2.code_fk
                 where ps2.event_fk = provided_event.id_pk
-                   and (ms2.group_fk != 27 or ms2.group_fk is null)) AS count_services_in_event,
+                    and (ms2.group_fk != 27 or ms2.group_fk is null)) 
+                        AS count_services_in_event,
 
         medical_service.code as service_code,
         (
@@ -100,7 +101,7 @@ def get_services(register_element):
                     where start_date = (
                         select max(start_date)
                         from tariff_nkd
-                        where start_date <= greatest('2015-01-01'::DATE, provided_service.end_date)
+                        where start_date <= greatest('2015-01-01'::DATE, provided_service.end_date) and start_date >= '2015-01-01'::DATE
                             and profile_fk = medical_service.tariff_profile_fk
                             and is_children_profile = provided_service.is_children_profile
                             and "level" = department.level
@@ -145,7 +146,20 @@ def get_services(register_element):
             )
         ELSE
             NULL
-        END as coefficient_4
+        END as coefficient_4,
+        examination_tariff.value as examination_tariff,
+        medical_register.type as register_type,
+        COALESCE(
+            (
+                select "value"
+                from hitech_service_nkd
+                where start_date = (select max(start_date) from hitech_service_nkd where start_date <= provided_service.end_date)
+                    and vmp_group = medical_service.vmp_group
+                order by start_date DESC
+                limit 1
+            ), 1
+        ) as vmp_nkd
+
     from
         provided_service
         join provided_event
@@ -198,6 +212,21 @@ def get_services(register_element):
                                                    235, 236, 237)
                         then '2015-03-01' ELSE '2015-01-01' END) :: DATE
                 )
+
+        LEFT JOIN examination_tariff
+            on medical_register.type = 3
+                and examination_tariff.service_fk = provided_service.code_fk
+                and examination_tariff.age = EXTRACT(year from provided_event.end_date) - extract(year from patient.birthdate)
+                and examination_tariff.gender_fk = patient.gender_fk
+                and examination_tariff.regional_coefficient = medical_organization.regional_coefficient
+                and examination_tariff.start_date =
+                    GREATEST(
+                        (select max(start_date)
+                         from examination_tariff
+                         where start_date <= provided_event.end_date
+                         and service_fk = provided_service.code_fk),
+                         '2015-06-01'
+                    )
     where medical_register.is_active
         and medical_register.year = %(year)s
         and medical_register.period = %(period)s
@@ -798,9 +827,13 @@ def get_payments_sum(service):
     else:
         tariff = float(service.expected_tariff or 0)
 
+    if service.register_type == 3:
+        tariff = float(service.examination_tariff)
+
     term = service.service_term
     nkd = service.nkd or 1
-
+    if service.service_group == 20:
+        nkd = service.vmp_nkd
     ### Неонатология 11 - я группа
     if service.service_group == 20 and service.vmp_group == 11:
         nkd = 70
@@ -1034,13 +1067,19 @@ def main():
             checks.underpay_wrong_age_service(register_element)
             checks.underpay_not_paid_in_oms(register_element)
             checks.underpay_invalid_hitech_service_diseases(register_element)
-            checks.underpay_wrong_age_adult_examination(register_element)
+
+            # -- эта проверка уже не нужна
+            #checks.underpay_wrong_age_adult_examination(register_element)
+
             checks.underpay_wrong_examination_age_group(register_element)
             checks.underpay_wrong_age_examination_children_adopted(register_element)
             checks.underpay_wrong_age_examination_children_difficult(register_element)
             checks.underpay_service_term_mismatch(register_element)
             checks.underpay_service_term_kind_mismatch(register_element)
             checks.underpay_wrong_gender_examination(register_element)
+            checks.underpay_incorrect_examination_events(register_element)
+            checks.underpay_old_examination_services(register_element)
+            checks.underpay_hitech_with_small_duration(register_element)
 
         print 'iterate tariff', register_element
         calculate_tariff(register_element)
@@ -1060,6 +1099,7 @@ def main():
 
             checks.underpay_second_phase_examination(register_element)
             checks.underpay_neurologist_first_phase_exam(register_element)
+            checks.underpay_multi_division_disease_events(register_element)
             checks.underpay_multi_subgrouped_stomatology_events(register_element)
             checks.underpay_outpatient_event(register_element)
 

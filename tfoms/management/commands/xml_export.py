@@ -307,7 +307,7 @@ def get_records(register_pk):
             service_worker_speciality.code as service_worker_speciality_code,
             provided_service.worker_code as service_worker_code,
             provided_service.comment as service_comment,
-            case coalesce((select max(payment_kind_fk) from provided_service where tariff > 0 and event_fk = provided_event.id_pk), 1)
+            case coalesce((select min(payment_kind_fk) from provided_service where tariff > 0 and event_fk = provided_event.id_pk and payment_type_fk = 2), 1)
             when 3 then 1
             when 2 then 2
             else 1 end as payment_kind_code
@@ -384,7 +384,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '02'
+    period = '05'
     year = '2015'
     print datetime.datetime.now()
 

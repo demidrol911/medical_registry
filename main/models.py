@@ -402,7 +402,7 @@ class MedicalRegisterStatus(models.Model):
 class MedicalRegister(models.Model):
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')
     filename = models.CharField(max_length=30)
-    timestamp = models.DateTimeField()
+    timestamp = models.DateTimeField(auto_now_add=True)
     status = models.ForeignKey(MedicalRegisterStatus, db_column='status_fk')
     organization = models.ForeignKey(MedicalOrganization,
                                      db_column='organization_fk', null=True)

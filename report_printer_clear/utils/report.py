@@ -24,15 +24,14 @@ class Report():
         self.pages.append(page)
 
     def print_pages(self, parameters):
-        book = ExcelBook(parameters.path_to_dir + ('/'+self.suffix if self.suffix else ''),
-                         parameters.report_name + ('_'+self.suffix if self.suffix else ''))
-        book.create_book(self.template)
-        for page in self.pages:
-            sheet = book.get_sheet(page.page_number)
-            page.calculate(parameters)
-            page.print_page(sheet, parameters)
-        self.filename = book.get_filename()
-        book.close()
+        with ExcelBook(parameters.path_to_dir + ('/'+self.suffix if self.suffix else ''),
+                       parameters.report_name + ('_'+self.suffix if self.suffix else '')) as book:
+            book.create_book(self.template)
+            for page in self.pages:
+                sheet = book.get_sheet(page.page_number)
+                page.calculate(parameters)
+                page.print_page(sheet, parameters)
+            self.filename = book.get_filename()
 
     def get_filename(self):
         return self.filename
