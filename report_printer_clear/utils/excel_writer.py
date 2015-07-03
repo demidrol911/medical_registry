@@ -4,21 +4,21 @@ from decimal import Decimal
 from name_generator import NameGenerator
 import xlsxwriter
 import os
+from shutil import move
 import xlrd
 import excel_converter as converter
-from medical_service_register.path import EXCEL_TEMPLATE_DIR
+from medical_service_register.path import EXCEL_TEMPLATE_DIR, BASE_DIR
 
 
 class ExcelBook():
-    path_to_dir = ''
-    filename = ''
+    temp_dir = os.path.join(BASE_DIR, 'tmp')
     book = None
 
     def __init__(self, path_to_dir, filename):
         name_gen = NameGenerator(path_to_dir)
         self.path_to_dir = path_to_dir
         self.filename = name_gen.generate_unique_name(filename+'.xlsx')
-        self.fullname = os.path.join(self.path_to_dir, self.filename)
+        self.fullname = os.path.join(self.temp_dir, self.filename)
 
     def create_book(self, template=''):
 
@@ -88,6 +88,16 @@ class ExcelBook():
 
     def close(self):
         self.book.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        if exc_type and os.path.exists(self.fullname):
+            os.remove(self.fullname)
+        else:
+            move(self.fullname, self.path_to_dir)
 
 
 class ExcelSheet():

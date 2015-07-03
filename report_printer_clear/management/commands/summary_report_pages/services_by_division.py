@@ -198,29 +198,41 @@ class AcceptedServicesPage(GeneralServicesPage):
 
                 0,  0,
 
-                SUM(CASE WHEN S.is_adult AND tc.id_pk = 19
+                SUM(CASE WHEN S.is_adult
+                           THEN
+                              (CASE WHEN S.organization = '280005' AND tc.id_pk = 19
+                                     THEN (tc.value-1)*S.service_tariff
+                                   WHEN S.organization = '280064' AND tc.id_pk = 16
+                                     THEN (tc.value-1)*S.service_tariff
+                                   ELSE 0
+                              END)
+                         ELSE 0
+                    END),
+                SUM(CASE WHEN S.is_child
+                           THEN
+                              (CASE WHEN S.organization = '280005' AND tc.id_pk = 19
+                                     THEN (tc.value-1)*S.service_tariff
+                                   WHEN S.organization = '280064' AND tc.id_pk = 16
+                                     THEN (tc.value-1)*S.service_tariff
+                                   ELSE 0
+                              END)
+                         ELSE 0
+                    END),
+
+                SUM(CASE WHEN S.is_adult AND tc.id_pk = 17
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
-                SUM(CASE WHEN S.is_child AND tc.id_pk = 19
+                SUM(CASE WHEN S.is_child AND tc.id_pk = 17
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
 
-                SUM(CASE WHEN S.is_adult AND tc.id_pk = 14
+                SUM(CASE WHEN S.is_adult AND tc.id_pk = 18
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
-                SUM(CASE WHEN S.is_child AND tc.id_pk = 14
-                           THEN (tc.value-1)*S.service_tariff
-                         ELSE 0
-                    END),
-
-                SUM(CASE WHEN S.is_adult AND tc.id_pk = 15
-                           THEN (tc.value-1)*S.service_tariff
-                         ELSE 0
-                    END),
-                SUM(CASE WHEN S.is_child AND tc.id_pk = 15
+                SUM(CASE WHEN S.is_child AND tc.id_pk = 18
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
@@ -460,29 +472,41 @@ class InvoicedServicesPage(GeneralServicesPage):
 
                 0,  0,
 
-                SUM(CASE WHEN S.is_adult AND tc.id_pk = 19
+                SUM(CASE WHEN S.is_adult
+                           THEN
+                              (CASE WHEN S.organization = '280005' AND tc.id_pk = 19
+                                     THEN (tc.value-1)*S.service_tariff
+                                   WHEN S.organization = '280064' AND tc.id_pk = 16
+                                     THEN (tc.value-1)*S.service_tariff
+                                   ELSE 0
+                              END)
+                         ELSE 0
+                    END),
+                SUM(CASE WHEN S.is_child
+                           THEN
+                              (CASE WHEN S.organization = '280005' AND tc.id_pk = 19
+                                     THEN (tc.value-1)*S.service_tariff
+                                   WHEN S.organization = '280064' AND tc.id_pk = 16
+                                     THEN (tc.value-1)*S.service_tariff
+                                   ELSE 0
+                              END)
+                         ELSE 0
+                    END),
+
+                SUM(CASE WHEN S.is_adult AND tc.id_pk = 17
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
-                SUM(CASE WHEN S.is_child AND tc.id_pk = 19
+                SUM(CASE WHEN S.is_child AND tc.id_pk = 17
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
 
-                SUM(CASE WHEN S.is_adult AND tc.id_pk = 14
+                SUM(CASE WHEN S.is_adult AND tc.id_pk = 18
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
-                SUM(CASE WHEN S.is_child AND tc.id_pk = 14
-                           THEN (tc.value-1)*S.service_tariff
-                         ELSE 0
-                    END),
-
-                SUM(CASE WHEN S.is_adult AND tc.id_pk = 15
-                           THEN (tc.value-1)*S.service_tariff
-                         ELSE 0
-                    END),
-                SUM(CASE WHEN S.is_child AND tc.id_pk = 15
+                SUM(CASE WHEN S.is_child AND tc.id_pk = 18
                            THEN (tc.value-1)*S.service_tariff
                          ELSE 0
                     END),
