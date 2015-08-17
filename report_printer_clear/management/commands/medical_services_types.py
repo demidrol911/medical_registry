@@ -124,13 +124,3 @@ class Command(BaseCommand):
             parameters.report_name = desc['title']
             report.print_pages(parameters)
             print
-
-
-
-
-
-
-
-
-
-

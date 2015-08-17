@@ -1,5 +1,5 @@
 from copy import deepcopy
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import openpyxl
 import xlrd
 from abc import ABCMeta, abstractmethod
@@ -18,10 +18,13 @@ class ExcelLoader():
             row = []
             for column_index in xrange(border['left'], border['right']+1):
                 src_value = self.get_cell(sheet_index, row_index, column_index)
-                if src_value:
-                    value = Decimal(src_value)
-                else:
-                    value = Decimal(0)
+
+                try:
+                    value = Decimal(src_value or 0)
+                except InvalidOperation:
+                    print src_value
+                    continue
+
                 row.append(value)
             total_data.append(row)
         return total_data

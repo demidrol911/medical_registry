@@ -16,7 +16,7 @@ class FinalDefectsPage(ReportPage):
 
     def calculate(self, parameters):
         self.data = None
-        path_to_dir = u'C:\дефекты_май'
+        path_to_dir = u'D:/work/defects'
         border = {'top': 6, 'bottom': 38, 'left': 3, 'right': 34}
         counter = 0
         unique_mo_names = []

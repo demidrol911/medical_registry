@@ -214,7 +214,7 @@ class SanctionsPage(ReportPage):
             total_amount_of_error['hosp'] += 1
             total_amount_of_error['uet'] += item.service_uet
             total_amount_of_error['tariff'] += item.service_tariff
-            total_amount_of_error['calculated_payment'] += item.service_calculated_payment
+            total_amount_of_error['calculated_payment'] += item.service_calculated_payment or 0
             total_amount_of_error['provided_tariff'] += 0 \
                 if item.capitation_string == u'Подуш.' \
                 else item.service_provided_tariff

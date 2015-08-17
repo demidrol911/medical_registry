@@ -246,7 +246,6 @@ class AcceptedServicesPage(GeneralServicesPage):
                            THEN round(tc.value*S.service_tariff, 2)
                          ELSE 0
                     END),
-
                 ---
                 0,  0
                 '''

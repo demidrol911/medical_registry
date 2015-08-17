@@ -44,8 +44,11 @@ def move_files_to_archive(files_list):
     for name in files_list:
         if os.path.exists(IMPORT_ARCHIVE_DIR+name):
             os.remove(IMPORT_ARCHIVE_DIR+name)
-        shutil.move(os.path.join(REGISTRY_PROCESSING_DIR, name),
-                    IMPORT_ARCHIVE_DIR)
+        try:
+            shutil.move(os.path.join(REGISTRY_PROCESSING_DIR, name),
+                        IMPORT_ARCHIVE_DIR)
+        except:
+            pass
 
 
 def send_error_file(path='', filename=None, message=''):

@@ -11,26 +11,29 @@ class Xml:
     
     def start(self, element):
         self.tags += 2
-        self.file.write('%s<%s>\n' % (' '*self.whitespaces, element.lower()))
+        self.file.write('%s<%s>\n' % (' '*self.whitespaces, element.upper()))
         self.whitespaces += 2
 
         self.started_tags += 1
 
     def end(self, element):
-        if self.ended_tags >= self.started_tags -1 and element != 'EXP_CASES':
-            return False
+        #if self.ended_tags >= self.started_tags -1 and element != 'EXP_CASES':
+        #    return False
 
-        if self.tags == 0:
-            return False
+        #if self.tags == 0:
+        #    return False
 
         self.tags -= 1
         self.whitespaces -= 2
-        self.file.write('%s</%s>\n' % (' '*self.whitespaces, element.lower()))
+        self.file.write('%s</%s>\n' % (' '*self.whitespaces, element.upper()))
 
         self.ended_tags += 1
         
     def put(self, element, value):
-        self.file.write('%s<%s>%s</%s>\n' % (' '*self.whitespaces, element.lower(), value, element.lower()))
+        self.file.write('%s<%s>%s</%s>\n' % (' '*self.whitespaces,
+                                             element.upper(),
+                                             value,
+                                             element.upper()))
         
     def plain_put(self, value):
         self.file.write('%s\n' % value)

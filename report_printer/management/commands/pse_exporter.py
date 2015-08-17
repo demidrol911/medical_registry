@@ -5,7 +5,7 @@ from tfoms import func
 from shutil import copy2
 from helpers.correct import date_correct
 from dbfpy import dbf
-
+import os
 
 ### Экспорт реестра в PSE файла
 # (P - файл пациентов, S - файл услуг, E - файл ошибок)
@@ -14,7 +14,7 @@ class Command(BaseCommand):
         mo = args[0]
         status = args[1]
         print u'Выгрузка в PSE файлы...'
-        target_dir = REESTR_PSE
+        target_dir = REESTR_PSE #os.path.join(REESTR_PSE, '280001')
         templates_path = '%s/templates/dbf_pattern' % BASE_DIR
         services = func.get_services(mo, is_include_operation=True)
         patients = func.get_patients(mo)

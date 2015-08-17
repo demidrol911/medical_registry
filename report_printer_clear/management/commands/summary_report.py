@@ -20,8 +20,13 @@ PRINT_BY_DEPARTMENT = False
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
+
         report_accepted = Report(template='reestr_201501.xls')
-        report_accepted.set_by_department(PRINT_BY_DEPARTMENT)
+
+        if 'by_departments' in args:
+            print u'Выгрузка по подразделениям'
+            report_accepted.set_by_department()
+
         report_accepted.add_page(AcceptedServicesPage())
         report_accepted.add_page(SanctionsPage())
         report_accepted.add_page(SanctionsReferencePage())
@@ -37,8 +42,8 @@ class Command(BaseCommand):
         report_defects.add_page(DefectsPage())
 
         report_wizard_final = AutomaticReportsWizard(
-            [report_accepted, report_invoiced, report_defects]
-        )
+            [report_accepted, report_invoiced,
+             report_defects])
         report_wizard_final.create_reports(8)
 
         report_wizard_preliminary = AutomaticReportsWizard([report_accepted])

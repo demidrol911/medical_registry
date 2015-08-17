@@ -108,7 +108,7 @@ def get_department_services(year, period, department_code):
 
 def main():
     year = '2015'
-    period = '05'
+    period = '06'
     path = 'd:/work/expertiza_export/%s/%s' % (year, period)
 
     departments = ProvidedService.objects.filter(

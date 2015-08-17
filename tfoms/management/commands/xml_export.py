@@ -85,7 +85,7 @@ def get_patients(period):
                 and medical_register.year = '2015'
                 and medical_register.period = %s
                 --and medical_register.organization_code in ('280036')
-                --and medical_register.type = 2
+                and medical_register.type = 2
             )
         """
     return Patient.objects.raw(query, [attachment_date, period])
@@ -384,7 +384,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '05'
+    period = '07'
     year = '2015'
     print datetime.datetime.now()
 
@@ -396,8 +396,8 @@ def main():
     ).order_by('organization_code')
     print u'Регистры: ', registers
 
-    file_regular = 'HS28002T28_15%s1' % period
-    file_patients = 'LS28002T28_15%s1' % period
+    file_regular = 'HS28004T28_15%s1' % period
+    file_patients = 'LS28004T28_15%s1' % period
 
     lm_xml = writer.Xml('%s.xml' % file_patients)
     lm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
@@ -457,7 +457,7 @@ def main():
         if register_type == 0:
             continue
         print register_type
-        name = '%sS28002T28_15%s1' % (XML_TYPES[register_type].upper(),
+        name = '%sS28004T28_15%s1' % (XML_TYPES[register_type].upper(),
                                       period)
         hm_xml = writer.Xml('%s.XML' % name)
 
@@ -538,10 +538,10 @@ def main():
                     hm_xml.put('SPOLIS', safe_str(patient_policy_series))
                     hm_xml.put('NPOLIS', safe_str(patient_policy_number))
                     hm_xml.put('ST_OKATO', '')
-                    hm_xml.put('SMO', '28002')
-                    hm_xml.put('SMO_OGRN', '1022800508488')
+                    hm_xml.put('SMO', '28004')
+                    hm_xml.put('SMO_OGRN', '1027739008440')
                     hm_xml.put('SMO_OK', '10000')
-                    hm_xml.put('SMO_NAM', u'ОАО "МСК "ДАЛЬМЕДСТРАХ"'.encode('cp1251'))
+                    hm_xml.put('SMO_NAM', u'АО "Страховая компания "СОГАЗ-Мед" Амурский филиал'.encode('cp1251'))
                     if register_type in (1, 2):
                         hm_xml.put('NOVOR', patient_is_newborn)
                     hm_xml.put('VNOV_D', record.weight or '')

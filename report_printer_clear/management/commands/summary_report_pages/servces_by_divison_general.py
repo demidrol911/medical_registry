@@ -61,6 +61,7 @@ class GeneralServicesPage(ReportPage):
                 ('coeff', 16),
                 ('accepted', 26)
             )
+
             for data_key, pos_in_arr in map_data:
                 result[0][pos_in_arr + 1] = term_capitation['men1'][data_key]
                 result[1][pos_in_arr + 1] = term_capitation['fem1'][data_key]
@@ -168,6 +169,10 @@ class GeneralServicesPage(ReportPage):
                         division_title = get_title(func.MEDICAL_SUBGROUPS, division)
                 else:
                     division_title = get_title(func.MEDICAL_SERVICES, division)
+
+                    if division == 100000:
+                        division_title = u'Прочие услуги'
+
                     if group == 20:
                         tariff_profile = MedicalService.objects.get(pk=division).tariff_profile.name
                         group_code = MedicalService.objects.get(pk=division).vmp_group
@@ -341,25 +346,25 @@ class GeneralServicesPage(ReportPage):
 
             ### Для диспнсеризации взрослых !!!!!!!!!!!!!!!!!!!!
                 if term == 4 and capitation in (23, 24):
-                    code_service = MedicalService.objects.get(pk=division).code
-                    if (capitation == 23 and code_service in ('019001', '019020', '019021', '019023', '019022', '019024')) \
-                       or (capitation == 24 and code_service in ('019002', '019021', '019023', '019022', '019024')):
+                    #code_service = MedicalService.objects.get(pk=division).code
+                    if capitation == 23 or capitation == 24:
                         print_division(sheet, division_title, values)
                 else:
                     print_division(sheet, division_title, values)
 
             if term == 4 and capitation in (23, 24):
-                code_service = MedicalService.objects.get(pk=division).code
-                if capitation == 23 and code_service in ('019001', '019020', '019021', '019023', '019022', '019024'):
+                #code_service = MedicalService.objects.get(pk=division).code
+                if capitation == 23 and division in (8339, 8354, 8384, 8385, 8386, 8387):
                     sum_by_term = self.__calc_sum(sum_by_term, values)
                 elif capitation == 24:
-                    if not code_service in ('019021', '019023', '019022', '019024'):
-                        values[0] = 0
-                        values[1] = 0
-                        values[4] = 0
-                        values[5] = 0
-                        values[6] = 0
-                        values[7] = 0
+                    #if not code_service in (8339, 8354, 8384, 8385, 8386, 8387):
+                    #    values[0] = 0
+                    #    values[1] = 0
+                    #    values[4] = 0
+                    #    values[5] = 0
+                    #    values[6] = 0
+                    #    values[7] = 0
+
                     sum_by_term = self.__calc_sum(sum_by_term, values)
             else:
                 sum_by_term = self.__calc_sum(sum_by_term, values)
@@ -428,6 +433,7 @@ class GeneralServicesPage(ReportPage):
                          ps.id_pk AS service_id,
                          pe.id_pk AS event_id,
                          pe.term_fk AS event_term,
+                         pe.end_date as event_end_date,
 
                          CASE WHEN ms.group_fk = 19
                                 THEN ps.quantity*ms.uet
@@ -605,14 +611,17 @@ class GeneralServicesPage(ReportPage):
 
                             -- Подушевое
                             CASE WHEN (
-                                     SELECT
-                                         ps1.start_date
-                                     FROM provided_service ps1
-                                         JOIN medical_service ms1
-                                            ON ps1.code_fk = ms1.id_pk
-                                     WHERE ps1.event_fk = event_id
-                                           AND ps1.payment_type_fk = 2
-                                           AND ms1.code = '019002') >= '2015-06-01'
+                                     --SELECT
+                                     --    ps1.start_date
+                                     --FROM provided_service ps1
+                                     --    JOIN medical_service ms1
+                                     --       ON ps1.code_fk = ms1.id_pk
+                                     --WHERE ps1.event_fk = event_id
+                                     --      AND ps1.payment_type_fk = 2
+                                     --      AND ms1.code = '019002'
+                                     select end_date from provided_event where id_pk = event_id
+
+                                     ) >= '2015-06-01'
                                    THEN 24
                                  ELSE 23
                             END AS capitation,
@@ -640,7 +649,15 @@ class GeneralServicesPage(ReportPage):
                             0 AS subgroup,
 
                             -- Отделения
-                            service_code_id AS division,
+
+                            case
+                            when event_end_date >= '2015-06-01'
+                            THEN
+                                case when service_code_id in (8384, 8385, 8386, 8387, 8347) THEN service_code_id
+                                ELSE 100000 end
+                            ELSE
+                                case when service_code_id in (8384, 8385, 8386, 8387, 8339) THEN service_code_id end
+                            END AS division,
 
                             -- Пол
                             0 AS gender

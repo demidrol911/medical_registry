@@ -383,10 +383,9 @@ class DefectsPage(ReportPage):
                            AND T.service_code = '119151'
                              THEN 'period_children_exam'
 
-                         WHEN T.service_group in (7, 25, 26, 12, 13)
+                         WHEN T.service_group in (25, 26, 12, 13)
                            AND T.service_code in (
-                                  '019001', '019021', '019023', '019022', '019024',
-                                  '019020', '019114', '019113', '019112', '019111',
+                                  '019114', '019113', '019112', '019111',
                                   '019110', '019109', '019108', '019107', '019106',
                                   '019105', '019104', '019103', '019102', '119003',
                                   '119004', '119002', '119005', '119006', '119007',
@@ -401,6 +400,22 @@ class DefectsPage(ReportPage):
                                   '019116', '019115', '019117',
                                   '019025', '019026', '019027', '019028'
                                )
+                             THEN 'clinical_exam'
+
+                         WHEN T.service_group in (7)
+                            and T.service_code in (
+                              '019021', '019023', '019022', '019024', '019025',
+                              '019026', '019027', '019028',
+                              '019002', '019003', '019004', '019005', '019006',
+                              '019007', '019008', '019009', '019010', '019011',
+                              '019012', '019013', '019014', '019015', '019016',
+                              '019017', '019018', '019019',
+                              '019020') and T.event_end_date >= '2015-06-01'
+                             THEN 'clinical_exam'
+
+                         WHEN T.service_group in (7)
+                            and T.service_code in ('019001', '019021', '019023', '019022', '019024')
+                            and T.event_end_date < '2015-06-01'
                              THEN 'clinical_exam'
 
                          WHEN T.service_group = 19
@@ -445,6 +460,7 @@ class DefectsPage(ReportPage):
                         ps.payment_type_fk = 2 AS is_accepted,
                         ps.payment_type_fk = 3 AS is_excluded,
                         ms.code like '1%%' AS is_children,
+                        pe.end_date as event_end_date,
 
                        (pe.term_fk = 3
                         AND ms.reason_fk = 1
@@ -500,16 +516,15 @@ class DefectsPage(ReportPage):
                                    AND pss.type_fk = 1
                                    AND pss.error_fk = (
                                        SELECT inner_me.id_pk
-                                       FROM  medical_error inner_me
+                                       FROM medical_error inner_me
                                            JOIN provided_service_sanction inner_pss
                                               ON inner_me.id_pk = inner_pss.error_fk
                                                  AND inner_pss.service_fk = ps.id_pk
-
                                        WHERE inner_pss.is_active
                                           AND inner_pss.type_fk = 1
                                        ORDER BY inner_me.weight DESC
                                        LIMIT 1
-                                )
+                                    )
                         LEFT JOIN medical_error me
                                 ON me.id_pk = pss.error_fk
                         WHERE
@@ -520,6 +535,8 @@ class DefectsPage(ReportPage):
                            AND (ms.group_fk != 27
                                 OR ms.group_fk is null
                                 )
+                           and (me.id_pk <> 70 or me.id_pk is null)
+
                     ) AS T
         '''
         return query
@@ -583,6 +600,10 @@ class DefectsPage(ReportPage):
         for data in self.data_detail:
             division = data.division_term
             failure_cause = data.failure_cause
+
+            if failure_cause is None:
+                continue
+
             column_index = DefectsPage.ERRORS_ORDER.index(failure_cause)
 
             for row_index, services_group in DefectsPage.SERVICES_GROUPS.get(division, []):

@@ -475,4 +475,4 @@ def get_service_validation(item, registry_type=1, event={}):
  "            or (self.event.term == 2 and event_term in (2, 10, 11, 12))):\n"
  "        errors.append((True, '904', 'USL', 'CODE_USL', self.event.record.id,\n"
  "                       self.event.id, self.id,\n"
- "                       u'Услуга не оказывается в текущих условиях'))\n")
+ "                       u'Услуга не оказывается в текущих условиях'))\n" )
