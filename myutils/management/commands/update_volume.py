@@ -37,7 +37,7 @@ class Command(BaseCommand):
             if mo:
                 MedicalServiceVolume.objects.create(
                     organization_id=mo.pk,
-                    date=datetime.date(year=2015, month=7, day=1),
+                    date=datetime.date(year=2015, month=8, day=1),
                     hospital=int(hospital or 0),
                     day_hospital=int(day_hospital or 0))
             else:
