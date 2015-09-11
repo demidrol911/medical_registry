@@ -159,3 +159,6 @@ class ExcelSheet():
 
     def hide_column(self, diapason):
         self.sheet.set_column(diapason, 20, None, {'hidden': 1})
+
+    def increment_row_index(self):
+        self.position['row'] += 1

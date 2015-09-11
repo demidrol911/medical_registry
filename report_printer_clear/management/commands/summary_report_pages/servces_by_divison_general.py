@@ -1,11 +1,9 @@
 #! -*- coding: utf-8 -*-
-from abc import abstractmethod
-from copy import deepcopy
 from report_printer_clear.utils.page import ReportPage
 from django.db import connection
-from tfoms import func
-from main.funcs import howlong
-from main.models import MedicalService
+from main.funcs import dictfetchall, howlong
+from decimal import Decimal
+from copy import deepcopy
 from report_printer.excel_style import (
     VALUE_STYLE,
     TITLE_STYLE,
@@ -15,719 +13,678 @@ from report_printer.excel_style import (
 
 
 class GeneralServicesPage(ReportPage):
-    ACT_WIDTH = 27
+    COUNT_CELL_IN_ACT = 28
+    STATISTIC_FIELDS = [
+        ('patients_adult', int),
+        ('patients_child', int),
+        ('events_adult', int),
+        ('events_child', int),
+        ('services_adult', int),
+        ('services_child', int),
+        ('quantities_adult', Decimal),
+        ('quantities_child', Decimal),
+        ('tariffs_adult', Decimal),
+        ('tariffs_child', Decimal),
+        ('curation_coefficient_adult', Decimal),
+        ('curation_coefficient_child', Decimal),
+        ('stomatology_coefficient_adult', Decimal),
+        ('stomatology_coefficient_child', Decimal),
+        ('mobile_coefficient_adult', Decimal),
+        ('mobile_coefficient_child', Decimal),
+        ('fap_coefficient_adult', Decimal),
+        ('fap_coefficient_child', Decimal),
+        ('xray_or_neurology_coefficient_adult', Decimal),
+        ('xray_or_neurology_coefficient_child', Decimal),
+        ('cardiology_coefficient_adult', Decimal),
+        ('cardiology_coefficient_child', Decimal),
+        ('pso_to_rsc_coefficient_adult', Decimal),
+        ('pso_to_rsc_coefficient_child', Decimal),
+        ('cpg_coefficient_adult', Decimal),
+        ('cpg_coefficient_child', Decimal),
+        ('accepted_payment_adult', Decimal),
+        ('accepted_payment_child', Decimal)
+    ]
+
+    CAPITATION_PRINT_TITLES = (
+        u'0 - 1 год мужчина',
+        u'0 - 1 год женщина',
+        u'1 - 4 год мужчина',
+        u'1 - 4 год женщина',
+        u'5 - 17 год мужчина',
+        u'5 - 17 год женщина',
+        u'18 - 59 год мужчина',
+        u'18 - 54 год женщина',
+        u'60 лет и старше мужчина',
+        u'55 лет и старше год женщина'
+    )
 
     def __init__(self):
         self.data = None
+        self.page_number = 0
         self.policlinic_capitation = None
         self.ambulance_capitation = None
-        self.page_number = 0
 
     @howlong
     def calculate(self, parameters):
-        self.data = None
-        self.policlinic_capitation = None
-        self.ambulance_capitation = None
-        query = self.get_query(parameters)
-        data_services = self.__run_query(query, dict(
+        query = self._construct_query()
+        self.data = self._run_query(query, dict(
             period=parameters.registry_period,
             year=parameters.registry_year,
-            organization=parameters.organization_code
+            organization=parameters.organization_code,
+            payment_type=parameters.payment_type_list,
+            department=parameters.departments
         ))
-        query_coeff = self.get_coeff_query(parameters)
-        data_coeff = self.__run_query(query_coeff, dict(
-            period=parameters.registry_period,
-            year=parameters.registry_year,
-            organization=parameters.organization_code
-        ))
-
-        self.data = []
-        for row in data_services:
-            values = list(row[7:])
-            key = list(row[:7])
-            for key_coef in data_coeff:
-                if key == list(key_coef[:7]):
-                    values = self.__calc_sum(values, list(key_coef[7:]))
-                    break
-            key.extend(values)
-            self.data.append(key)
-
-        def capitation_to_arrays(term_capitation):
-            result = [[0, ] * 28 for _ in range(0, 10)]
-            map_data = (
-                ('population', 0),
-                ('basic_tariff', 4),
-                ('tariff', 8),
-                ('coeff', 16),
-                ('accepted', 26)
-            )
-
-            for data_key, pos_in_arr in map_data:
-                result[0][pos_in_arr + 1] = term_capitation['men1'][data_key]
-                result[1][pos_in_arr + 1] = term_capitation['fem1'][data_key]
-
-                result[2][pos_in_arr + 1] = term_capitation['men2'][data_key]
-                result[3][pos_in_arr + 1] = term_capitation['fem2'][data_key]
-
-                result[4][pos_in_arr + 1] = term_capitation['men3'][data_key]
-                result[5][pos_in_arr + 1] = term_capitation['fem3'][data_key]
-
-                result[6][pos_in_arr] = term_capitation['men4'][data_key]
-                result[7][pos_in_arr] = term_capitation['fem4'][data_key]
-
-                result[8][pos_in_arr] = term_capitation['men5'][data_key]
-                result[9][pos_in_arr] = term_capitation['fem5'][data_key]
-            return result
 
         if parameters.policlinic_capitation[0]:
-            self.policlinic_capitation = capitation_to_arrays(parameters.policlinic_capitation[1])
+            self.policlinic_capitation = self._convert_capitation(parameters.policlinic_capitation[1])
+        else:
+            self.policlinic_capitation = []
+        print parameters.ambulance_capitation
         if parameters.ambulance_capitation[0]:
-            self.ambulance_capitation = capitation_to_arrays(parameters.ambulance_capitation[1])
+            self.ambulance_capitation = self._convert_capitation(parameters.ambulance_capitation[1])
+        else:
+            self.ambulance_capitation = []
 
-    @abstractmethod
-    def get_query(self, parameters):
-        pass
+    def _construct_query(self):
+        query = '''
+        WITH all_data AS (
+            SELECT
+                CASE WHEN pe.term_fk = 1 AND ms.group_fk IS NULL
+                       THEN '1'
+                     WHEN pe.term_fk = 1 AND ms.group_fk IS NOT NULL
+                       THEN '10'
+                     WHEN pe.term_fk = 2 AND ms.group_fk IS NULL
+                       THEN '2'
+                     WHEN pe.term_fk = 2 AND ms.group_fk IS NOT NULL
+                       THEN '20'
+                     WHEN pe.term_fk = 3 AND (ms.group_fk IS NULL OR ms.group_fk = 24)
+                          AND ps.payment_kind_fk = 2
+                       THEN '30'
+                     WHEN pe.term_fk = 3 AND (ms.group_fk IS NULL OR ms.group_fk = 24)
+                          AND (ps.payment_kind_fk != 2 OR ps.payment_kind_fk IS NULL)
+                       THEN '31'
+                     WHEN pe.term_fk = 3 AND ms.group_fk NOT IN (24, 19)
+                       THEN '32'
+                     WHEN ms.group_fk = 7
+                       THEN '41'
+                     WHEN ms.group_fk in (25, 26)
+                       THEN '42'
+                     WHEN pe.term_fk IS NULL AND ms.group_fk NOT IN (7, 25, 26)
+                       THEN '43'
+                     WHEN pe.term_fk = 4
+                       THEN '5'
+                     WHEN ms.group_fk = 19
+                       THEN '60'
+                END AS act_order,
 
-    @abstractmethod
-    def get_coeff_query(self, parameters):
-        pass
+                CASE
+                    WHEN pe.term_fk IS NULL AND (ms.group_fk != 7 OR ms.group_fk IS NULL)
+                      THEN 'Диспансеризация'
+                    WHEN ms.group_fk = 7 AND pe.end_date >= '2015-06-01'
+                      THEN 'Диспансеризация взрослых после 1.06.2015'
+                    WHEN ms.group_fk = 7 AND pe.end_date < '2015-06-01'
+                      THEN 'Диспансеризация взрослых до 1.06.2015'
+                    WHEN pe.term_fk = 3 AND (ms.group_fk != 19 OR ms.group_fk IS NULL)
+                      THEN (
+                        CASE
+                            WHEN ps.payment_kind_fk = 2
+                              THEN 'Поликлиника (подушевое)'
+                            ELSE 'Поликлиника (за единицу объёма)'
+                        END
+                    )
+                    ELSE (
+                        CASE WHEN pe.comment ILIKE '%%P493'
+                               THEN mst_event.name || ' (федеральный бюджет)'
+                             ELSE mst_event.name
+                        END
+                        )
+                END AS term_group_name,
+
+                CASE
+                    WHEN ms.group_fk IS NULL OR ms.group_fk = 24
+                      THEN (
+                        CASE
+                            WHEN pe.term_fk = 2
+                              THEN term_day_hospital.name
+                            WHEN pe.term_fk = 3
+                              THEN (
+                                -- Кейс для выбора наименование подгруппы в акте в поликлинике
+                                CASE
+                                    WHEN ms.reason_fk = 1
+                                         AND (ms.group_fk IS NULL OR ms.group_fk = 24)
+                                      THEN
+                                        CASE
+                                            WHEN (
+                                                SELECT
+                                                  COUNT(DISTINCT ps_i.id_pk)
+                                                FROM provided_service ps_i
+                                                  JOIN medical_service ms_i
+                                                     ON ps_i.code_fk = ms_i.id_pk
+                                                WHERE
+                                                  ps_i.event_fk = pe.id_pk
+                                                  AND (ms_i.group_fk = 24 OR ms_i.group_fk is null)
+                                                  AND ms_i.reason_fk = 1
+                                               ) > 1 THEN 'Поликлиника (заболевание)'
+                                            WHEN (
+                                                SELECT
+                                                  COUNT(DISTINCT ps_i.id_pk)
+                                                FROM provided_service ps_i
+                                                  JOIN medical_service ms_i
+                                                     ON ps_i.code_fk = ms_i.id_pk
+                                                WHERE
+                                                  ps_i.event_fk = pe.id_pk
+                                                  AND (ms_i.group_fk = 24 OR ms_i.group_fk is null)
+                                                  AND ms_i.reason_fk = 1
+                                               ) = 1 THEN 'Поликлиника (разовые)'
+                                            ELSE (
+                                                SELECT
+                                                  COUNT(DISTINCT ps_i.id_pk)
+                                                FROM provided_service ps_i
+                                                  JOIN medical_service ms_i
+                                                     ON ps_i.code_fk = ms_i.id_pk
+                                                WHERE
+                                                  ps_i.event_fk = pe.id_pk
+                                                  AND (ms_i.group_fk = 24 OR ms_i.group_fk is null)
+                                                  AND ms_i.reason_fk = 1
+                                            )::VARCHAR
+                                        END
+                                    WHEN ms.reason_fk = 2
+                                      THEN 'Поликлиника (профосмотр)'
+                                    WHEN ms.reason_fk = 3
+                                      THEN 'Поликлиника (прививка)'
+                                    WHEN ms.reason_fk = 5
+                                      THEN 'Поликлиника (неотложка)'
+                                    WHEN ms.reason_fk = 8
+                                      THEN 'Поликлиника (с иными целями)'
+                                END)
+                        END)
+                    WHEN ms.group_fk IS NOT NULL
+                      THEN (
+                        CASE
+                            WHEN ms.group_fk = 7
+                              THEN
+                                CASE (
+                                        SELECT
+                                          code
+                                        FROM provided_service
+                                          JOIN medical_service
+                                             ON code_fk = medical_service.id_pk
+                                        WHERE
+                                          event_fk = pe.id_pk
+                                          AND code IN ('019021', '019023', '019022', '019024')
+                                        LIMIT 1
+                                     )
+                                    WHEN '019021'
+                                      THEN 'I группа диспанс. мужчины'
+                                    WHEN '019022'
+                                      THEN 'I группа диспанс. женщины'
+                                    WHEN '019023'
+                                      THEN 'II группа диспанс. мужчины'
+                                    WHEN '019024'
+                                      THEN 'II группа диспанс. женщины'
+                                    ELSE 'Диспансеризация'
+                                END
+                            WHEN ms.group_fk = 19 OR ms.subgroup_fk IN (12, 13, 14, 17)
+                              THEN 'Стоматология'
+                            ELSE msg.name
+                        END
+                    )
+                END AS term_subgroup_name,
+
+                CASE WHEN ms.group_fk IS NULL
+                          OR ms.group_fk = 24
+                       THEN (
+                         CASE
+                            WHEN pe.term_fk in (1, 2)
+                              THEN tp.name
+                            WHEN pe.term_fk = 3
+                              THEN md_policlinic.name
+                            WHEN pe.term_fk = 4
+                              THEN mssg.name
+                            WHEN pe.term_fk IS NULL
+                              THEN 'Поликлиника'
+                            ELSE 'НЕИЗВЕСТНОЕ ОТДЕЛЕНИЕ'
+                            END
+                       )
+                     WHEN ms.group_fk IS NOT NULL
+                       THEN (
+                         -- Разбивка стоматологии
+                         CASE
+                             WHEN ms.group_fk = 19
+                               THEN (
+                                 SELECT
+                                    "name"
+                                 FROM medical_service_subgroup
+                                 WHERE id_pk = (
+                                   SELECT
+                                      MAX(subgroup_fk)
+                                   FROM medical_service
+                                     JOIN provided_service
+                                        ON code_fk = medical_service.id_pk
+                                   WHERE
+                                     event_fk = pe.id_pk
+                                     AND payment_type_fk = 2
+                               )
+                             )
+                            -- Разбивка диспансеризации
+                            WHEN ms.group_fk = 7
+                              THEN (
+                                CASE ms.code
+                                    WHEN '019021'
+                                      THEN 'Прием врача-терапевта итоговый (I группа - мужчины)'
+                                    WHEN '019022'
+                                      THEN 'Прием врача-терапевта итоговый  (I группа - женщины)'
+                                    WHEN '019023'
+                                      THEN 'Прием врача-терапевта итоговый  (II группа - мужчины)'
+                                    WHEN '019024'
+                                      THEN 'Прием врача-терапевта итоговый (II группа - женщины)'
+                                    WHEN '019002'
+                                      THEN 'Опрос (анкетирование)'
+                                    ELSE 'Прочие услуги (ислледования, анализы)'
+                                END)
+                            WHEN ms.group_fk IN (11, 12, 13)
+                              THEN (
+                                CASE
+                                    WHEN ms.subgroup_fk IS NULL
+                                      THEN ms.name
+                                    ELSE mssg.name || (
+                                      CASE
+                                          WHEN p.gender_fk = 1
+                                            THEN ', мальчики'
+                                          WHEN p.gender_fk = 2
+                                            THEN ', девочки'
+                                      END)
+                                END)
+                            WHEN ms.group_fk = 20
+                              THEN ms.vmp_group || ' (' || tp.name || ') ' || ms.name
+                            ELSE (
+                              CASE
+                                  WHEN ms.subgroup_fk IS NULL
+                                    THEN ms.name
+                                  ELSE mssg.name
+                              END)
+                         END)
+                END AS profile_name,
+
+                -- Всякие нужные для статистики данные
+                ms.code like '1%%' AS is_children_profile,
+                ms.group_fk AS service_group_id,
+                ms.code AS service_code,
+                ms.reason_fk AS service_reason_id,
+                mr.organization_code AS organization_code,
+                ROUND(ps.tariff, 2) AS service_tariff,
+                ROUND(CASE WHEN ps.payment_type_fk = 2 THEN ps.accepted_payment
+                           WHEN ps.payment_type_fk = 3 THEN ps.provided_tariff
+                           WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
+                      END, 2) AS service_accepted_payment,
+                ROUND(ps.provided_tariff, 2) AS service_provided_tariff,
+
+                CASE
+                    WHEN ms.group_fk = 19
+                      THEN ps.quantity*ms.uet
+                    ELSE ps.quantity
+                END AS service_quantity,
+
+                p.id_pk AS patient_id,
+                pe.id_pk AS event_id,
+                ps.id_pk AS service_id,
+
+                CASE WHEN ms.group_fk = 19 AND ms.subgroup_fk IS NULL
+                       THEN True
+                     ELSE False
+                END AS is_stomatology_services,
+
+                CASE
+                    WHEN (pe.term_fk = 3 AND ms.reason_fk = 1 AND (ms.group_fk = 24 OR ms.group_fk is null)
+                         AND (SELECT
+                                 COUNT(DISTINCT ps_i.id_pk)
+                              FROM provided_service ps_i
+                                JOIN medical_service ms_i
+                                   ON ps_i.code_fk = ms_i.id_pk
+                              WHERE
+                                ps_i.event_fk = pe.id_pk
+                                AND (ms_i.group_fk = 24 OR ms_i.group_fk is null)
+                                AND ms_i.reason_fk = 1
+                              ) > 1
+                            )
+                         OR (ms.group_fk = 19 AND ms.subgroup_fk = 12)
+                      THEN True
+                    ELSE False
+                END AS is_treatment,
+
+                CASE
+                    WHEN (pe.term_fk = 3 AND ps.payment_kind_fk = 2) or pe.term_fk = 4
+                      THEN True
+                    ELSE False
+                END AS is_capitation,
+
+                ----- Коеффициенты
+                -- Коеффициент Курации
+                ROUND(CASE
+                          WHEN psc_curation.id_pk IS NOT NULL
+                               AND psc.coefficient_fk IN (8, 9, 10, 11, 12)
+                            THEN 0.25*ps.tariff*tc.value
+                          ELSE 0
+                      END, 2) +
+                ROUND(CASE
+                          WHEN psc_curation.id_pk IS NOT NULL
+                            THEN 0.25*ps.tariff
+                          ELSE 0
+                      END, 2) AS curation_coefficient,
+
+
+                -- Неотложка у зубника
+                ROUND(CASE WHEN tc.id_pk = 4 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS stomatology_coefficient,
+
+
+                -- Мобильные бригады
+                ROUND(CASE WHEN tc.id_pk = 5 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS mobile_coefficient,
+
+                -- АООД рентгенотерапия
+                ROUND(CASE WHEN tc.id_pk = 19 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS xray_coefficient,
+
+                -- КПГ неврология
+                ROUND(CASE WHEN tc.id_pk = 16 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS neurology_coefficient,
+
+                -- Клинико-профильные группы
+                ROUND(CASE WHEN tc.id_pk in (8, 9, 10, 11, 12) THEN tc.value*ps.tariff ELSE 0 END, 2) AS cpg_coefficient,
+
+                -- КПГ кардиология
+                ROUND(CASE WHEN tc.id_pk = 17 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS cardiology_coefficient,
+
+                -- Перевод из ПСО в РСЦ
+                ROUND(CASE WHEN tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS pso_to_rsc_coefficient
+
+            FROM provided_service ps
+              JOIN provided_event pe
+                 ON pe.id_pk = ps.event_fk
+              JOIN medical_register_record mrr
+                 ON mrr.id_pk = pe.record_fk
+              JOIN medical_register mr
+                 ON mr.id_pk = mrr.register_fk
+              JOIN medical_service ms
+                 ON ms.id_pk = ps.code_fk
+              JOIN patient p
+                 ON p.id_pk = mrr.patient_fk
+              JOIN medical_organization department
+                 ON department.id_pk = ps.department_fk
+
+              LEFT JOIN medical_division md_day_hospital
+                 ON md_day_hospital.id_pk = pe.division_fk
+              LEFT join medical_service_term term_day_hospital
+                 ON term_day_hospital.id_pk = md_day_hospital.term_fk
+              LEFT join medical_service_term mst_day_hospital
+                 ON mst_day_hospital.id_pk = md_day_hospital.term_fk
+              LEFT JOIN tariff_profile tp
+                 ON tp.id_pk = ms.tariff_profile_fk
+              LEFT JOIN medical_division md_policlinic
+                 ON md_policlinic.id_pk = ms.division_fk
+
+            LEFT JOIN medical_service_term mst_event
+                ON mst_event.id_pk = pe.term_fk
+            LEFT JOIN medical_service_reason msr
+                ON msr.id_pk = ms.reason_fk
+
+            LEFT join medical_service_group msg
+                ON msg.id_pk = ms.group_fk
+            LEFT JOIN medical_service_subgroup mssg
+                ON mssg.id_pk = ms.subgroup_fk
+
+            LEFT JOIN provided_service_coefficient psc_curation
+                ON psc_curation.service_fk = ps.id_pk
+                   AND psc_curation.coefficient_fk = 7
+            LEFT JOIN provided_service_coefficient psc
+                ON psc.service_fk = ps.id_pk
+                   AND psc.coefficient_fk != 7
+            LEFT JOIN tariff_coefficient tc
+                ON tc.id_pk = psc.coefficient_fk
+            WHERE mr.is_active
+              AND mr.year = %(year)s
+              AND mr.period = %(period)s
+              AND mr.organization_code = %(organization)s
+              AND (ms.group_fk != 27 or ms.group_fk IS NULL)
+              AND ps.payment_type_fk = ANY(%(payment_type)s)
+              AND department.old_code = ANY(%(department)s)
+        )
+
+        SELECT
+            act_order,
+            term_group_name,
+            term_subgroup_name,
+            profile_name,
+
+            COALESCE(COUNT(DISTINCT CASE WHEN NOT is_children_profile THEN patient_id END), 0) AS patients_adult,
+            COALESCE(COUNT(DISTINCT CASE WHEN is_children_profile THEN patient_id END), 0) AS patients_child,
+
+            COALESCE(COUNT(DISTINCT CASE WHEN NOT is_children_profile AND is_treatment THEN event_id END), 0) AS events_adult,
+            COALESCE(COUNT(DISTINCT CASE WHEN is_children_profile AND is_treatment THEN event_id END), 0) AS events_child,
+
+            COALESCE(COUNT(DISTINCT CASE WHEN NOT is_children_profile
+                                           THEN (
+                                               CASE WHEN is_stomatology_services
+                                                      THEN NULL
+                                                    ELSE service_id
+                                               END)
+                                    END), 0) AS services_adult,
+            COALESCE(COUNT(DISTINCT CASE WHEN is_children_profile
+                                           THEN (
+                                               CASE WHEN is_stomatology_services
+                                                      THEN NULL
+                                                    ELSE service_id
+                                               END)
+                                    END), 0) AS services_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN service_quantity END), 0) AS quantities_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN service_quantity END), 0) AS quantities_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN service_tariff END), 0) AS tariffs_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN service_tariff END), 0) AS tariffs_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN curation_coefficient END), 0) AS curation_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN curation_coefficient END), 0) AS curation_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN stomatology_coefficient END), 0) AS stomatology_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN stomatology_coefficient END), 0) AS stomatology_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN mobile_coefficient END), 0) AS mobile_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN mobile_coefficient END), 0) AS mobile_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN cpg_coefficient END), 0) AS cpg_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN cpg_coefficient END), 0) AS cpg_coefficient_child,
+
+            COALESCE(SUM(CASE
+                             WHEN NOT is_children_profile
+                               THEN (
+                                  CASE
+                                      WHEN organization_code = '280005'
+                                        THEN xray_coefficient
+                                      WHEN organization_code = '280064'
+                                        THEN neurology_coefficient
+                                      ELSE 0
+                                  END)
+                             ELSE 0
+                         END), 0)  AS xray_or_neurology_coefficient_adult,
+
+            COALESCE(SUM(CASE
+                             WHEN is_children_profile
+                               THEN (
+                                  CASE
+                                      WHEN organization_code = '280005'
+                                        THEN xray_coefficient
+                                      WHEN organization_code = '280064'
+                                        THEN neurology_coefficient
+                                      ELSE 0
+                                  END)
+                             ELSE 0
+                         END), 0) AS xray_or_neurology_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN cardiology_coefficient END), 0) AS cardiology_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN cardiology_coefficient END), 0) AS cardiology_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN pso_to_rsc_coefficient END), 0) AS pso_to_rsc_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN pso_to_rsc_coefficient END), 0) AS pso_to_rsc_coefficient_child,
+
+            0 AS fap_coefficient_adult,
+            0 AS fap_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile AND NOT is_capitation THEN service_accepted_payment END), 0) AS accepted_payment_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile AND NOT is_capitation THEN service_accepted_payment END), 0) AS accepted_payment_child
+
+        FROM all_data
+
+        GROUP BY act_order, term_group_name, term_subgroup_name, profile_name
+        ORDER BY act_order, term_group_name, term_subgroup_name NULLS FIRST, profile_name
+        '''
+
+        return query
+
+    def _run_query(self, query, parameters):
+        cursor = connection.cursor()
+        cursor.execute(query, parameters)
+        return dictfetchall(cursor)
+
+    def _convert_capitation(self, capitation_data):
+        convert_capitation = [
+            deepcopy(self._reset_total())
+            for _ in range(0, 10)]
+
+        age_groups = [
+            'men1', 'fem1', 'men2', 'fem2', 'men3', 'fem3',
+            'men4', 'fem4', 'men5', 'fem5'
+        ]
+        for index, age_group in enumerate(age_groups):
+            item = capitation_data[age_group]
+            if age_group in ('men1', 'fem1', 'men2', 'fem2', 'men3', 'fem3'):
+                convert_capitation[index]['patients_child'] = item['population']
+                convert_capitation[index]['quantities_child'] = item['basic_tariff']
+                convert_capitation[index]['tariffs_child'] = item['tariff']
+                convert_capitation[index]['fap_coefficient_child'] = item['coeff']
+                convert_capitation[index]['accepted_payment_child'] = item['accepted']
+            if age_group in ('men4', 'fem4', 'men5', 'fem5'):
+                convert_capitation[index]['patients_adult'] = item['population']
+                convert_capitation[index]['quantities_adult'] = item['basic_tariff']
+                convert_capitation[index]['tariffs_adult'] = item['tariff']
+                convert_capitation[index]['fap_coefficient_adult'] = item['coeff']
+                convert_capitation[index]['accepted_payment_adult'] = item['accepted']
+
+        return convert_capitation
 
     def print_page(self, sheet, parameters):
-        def print_division(act_book, title, row):
-            act_book.write(title, 'c')
-            for value in row[:-1]:
-                act_book.write(value, 'c')
-            act_book.write(row[-1], 'r')
-
-        def get_title(dict_src, key):
-            if key and key in dict_src:
-                return dict_src[key]['name']
-            else:
-                return u'Неизвестно'
-
-        signs_title = {
-            'can_print_policlinic_capitation': True,
-            'can_print_policlinic_unit': True,
-            'can_print_exam_till_1_06_2015': True,
-            'can_print_exam_since_1_06_2015': True,
-            'can_print_ambulance': True
-        }
-
-        signs_term = {
-            'is_policlinic': False,
-            'is_ambulance': False,
-            'is_exam_till_1_06_2015': False,
-            'is_exam_since_1_06_2015': False,
-            'is_exam_all_1_06_2015': False
-        }
-
-        zero_key = {
-            'term': 0, 'capitation': 0,
-            'reason': 0, 'group': 0,
-            'subgroup': 0, 'division': 0,
-            'gender': 0
-        }
-
-        latest_key = deepcopy(zero_key)
-
-        sum_by_term = None
-        subtotal = None
-        total = None
-        sum_adult_exam = None
-
         sheet.write_cell(0, 3, u'Сводная справка  по  дефектам за ' + parameters.date_string)
         sheet.write_cell(3, 0, parameters.organization_code+' '+parameters.report_name)
-
         sheet.write_cell(2, 0, parameters.organization_code+' '+parameters.report_name)
         sheet.write_cell(2, 9, u'за ' + parameters.date_string)
         sheet.write_cell(3, 0, u'Частичный реестр: %s' % ','.join(parameters.partial_register))
         sheet.set_position(7, 0)
 
-        for row in self.data:
-            term = row[0]
-            capitation = row[1]
-            reason = row[2]
-            group = row[3]
-            subgroup = row[4]
-            division = row[5]
-            gender = row[6]
+        latest_term_group = ''
+        latest_term_subgroup = ''
+        total_by_term_group = self._reset_total()
+        total_by_mo = self._reset_total()
+        totals_by_term = {
+            u'Поликлиника (подушевое)': {u'on': False, u'total': self._reset_total()},
+            u'Поликлиника (за единицу объёма)': {u'on': False, u'total': self._reset_total()},
+            u'Диспансеризация взрослых после 1.06.2015': {u'on': False, u'total': self._reset_total()},
+            u'Диспансеризация взрослых до 1.06.2015': {u'on': False, u'total': self._reset_total()},
+            u'Скорая помощь': {u'on': False, u'total': self._reset_total()}
+        }
 
-            values = row[7:]
+        for item in self.data:
+            is_changed_term_group = latest_term_group != item['term_group_name']
+            is_changed_term_subgroup = latest_term_subgroup != item['term_subgroup_name']
+            if (is_changed_term_group or is_changed_term_subgroup) and (latest_term_group != ''):
+                self._print_total(sheet, u'Итого', total_by_term_group)
+                self._accumulate_total(total_by_term_group, total_by_mo)
+                total_by_term_group = self._reset_total()
 
-            # Вычисляем заголовоки разделов и отделений
-            if group:
-                if group == 23:
-                    term_title = get_title(func.MEDICAL_SUBGROUPS, reason)
-                elif group == 19:
-                    term_title = u'Стоматология'
-                else:
-                    term_title = get_title(func.MEDICAL_GROUPS, group)
-                if subgroup:
-                    if division == 999:
-                        division_title = u'Стоматология (снятые)'
-                    else:
-                        division_title = get_title(func.MEDICAL_SUBGROUPS, division)
-                else:
-                    division_title = get_title(func.MEDICAL_SERVICES, division)
+            # включить аккумулятор
+            if item['term_group_name'] in totals_by_term \
+                    and not totals_by_term[item['term_group_name']][u'on']:
+                totals_by_term[item['term_group_name']][u'on'] = True
+            # аккумулируем
+            if item['term_group_name'] in totals_by_term \
+                    and totals_by_term[item['term_group_name']][u'on']:
+                self._accumulate_total(item, totals_by_term[item['term_group_name']][u'total'])
+            # выключить аккумулятор
+            if is_changed_term_group \
+                    and latest_term_group in totals_by_term \
+                    and totals_by_term[latest_term_group][u'on']:
+                totals_by_term[latest_term_group][u'on'] = False
+                self._print_total(sheet, u'Итого по ' + latest_term_group,
+                                  totals_by_term[latest_term_group][u'total'])
 
-                    if division == 100000:
-                        division_title = u'Прочие услуги'
-
-                    if group == 20:
-                        tariff_profile = MedicalService.objects.get(pk=division).tariff_profile.name
-                        group_code = MedicalService.objects.get(pk=division).vmp_group
-                        division_title = str(group_code) + ' (' + tariff_profile + ')' + division_title
-            else:
-                division_title = ''
-                if term == 1:
-                    term_title = u'Стационар'
-                    division_title = get_title(func.TARIFF_PROFILES, division)
-                elif term == 2:
-                    if reason:
-                        if reason == 10:
-                            term_title = u'Дневной стационар (Дневной стационар в стационаре)'
-                        elif reason == 11:
-                            term_title = u'Дневной стационар (Дневной стационар при поликлинике)'
-                        elif reason == 12:
-                            term_title = u'Дневной стационар (Дневной стационар на дому)'
-                        division_title = get_title(func.TARIFF_PROFILES, division)
-                    else:
-                        division_title = u'Дневной стационар'
-                elif term == 3:
-                    if reason == 1:
-                        term_title = u'Поликлиника (заболевание)'
-                    elif reason == 2:
-                        term_title = u'Поликлиника (профосмотр)'
-                    elif reason == 3:
-                        term_title = u'Поликлиника (прививка)'
-                    elif reason == 5:
-                        term_title = u'Поликлиника (неотложка)'
-                    elif reason == 8:
-                        term_title = u'Поликлиника (с иными целями)'
-                    elif reason == 99:
-                        term_title = u'Поликлиника (разовые)'
-                        values[2] = 0
-                        values[3] = 0
-                    division_title = get_title(func.MEDICAL_DIVISIONS, division)
-                elif term == 5:
-                    term_title = u'Скорая помощь'
-                    division_title = get_title(func.MEDICAL_DIVISIONS, division)
-                elif term == 7:
+            if is_changed_term_group:
+                latest_term_group = item['term_group_name']
+                sheet.set_style(TITLE_STYLE)
+                if latest_term_group in (u'Диспансеризация', u'Поликлиника'):
                     pass
-            if gender == 1:
-                division_title += u', мальчики'
-            elif gender == 2:
-                division_title += u', девочки'
-            ###
-
-            if term != latest_key['term'] \
-                    or capitation != latest_key['capitation'] \
-                    or reason != latest_key['reason'] \
-                    or group != latest_key['group']:
-                # Печать итоговой суммы по отделениям
-                if sum_by_term:
-                    total = self.__calc_sum(total, sum_by_term)
-                    latest_key['division'] = 0
-                    latest_key['gender'] = 0
-                    sheet.set_style(TOTAL_STYLE)
-                    print_division(sheet, u'Итого', sum_by_term)
-                    sheet.set_position(sheet.get_row_index() + 1, sheet.get_column_index())
-
-                # Рассчет промежуточных итоговых сумм
-                if signs_term['is_policlinic'] \
-                        or signs_term['is_ambulance'] \
-                        or signs_term['is_exam_till_1_06_2015'] \
-                        or signs_term['is_exam_since_1_06_2015']:
-                    subtotal = self.__calc_sum(subtotal, sum_by_term)
-
-                if signs_term['is_exam_all_1_06_2015']:
-                    sum_adult_exam = self.__calc_sum(sum_adult_exam, sum_by_term)
-
-                sum_by_term = None
-
-                # Печать промежуточных итоговых сумм
-                signs_term_name = ''
-                title_subtotal = ''
-                if signs_term['is_policlinic'] \
-                        and not(term == 3 and latest_key['capitation'] == capitation):
-                    signs_term_name = 'is_policlinic'
-                    title_subtotal = u'Итого по поликлинике'
-
-                if signs_term['is_ambulance'] and (term != 5):
-                    signs_term_name = 'is_ambulance'
-                    title_subtotal = u'Итого по скорой помощи'
-
-                if signs_term['is_exam_till_1_06_2015'] \
-                        and not(term == 4 and capitation == 23):
-                    signs_term_name = 'is_exam_till_1_06_2015'
-                    title_subtotal = u'Итого по взр. диспансер. до 1 июня'
-
-                if signs_term['is_exam_since_1_06_2015'] \
-                        and not(term == 4 and capitation == 24):
-                    signs_term_name = 'is_exam_since_1_06_2015'
-                    title_subtotal = u'Итого по взр. диспансер. после 1 июня'
-
-                if signs_term_name:
-                    sheet.set_style(TOTAL_STYLE)
-                    print_division(sheet, title_subtotal, subtotal)
-                    sheet.set_position(sheet.get_row_index() + 1, 0)
-                    signs_term[signs_term_name] = False
-
-                if signs_term['is_exam_all_1_06_2015'] \
-                        and not(term == 4 and capitation in [23, 24]):
-                    sheet.set_style(TOTAL_STYLE)
-                    print_division(sheet, u'Итого по взр. диспансер.', sum_adult_exam)
-                    sheet.set_position(sheet.get_row_index() + 1, 0)
-                    signs_term['is_exam_all_1_06_2015'] = False
-                ###
-
-                # Печать разделов, в которых будут рассчитываться промежуточные суммы
-                signs_term_name = ''
-                sings_can_print = ''
-                title_subtotal = ''
-                if term == 3 and capitation == 0 \
-                        and signs_title['can_print_policlinic_capitation']:
-                    signs_term_name = 'is_policlinic'
-                    sings_can_print = 'can_print_policlinic_capitation'
-                    title_subtotal = u'Поликлиника (подушевое)'
-
-                elif term == 3 and capitation == 1 \
-                        and signs_title['can_print_policlinic_unit']:
-                    signs_term_name = 'is_policlinic'
-                    sings_can_print = 'can_print_policlinic_unit'
-                    title_subtotal = u'Поликлиника (за единицу объёма)'
-
-                elif term == 4 and capitation == 23 \
-                        and signs_title['can_print_exam_till_1_06_2015']:
-                    signs_term_name = 'is_exam_till_1_06_2015'
-                    sings_can_print = 'can_print_exam_till_1_06_2015'
-                    title_subtotal = u'Диспансеризация взрослых до 1.06.2015'
-                    signs_term['is_exam_all_1_06_2015'] = True
-
-                elif term == 4 and capitation == 24 \
-                        and signs_title['can_print_exam_since_1_06_2015']:
-                    signs_term_name = 'is_exam_since_1_06_2015'
-                    sings_can_print = 'can_print_exam_since_1_06_2015'
-                    title_subtotal = u'Диспансеризация взрослых после 1.06.2015'
-                    signs_term['is_exam_all_1_06_2015'] = True
-
-                elif term == 5 \
-                        and signs_title['can_print_ambulance']:
-                    signs_term_name = 'is_ambulance'
-                    sings_can_print = 'can_print_ambulance'
-                    title_subtotal = u'Скорая помощь'
-
-                if signs_term_name:
-                    sheet.set_style(TITLE_STYLE)
-                    sheet.write(title_subtotal, 'r', GeneralServicesPage.ACT_WIDTH+1)
-                    signs_term[signs_term_name] = True
-                    signs_title[sings_can_print] = False
-                    subtotal = None
-                    latest_key['division'] = 0
-                    latest_key['gender'] = 0
-                ###
-
-                print term_title
-                sheet.set_style(TITLE_STYLE)
-                sheet.write(term_title, 'r', GeneralServicesPage.ACT_WIDTH+1)
-                sheet.set_style(VALUE_STYLE)
-                latest_key['term'] = term
-                latest_key['capitation'] = capitation
-                latest_key['reason'] = reason
-                latest_key['group'] = group
-
-            # Печатаем отделение
-            if division != latest_key['division'] or gender != latest_key['gender']:
-                sheet.set_style(VALUE_STYLE)
-                if division_title == u'Неизвестно':
-                    sheet.set_style(WARNING_STYLE)
-                latest_key['division'] = division
-                latest_key['gender'] = gender
-
-            ### Для диспнсеризации взрослых !!!!!!!!!!!!!!!!!!!!
-                if term == 4 and capitation in (23, 24):
-                    #code_service = MedicalService.objects.get(pk=division).code
-                    if capitation == 23 or capitation == 24:
-                        print_division(sheet, division_title, values)
                 else:
-                    print_division(sheet, division_title, values)
+                    sheet.write(latest_term_group, 'r', self.COUNT_CELL_IN_ACT)
 
-            if term == 4 and capitation in (23, 24):
-                #code_service = MedicalService.objects.get(pk=division).code
-                if capitation == 23 and division in (8339, 8354, 8384, 8385, 8386, 8387):
-                    sum_by_term = self.__calc_sum(sum_by_term, values)
-                elif capitation == 24:
-                    #if not code_service in (8339, 8354, 8384, 8385, 8386, 8387):
-                    #    values[0] = 0
-                    #    values[1] = 0
-                    #    values[4] = 0
-                    #    values[5] = 0
-                    #    values[6] = 0
-                    #    values[7] = 0
-
-                    sum_by_term = self.__calc_sum(sum_by_term, values)
-            else:
-                sum_by_term = self.__calc_sum(sum_by_term, values)
-        if self.data:
-            sheet.set_style(TOTAL_STYLE)
-            print_division(sheet, u'Итого', sum_by_term)
-            sheet.set_position(sheet.get_row_index() + 1, sheet.get_column_index())
-            total = self.__calc_sum(total, sum_by_term)
-
-        if self.data:
-            print_division(sheet, u'Итого по МО', total)
-
-        def print_tariff_capitation(title, term_capitation):
-            labels = [
-                u'0 - 1 год мужчина',
-                u'0 - 1 год женщина',
-                u'1 - 4 год мужчина',
-                u'1 - 4 год женщина',
-                u'5 - 17 год мужчина',
-                u'5 - 17 год женщина',
-                u'18 - 59 год мужчина',
-                u'18 - 54 год женщина',
-                u'60 лет и старше мужчина',
-                u'55 лет и старше год женщина'
-            ]
-
-            sheet.set_position(sheet.get_row_index() + 1, sheet.get_column_index())
-            if term_capitation:
+            if is_changed_term_subgroup:
+                latest_term_subgroup = item['term_subgroup_name']
                 sheet.set_style(TITLE_STYLE)
-                sheet.write(title, 'r', GeneralServicesPage.ACT_WIDTH+1)
-                sheet.set_style(VALUE_STYLE)
-                for idx, age_group in enumerate(term_capitation):
-                    print_division(sheet, labels[idx], age_group)
+                sheet.write(latest_term_subgroup, 'r', self.COUNT_CELL_IN_ACT)
 
-        def sum_tariff_capitation(term_capitation):
-            total_capitation = None
-            for idx, age_group in enumerate(term_capitation):
-                total_capitation = self.__calc_sum(total_capitation, age_group)
-            return total_capitation
+            sheet.set_style(VALUE_STYLE)
+            sheet.write(item['profile_name'], 'c')
+            self._print_item(sheet, item)
+            self._accumulate_total(item, total_by_term_group)
 
-        if self.policlinic_capitation:
-            total_policlinic = sum_tariff_capitation(self.policlinic_capitation)
-            total = self.__calc_sum(total, total_policlinic)
-            print_tariff_capitation(u'Подушевой норматив по амбул. мед. помощи', self.policlinic_capitation)
-            sheet.set_style(TOTAL_STYLE)
-            print_division(sheet, u'Итого по подушевому нормативу', total_policlinic)
-            sheet.set_position(sheet.get_row_index() + 1, sheet.get_column_index())
+        self._accumulate_total(total_by_term_group, total_by_mo)
 
-        if self.ambulance_capitation:
-            total_ambulance = sum_tariff_capitation(self.ambulance_capitation)
-            total = self.__calc_sum(total, total_ambulance)
-            print_tariff_capitation(u'Подушевой норматив по скорой мед. помощи', self.ambulance_capitation)
-            sheet.set_style(TOTAL_STYLE)
-            print_division(sheet, u'Итого по подушевому нормативу', total_ambulance)
-            sheet.set_position(sheet.get_row_index() + 1, sheet.get_column_index())
+        self._print_total(sheet, u'Итого', total_by_term_group)
+        if latest_term_group in totals_by_term \
+                and totals_by_term[latest_term_group][u'on']:
+            totals_by_term[latest_term_group][u'on'] = False
+            self._print_total(sheet, u'Итого по ' + latest_term_group,
+                              totals_by_term[latest_term_group][u'total'])
+        self._print_total(sheet, u'Итого по МО', total_by_mo)
 
+        total_by_policlinic_capitation = self._accumulate_capitaion_total(self.policlinic_capitation)
+        total_by_ambulance_capitation = self._accumulate_capitaion_total(self.ambulance_capitation)
+        self._accumulate_total(total_by_policlinic_capitation, total_by_mo)
+        self._accumulate_total(total_by_ambulance_capitation, total_by_mo)
+
+        self._print_capitation(sheet, u'Подушевой норматив по амбул. мед. помощи', self.policlinic_capitation)
+        self._print_total(sheet, u'Итого по подушевому нормативу', total_by_policlinic_capitation)
+        self._print_capitation(sheet, u'Подушевой норматив по скорой мед. помощи', self.ambulance_capitation)
+        self._print_total(sheet, u'Итого по подушевому нормативу', total_by_ambulance_capitation)
         if self.policlinic_capitation or self.ambulance_capitation:
-            print_division(sheet, u'Итого по МО c подушевым', total)
+            self._print_total(sheet, u'Итого по МО c подушевым', total_by_mo)
 
-    @staticmethod
-    def get_general_query():
-        query = '''
-                -- Акт принятых услуг --
-                WITH services_mo AS (
-                     SELECT
-                         ps.id_pk AS service_id,
-                         pe.id_pk AS event_id,
-                         pe.term_fk AS event_term,
-                         pe.end_date as event_end_date,
+    def _reset_total(self):
+        return deepcopy({field_name: field_type(0) for field_name, field_type in self.STATISTIC_FIELDS})
 
-                         CASE WHEN ms.group_fk = 19
-                                THEN ps.quantity*ms.uet
-                              ELSE ps.quantity
-                         END AS service_quantity,
+    def _accumulate_total(self, subtotal, total):
+        for field_name, field_type in self.STATISTIC_FIELDS:
+            total[field_name] = field_type(total[field_name]) + field_type(subtotal[field_name] or 0)
 
-                         ROUND(ps.tariff, 2) AS service_tariff,
-                         ROUND(ps.accepted_payment, 2) AS service_accepted_payment,
-                         ROUND(ps.provided_tariff, 2) AS service_provided_tariff,
+    def _accumulate_capitaion_total(self, capitation_data):
+        total = self._reset_total()
+        for item in capitation_data:
+            self._accumulate_total(item, total)
+        return total
 
+    def _print_item(self, sheet, item):
+        for field_name, _ in self.STATISTIC_FIELDS[:-1]:
+            sheet.write(item[field_name], 'c')
+        sheet.write(item[self.STATISTIC_FIELDS[-1][0]], 'r')
 
-                         ps.payment_type_fk AS payment_type,
-                         ps.start_date AS start_date,
-                         ps.end_date AS end_date,
-                         dep.old_code AS department,
-                         ms.group_fk As service_group,
-                         ms.subgroup_fk AS service_subgroup,
-                         ms.division_fk AS service_division,
-                         ms.tariff_profile_fk AS service_tariff_profile,
-                         ms.id_pk AS service_code_id,
-                         ms.code AS service_code,
-                         ms.code ILIKE '0%%' AS is_adult,
-                         ms.code ILIKE '1%%' AS is_child,
-                         ms.reason_fk AS service_reason,
-                         msd.term_fk AS division_term,
-                         pt.id_pk AS patient_id,
-                         pt.gender_fk AS patient_gender,
-
-                         mr.organization_code AS organization,
-
-                         CASE WHEN pe.term_fk = 3
-                                THEN (
-                                   CASE WHEN ps.payment_kind_fk = 2
-                                          THEN 0
-                                        WHEN ps.payment_kind_fk in (1, 3)
-                                          THEN 1
-                                   END
-                                 )
-                              WHEN pe.term_fk = 4 THEN 0
-                              ELSE 1
-                         END AS service_capitation,
-
-                        (pe.term_fk = 3 AND ms.reason_fk = 1
-                         AND (ms.group_fk = 24 OR ms.group_fk is null)
-                         ) OR (ms.group_fk = 19 AND ms.subgroup_fk = 12) AS is_treatment
-
-                     FROM medical_register mr
-                         JOIN medical_register_record mrr
-                           ON mr.id_pk = mrr.register_fk
-                         JOIN provided_event pe
-                           ON mrr.id_pk = pe.record_fk
-                         JOIN provided_service ps
-                           ON ps.event_fk = pe.id_pk
-                         JOIN medical_organization mo
-                           ON ps.organization_fk = mo.id_pk
-                         JOIN medical_service ms
-                           ON ms.id_pk = ps.code_fk
-                         JOIN patient pt
-                           ON pt.id_pk = mrr.patient_fk
-                         JOIN medical_organization dep
-                           ON ps.department_fk = dep.id_pk
-                         LEFT JOIN medical_division msd
-                           ON msd.id_pk = pe.division_fk
-                     WHERE
-                          mr.is_active
-                          AND mr.year=%(year)s
-                          AND mr.period=%(period)s
-                          AND mo.code = %(organization)s
-                          AND (ms.group_fk != 27 OR ms.group_fk is NULL)
-                )
-                SELECT T.term, T.capitation, T.sub_term, T."group", T.subgroup, T.division, T.gender,
-
-                -- Рассчёт --
-                {inner_query}
-
-                FROM (
-                    (SELECT
-                         service_id,
-
-                         -- Вид помощи
-                         CASE WHEN event_term is NULL
-                                THEN 4
-                              WHEN event_term = 4
-                                THEN 5
-                              ELSE event_term
-                         END AS term,
-
-                         -- Подушевое
-                         service_capitation AS capitation,
-
-                         -- Подраздел
-                         CASE WHEN service_group is NULL
-                                   OR service_group = 24
-                                THEN (
-                                    CASE WHEN event_term = 3 THEN (
-                                           CASE WHEN service_reason = 1
-                                                     AND (service_group = 24 OR service_group is NULL)
-                                                     AND (
-                                                        SELECT
-                                                            COUNT(ps1.id_pk)
-                                                        FROM provided_service ps1
-                                                            JOIN medical_service ms1
-                                                               ON ms1.id_pk = ps1.code_fk
-                                                        WHERE
-                                                             ps1.event_fk = event_id
-                                                             AND (ms1.group_fk = 24 OR ms1.group_fk is NULL)
-                                                             AND ms1.reason_fk = 1
-                                                       ) = 1
-                                                  THEN 99
-                                                ELSE service_reason
-                                           END
-                                         )
-                                         WHEN event_term = 2
-                                           THEN division_term
-                                         ELSE 0
-                                    END
-                                )
-                              WHEN service_group in (25, 26)
-                                THEN 23
-                              ELSE 0
-                         END AS sub_term,
-
-                        -- Группы услуг
-                        CASE WHEN service_group is NULL
-                               THEN 0
-                             WHEN service_group = 24
-                               THEN 0
-                             ELSE service_group
-                        END as "group",
-
-                        -- Подгруппы
-                        CASE WHEN service_subgroup IS NULL
-                               THEN 0
-                             ELSE 1
-                        END AS subgroup,
-
-                        -- Отделения
-                        CASE WHEN service_group is NULL OR service_group = 24
-                               THEN (
-                                   CASE WHEN event_term = 3
-                                          THEN service_division
-                                        WHEN event_term = 4
-                                          THEN service_division
-                                        WHEN event_term = 2
-                                          THEN service_tariff_profile
-                                        WHEN event_term = 1
-                                          THEN service_tariff_profile
-                                   END
-                               )
-                             ELSE (
-                                  CASE WHEN service_subgroup is NULL
-                                         THEN service_code_id
-                                       ELSE service_subgroup
-                                  END
-                               )
-                        END AS division,
-
-                        -- Пол
-                        CASE WHEN service_subgroup in (8, 16, 9, 10, 24, 25)
-                               THEN patient_gender
-                             ELSE 0
-                        END AS gender
-                    FROM  services_mo
-                    WHERE
-                         service_group not in (7, 19)
-                         OR service_group is NULL
-                    )
-                    UNION
-                    (
-                        -- Диспансеризация взрослых
-                        SELECT
-                            service_id,
-                            -- Вид помощи
-                            4 as term,
-
-                            -- Подушевое
-                            CASE WHEN (
-                                     --SELECT
-                                     --    ps1.start_date
-                                     --FROM provided_service ps1
-                                     --    JOIN medical_service ms1
-                                     --       ON ps1.code_fk = ms1.id_pk
-                                     --WHERE ps1.event_fk = event_id
-                                     --      AND ps1.payment_type_fk = 2
-                                     --      AND ms1.code = '019002'
-                                     select end_date from provided_event where id_pk = event_id
-
-                                     ) >= '2015-06-01'
-                                   THEN 24
-                                 ELSE 23
-                            END AS capitation,
-
-                            -- Место или причина
-                            (SELECT
-                                 ms1.subgroup_fk
-                             FROM provided_service ps1
-                                 JOIN medical_service ms1
-                                    ON ps1.code_fk = ms1.id_pk
-                             WHERE ps1.event_fk = event_id
-                                   AND ps1.payment_type_fk = 2
-                                   AND ms1.code in (
-                                                '019021',
-                                                '019023',
-                                                '019022',
-                                                '019024'
-                                            )
-                            ) AS sub_term,
-
-                            -- Группы услуг
-                            23 AS "group",
-
-                            -- Подгруппы
-                            0 AS subgroup,
-
-                            -- Отделения
-
-                            case
-                            when event_end_date >= '2015-06-01'
-                            THEN
-                                case when service_code_id in (8384, 8385, 8386, 8387, 8347) THEN service_code_id
-                                ELSE 100000 end
-                            ELSE
-                                case when service_code_id in (8384, 8385, 8386, 8387, 8339) THEN service_code_id end
-                            END AS division,
-
-                            -- Пол
-                            0 AS gender
-                        FROM services_mo
-                        WHERE service_group = 7
-                    )
-                    UNION
-                    (
-                        -- Стоматология
-                        SELECT
-                            service_id,
-                            -- Вид помощи
-                            7 as term,
-
-                            -- Подушевое
-                            1 AS capitation,
-
-                            -- Место или причина
-                            0 as sub_term,
-
-                            -- Группы услуг
-                            19 as "group",
-
-                            -- Подгруппы
-                            1 AS subgroup,
-
-                            -- Отделения
-                            CASE WHEN payment_type=3
-                                   THEN 999
-                                 ELSE
-                                    (
-                                     SELECT
-                                         MAX(ms1.subgroup_fk)
-                                     FROM provided_service ps1
-                                         JOIN medical_service ms1
-                                            ON ms1.id_pk = ps1.code_fk
-                                     WHERE ps1.event_fk = event_id
-                                           AND ps1.payment_type_fk = payment_type
-                                           AND ps1.start_date = start_date
-                                           AND ps1.end_date = end_date
-                                 )
-                            END AS division,
-
-                            -- Пол
-                            0 AS gender
-                        FROM services_mo
-                        WHERE service_group = 19
-                      )
-                    ) AS T
-                    JOIN services_mo S
-                       ON S.service_id = T.service_id
-                    {joins}
-                WHERE {where}
-                GROUP BY T.term, T.capitation, T.sub_term, T."group", T.subgroup, T.division, T.gender
-                ORDER BY T.term, T.capitation, T.sub_term, T."group", T.subgroup, T.division, T.gender
-                '''
-        return query
-
-    def __calc_sum(self, total_sum, cur_sum, pres=0):
-        if total_sum:
-            for i, value in enumerate(cur_sum):
-                if pres:
-                    total_sum[i] = total_sum[i] + value
-                else:
-                    total_sum[i] = total_sum[i] + value
-            return total_sum
+    def _print_total(self, sheet, title, total):
+        if total == self._reset_total():
+            pass
         else:
-            return list(cur_sum)
+            sheet.set_style(TOTAL_STYLE)
+            sheet.write(title, 'c')
+            self._print_item(sheet, total)
+            sheet.increment_row_index()
 
-    def __run_query(self, query, parameters):
-        cursor = connection.cursor()
-        cursor.execute(query, parameters)
-        return [row for row in cursor.fetchall()]
+    def _print_capitation(self, sheet, title, capitation_data):
+        if capitation_data:
+            sheet.set_style(TITLE_STYLE)
+            sheet.write(title, 'r', self.COUNT_CELL_IN_ACT)
+            sheet.set_style(VALUE_STYLE)
+            for index, field_name in enumerate(self.CAPITATION_PRINT_TITLES):
+                sheet.write(field_name, 'c')
+                self._print_item(sheet, capitation_data[index])

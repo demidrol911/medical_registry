@@ -332,7 +332,30 @@ class MedicalOrganization(models.Model):
             result[5]['fem'] += population.older_fiftyfive_age_female
         return result
 
+    def get_attachment_ambulance_count_since_2015_08_01(self, date):
+        populations = AttachmentStatistics.objects.filter(organization=self.code, at=date)
+        result = {
+            1: {'men': 0, 'fem': 0},
+            2: {'men': 0, 'fem': 0},
+            3: {'men': 0, 'fem': 0},
+            4: {'men': 0, 'fem': 0},
+            5: {'men': 0, 'fem': 0}
+        }
+        for population in populations:
+            result[1]['men'] += population.less_one_age_male_ambulance
+            result[1]['fem'] += population.less_one_age_female_ambulance
+            result[2]['men'] += population.one_four_age_male_ambulance
+            result[2]['fem'] += population.one_four_age_female_ambulance
+            result[3]['men'] += population.five_seventeen_age_male_ambulance
+            result[3]['fem'] += population.five_seventeen_age_female_ambulance
+            result[4]['men'] += population.eighthteen_fiftynine_age_male_ambulance
+            result[4]['fem'] += population.eighthteen_fiftyfour_age_female_ambulance
+            result[5]['men'] += population.older_sixty_age_male_ambulance
+            result[5]['fem'] += population.older_fiftyfive_age_female_ambulance
+        return result
+
     def get_ambulance_attachment_count(self, date):
+        '''
         capitation_cache = {}
         for line in file('capitation_exception_cache.csv'):
             line_data = line.split(';')
@@ -348,47 +371,48 @@ class MedicalOrganization(models.Model):
             5: {'men': 0, 'fem': 0}
         }
 
-        # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
-        # при рассчёт численности для 280017 и 280001 используется следующий запрос
-        # 280088 обслуживает 280028
+        ### Этот костыль будет до тех пор пока я не внесу старые данные по подушевому по скорой помощи
+        ### За 2015 год
+        ### До августа 2015 рассчет подушевого по скорой помощи осуществлялся по следующей схеме
+        if date < datetime.datetime(year=2015, month=7, day=1):
+            # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
+            # при рассчёт численности для 280017 и 280001 используется следующий запрос
+            # 280088 обслуживает 280028
 
-        if self.code in capitation_cache:
-            result[1]['men'] = capitation_cache[self.code][0]
-            result[1]['fem'] = capitation_cache[self.code][1]
+            if self.code in capitation_cache:
+                result[1]['men'] = capitation_cache[self.code][0]
+                result[1]['fem'] = capitation_cache[self.code][1]
 
-            result[2]['men'] = capitation_cache[self.code][2]
-            result[2]['fem'] = capitation_cache[self.code][3]
+                result[2]['men'] = capitation_cache[self.code][2]
+                result[2]['fem'] = capitation_cache[self.code][3]
 
-            result[3]['men'] = capitation_cache[self.code][4]
-            result[3]['fem'] = capitation_cache[self.code][5]
+                result[3]['men'] = capitation_cache[self.code][4]
+                result[3]['fem'] = capitation_cache[self.code][5]
 
-            result[4]['men'] = capitation_cache[self.code][6]
-            result[4]['fem'] = capitation_cache[self.code][7]
+                result[4]['men'] = capitation_cache[self.code][6]
+                result[4]['fem'] = capitation_cache[self.code][7]
 
-            result[5]['men'] = capitation_cache[self.code][8]
-            result[5]['fem'] = capitation_cache[self.code][9]
+                result[5]['men'] = capitation_cache[self.code][8]
+                result[5]['fem'] = capitation_cache[self.code][9]
 
-        # Для вех остальных больниц используются уже рассчитанные значения численности из
-        # таблицы attachment_statistics
+            # Для всех остальных больниц используются уже рассчитанные значения численности из
+            # таблицы attachment_statistics
+            else:
+                result = self.get_attachment_count(date)
+                for mo in MedicalOrganization.objects.filter(
+                        ambulance=self.pk,
+                        parent__isnull=True):
+                    mo_result = mo.get_attachment_count(date)
+                    for group in mo_result:
+                        result[group]['men'] += mo_result[group]['men']
+                        result[group]['fem'] += mo_result[group]['fem']
         else:
-            result = self.get_attachment_count(date)
-            for mo in MedicalOrganization.objects.filter(
-                    ambulance=self.pk,
-                    parent__isnull=True):
-                mo_result = mo.get_attachment_count(date)
-                for group in mo_result:
-                    result[group]['men'] += mo_result[group]['men']
-                    result[group]['fem'] += mo_result[group]['fem']
+            # Новый рассчет подушевого по скорой помощи
+            # данные берутся из attachment_statistics
+            result = self.get_attachment_ambulance_count_since_2015_08_01(date)
+        '''
+        result = self.get_attachment_ambulance_count_since_2015_08_01(date)
         return result
-
-    def get_capitation_events(self, year, period, date):
-        return ProvidedService.objects.filter(
-            event__record__register__year=year,
-            event__record__register__period=period,
-            event__record__register__is_active=True,
-            event__record__register__organization_code=self.code,
-            payment_kind=2).\
-            values_list('event__id_pk', flat=True).distinct()
 
 
 class MedicalRegisterStatus(models.Model):
@@ -1419,6 +1443,18 @@ class AttachmentStatistics(models.Model):
     eighthteen_fiftyfour_age_female = models.IntegerField()
     older_sixty_age_male = models.IntegerField()
     older_fiftyfive_age_female = models.IntegerField()
+
+    less_one_age_male_ambulance = models.IntegerField()
+    less_one_age_female_ambulance = models.IntegerField()
+    one_four_age_male_ambulance = models.IntegerField()
+    one_four_age_female_ambulance = models.IntegerField()
+    five_seventeen_age_male_ambulance = models.IntegerField()
+    five_seventeen_age_female_ambulance = models.IntegerField()
+    eighthteen_fiftynine_age_male_ambulance = models.IntegerField()
+    eighthteen_fiftyfour_age_female_ambulance = models.IntegerField()
+    older_sixty_age_male_ambulance = models.IntegerField()
+    older_fiftyfive_age_female_ambulance = models.IntegerField()
+
     at = models.DateField()
     group = models.IntegerField()
 
