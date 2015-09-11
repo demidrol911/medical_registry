@@ -15,6 +15,7 @@ def unicode_to_cp866(string):
 
 def get_department_services(year, period, department_code):
     query = """
+
         -- Выборка услуг для выгрузки Т-файлов экспертам --
         select DISTINCT ps.id_pk,
             md.code as division_code,
@@ -47,10 +48,10 @@ def get_department_services(year, period, department_code):
             COALESCE(adr.extra_number, ''), coalesce(adr.room_number)) as address,
             case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
             dep.old_code
-        from provided_service ps
+        FROM provided_service ps
             JOIN medical_service ms
                 on ms.id_pk = ps.code_fk
-            join provided_event pe
+            JOIN provided_event pe
                 on ps.event_fk = pe.id_pk
             JOIN medical_register_record mrr
                 on mrr.id_pk = pe.record_fk
@@ -108,7 +109,7 @@ def get_department_services(year, period, department_code):
 
 def main():
     year = '2015'
-    period = '06'
+    period = '07'
     path = 'd:/work/expertiza_export/%s/%s' % (year, period)
 
     departments = ProvidedService.objects.filter(

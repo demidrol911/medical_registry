@@ -85,7 +85,7 @@ def get_patients(period):
                 and medical_register.year = '2015'
                 and medical_register.period = %s
                 --and medical_register.organization_code in ('280036')
-                and medical_register.type = 2
+                --and medical_register.type = 2
             )
         """
     return Patient.objects.raw(query, [attachment_date, period])
@@ -497,7 +497,7 @@ def main():
             hm_xml.put('MONTH', register.period)
             hm_xml.put('NSCHET', index+1)
             hm_xml.put('DSCHET', register.invoice_date.strftime("%Y-%m-%d"))
-            hm_xml.put('PLAT', '28002')
+            hm_xml.put('PLAT', '28004')
             hm_xml.put('SUMMAV', round(invoiced_payment or 0, 2))
             hm_xml.put('COMENTS', safe_str(register.invoice_comment))
             hm_xml.put('SUMMAP', round(float(accepted_payment or 0), 2))
