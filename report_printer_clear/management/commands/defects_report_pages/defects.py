@@ -211,7 +211,7 @@ class DefectsPage(ReportPage):
                                    END
                         ) AS visit_exclude,
 
-                    COUNT(DISTINCT CASE WHEN T1.is_excluded
+                    COUNT(DISTINCT CASE WHEN T1.is_excluded AND (T1.error_old_code != 'ZD' or T1.error_old_code IS NULL)
                                           THEN CASE WHEN T1.service_group in (25, 26)
                                                       THEN T1.service_id
                                                     WHEN T1.service_group in (19)
@@ -260,7 +260,7 @@ class DefectsPage(ReportPage):
                                    END
                          ) AS visit_exclude,
 
-                    COUNT(DISTINCT CASE WHEN T1.is_excluded
+                    COUNT(DISTINCT CASE WHEN T1.is_excluded AND (T1.error_old_code != 'ZD' or T1.error_old_code IS NULL)
                                           THEN CASE WHEN T1.service_group in (25, 26)
                                                       THEN T1.service_id
                                                     WHEN T1.service_group in (19)
@@ -454,6 +454,7 @@ class DefectsPage(ReportPage):
                         ms.subgroup_fk AS service_subgroup,
                         mo.id_pk AS organization_id,
                         me.failure_cause_fk AS error,
+                        me.old_code AS error_old_code,
 
                         ps.quantity AS COUNT_days,
                         ps.quantity*ms.uet AS uet,
@@ -535,7 +536,7 @@ class DefectsPage(ReportPage):
                            AND (ms.group_fk != 27
                                 OR ms.group_fk is null
                                 )
-                           and (me.id_pk <> 70 or me.id_pk is null)
+                           --and (me.id_pk <> 70 or me.id_pk is null)
 
                     ) AS T
         '''
