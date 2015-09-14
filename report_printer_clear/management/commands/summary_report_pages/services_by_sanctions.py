@@ -133,20 +133,18 @@ class SanctionsPage(ReportPage):
                    AND (ms.group_fk != 27
                         OR ms.group_fk is null
                        )
+                   AND dep.old_code = ANY(%(department)s)
+                ORDER BY failure_cause_number ASC, error_id ASC,
+                patient_fullname, event_id, service_code
                 '''
 
         self.data = MedicalOrganization.objects.raw(
-            query + (("AND dep.old_code = '%s'" % str(parameters.department))
-                     if parameters.department
-                     else '')
-            + '''
-              ORDER BY failure_cause_number ASC, error_id ASC,
-              patient_fullname, event_id, service_code
-              ''',
+            query,
             dict(
                 period=parameters.registry_period,
                 year=parameters.registry_year,
-                organization=parameters.organization_code
+                organization=parameters.organization_code,
+                department=parameters.departments
             ))
 
     def print_page(self, sheet, parameters):

@@ -1087,11 +1087,11 @@ def main():
             checks.underpay_service_term_kind_mismatch(register_element)
             checks.underpay_wrong_gender_examination(register_element)
             checks.underpay_incorrect_examination_events(register_element)
-            checks.underpay_old_examination_services(register_element)
             checks.underpay_hitech_with_small_duration(register_element)
 
         print 'iterate tariff', register_element
         calculate_tariff(register_element)
+        checks.underpay_old_examination_services(register_element)
 
         print u'stomat, outpatient, examin'
         if register_element['status'] == 500:

@@ -25,7 +25,9 @@ class Command(BaseCommand):
         for index, service in enumerate(services):
             if service['department'] not in services_group:
                 services_group[service['department']] = []
-            if service['group'] != 27:
+            if service['group'] == 27 or service['code'] in ('A06.10.006', 'A06.12.031'):
+                pass
+            else:
                 services_group[service['department']].append(index)
 
         for department in services_group:

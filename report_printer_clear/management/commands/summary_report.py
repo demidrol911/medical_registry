@@ -5,16 +5,12 @@ from report_printer_clear.management.commands.summary_report_pages.sanctions_ide
 
 from summary_report_pages.order146 import Order146Page
 from summary_report_pages.sanctions_reference import SanctionsReferencePage
-from summary_report_pages.services_by_division import (
-    AcceptedServicesPage, InvoicedServicesPage
-)
+from summary_report_pages.services_by_division import AcceptedServicesPage, InvoicedServicesPage
 from summary_report_pages.services_by_sanctions import SanctionsPage
 from summary_report_pages.sogaz_mek_detailed import SogazMekDetailedPage
 from summary_report_pages.sogaz_mek_general import SogazMekGeneralPage
 from report_printer_clear.utils.report import Report
 from report_printer_clear.utils.wizard import AutomaticReportsWizard
-
-PRINT_BY_DEPARTMENT = False
 
 
 class Command(BaseCommand):
@@ -42,8 +38,9 @@ class Command(BaseCommand):
         report_defects.add_page(DefectsPage())
 
         report_wizard_final = AutomaticReportsWizard(
-            [report_accepted, report_invoiced,
-             report_defects])
+            [report_accepted,
+             report_invoiced, report_defects]
+        )
         report_wizard_final.create_reports(8)
 
         report_wizard_preliminary = AutomaticReportsWizard([report_accepted])

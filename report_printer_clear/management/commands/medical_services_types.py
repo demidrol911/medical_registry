@@ -3,6 +3,33 @@
 from django.core.management.base import BaseCommand
 from main.funcs import howlong
 from medical_service_register.path import REESTR_EXP
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_all import ClinicAllPrimary, \
+    ClinicAllSpec, ClinicAll
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_all import \
+    ClinicCapitationAll, ClinicCapitationAllPrimary, ClinicCapitationAllSpec
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_disease import \
+    ClinicCapitationDiseaseTreatmentPrimary, ClinicCapitationDiseaseSingleVisitSpec, \
+    ClinicCapitationDiseaseSingleVisitAll
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_other_purposes import \
+    ClinicCapitationOtherPurposesPrimary
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_prevention import \
+    ClinicCapitationPreventionSpec, ClinicCapitationPreventionAll
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_disease import \
+    ClinicDiseaseTreatmentSpec, ClinicDiseaseTreatmentAll, ClinicDiseaseSingleVisitSpec, ClinicDiseaseSingleVisitAll
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_emergency import ClinicEmergencySpec, \
+    ClinicEmergencyAll, EmergencyCareEmergencyDepartment
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_other_purposes import \
+    ClinicOtherPurposesPrimary
+from report_printer_clear.management.commands.medical_services_types_pages.clinic_prevention import \
+    ClinicPreventionPrimary, ClinicPreventionSpec, ClinicPreventionAll, ProphylacticExaminationAdult
+from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_all import DayHospitalAll
+from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_home import DayHospitalHome
+from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_hospital import \
+    DayHospitalHospital, InvasiveMethodsPage
+from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_hepatitis_C_virus import \
+   DayHospitalHepatitisCVirus
+from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_policlinic import \
+    DayHospitalPoliclinic
 from report_printer_clear.management.commands.medical_services_types_pages.hospital_ambulance import \
     HospitalAmbulancePage
 from report_printer_clear.management.commands.medical_services_types_pages.hospital_hmc import HospitalHmcPage
@@ -41,6 +68,14 @@ class Command(BaseCommand):
 
     @howlong
     def handle(self, *args, **options):
+        '''
+        clinic_prevention_spec надо ли включать прививки
+        clinic_prevention_primary надо ли заполнять разделы по терапии, педиатрии и т. д. или заполнить только Центр здоровья
+                           включать ли прививкки. Что включать в посещения врача и фельдшера?
+        clinic_prevention_all - сюда включается профосмотр взрослых, а куда его включать в предыдущих актах?
+        clinic_capitation_prevention_spec - сюда включать прививки?
+        clinic_capitation_prevention_all - сюда включать прививки?
+        '''
 
         reports_desc = (
             {'pattern': 'examination_adult.xls',
@@ -101,13 +136,127 @@ class Command(BaseCommand):
              'pages': (HospitalHmcPage, ),
              'title': u'круглосуточный стационар ВМП'},
 
-            {'pattern': 'policlinic_capitation_visit_other_purposes.xls',
-             'pages': (PoliclinicCapitationVisitOtherPurposesPage, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу (посещения с иными целями) перв.мед.помощь'},
+            # Дневной стационар
+            {'pattern': 'day_hospital_hospital.xls',
+             'pages': (DayHospitalHospital, InvasiveMethodsPage),
+             'title': u'дневной стационар при стационаре'},
 
-            {'pattern': 'policlinic_capitation_treatment_disease.xls',
-             'pages': (PoliclinicCapitationTreatmentDiseasePage, ),
+            {'pattern': 'day_hospital_policlinic.xls',
+             'pages': (DayHospitalPoliclinic, ),
+             'title': u'дневной стационар при поликлинике'},
+
+            {'pattern': 'day_hospital_home.xls',
+             'pages': (DayHospitalHome, ),
+             'title': u'дневной стационар на дому'},
+
+            {'pattern': 'day_hospital_hepatitis_C_virus.xls',
+             'pages': (DayHospitalHepatitisCVirus, ),
+             'title': u'дневной стационар (вирус гепатита С)'},
+
+            {'pattern': 'day_hospital_all.xls',
+             'pages': (DayHospitalAll, InvasiveMethodsPage),
+             'title': u'дневной стационар свод'},
+
+            # Поликлиника по подушевому
+            {'pattern': 'clinic_capitation_disease_treatment_primary.xls',
+             'pages': (ClinicCapitationDiseaseTreatmentPrimary, ),
              'title': u'поликлиника фин-ние по подушевому нормативу (обращения по поводу заболевания) перв.мед.помощь'},
+
+            {'pattern': 'clinic_capitation_disease_single_visit_spec.xls',
+             'pages': (ClinicCapitationDiseaseSingleVisitSpec, ),
+             'title': u'Поликлиника фин-ние по подушевому нормативу (разовые посещения в связи с '
+                      u'заболеванием) спец.мед.помощь'},
+
+            {'pattern': 'clinic_capitation_disease_single_visit_all.xls',
+             'pages': (ClinicCapitationDiseaseSingleVisitAll, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (разовые посещения в связи с '
+                      u'заболеванием) свод.xls'},
+
+            {'pattern': 'clinic_capitation_prevention_spec.xls',
+             'pages': (ClinicCapitationPreventionSpec, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу '
+                      u'(посещения с профилактической целью) спец.мед.помощь'},
+
+            {'pattern': 'clinic_capitation_prevention_all.xls',
+             'pages': (ClinicCapitationPreventionAll, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу '
+                      u'(посещения с профилактической целью) свод'},
+
+            {'pattern': 'clinic_capitation_other_purposes_primary.xls',
+             'pages': (ClinicCapitationOtherPurposesPrimary, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу '
+                      u'(посещения с иными целями) перв.мед.помощь'},
+
+            {'pattern': 'clinic_capitation_all_primary.xls',
+             'pages': (ClinicCapitationAllPrimary, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу перв.мед.помощь (свод)'},
+
+            {'pattern': 'clinic_capitation_all_spec.xls',
+             'pages': (ClinicCapitationAllSpec, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу спец.мед.помощь (свод)'},
+
+            {'pattern': 'clinic_capitation_all.xls',
+             'pages': (ClinicCapitationAll, ),
+             'title': u'Поликлиника фин-ние по подушевому нормативу свод'},
+
+            # Поликлиника за единицу объема
+            {'pattern': 'clinic_emergency_spec.xls',
+             'pages': (ClinicEmergencySpec, EmergencyCareEmergencyDepartment),
+             'title': u'поликлиника (в неотложной форме) спец.мед.помощь'},
+
+            {'pattern': 'clinic_emergency_all.xls',
+             'pages': (ClinicEmergencyAll, ),
+             'title': u'поликлиника (в неотложной форме) свод'},
+
+            {'pattern': 'clinic_disease_treatment_spec.xls',
+             'pages': (ClinicDiseaseTreatmentSpec, ),
+             'title': u'поликлиника (обращения по поводу заболевания) спец.мед.помощь'},
+
+            {'pattern': 'clinic_disease_treatment_all.xls',
+             'pages': (ClinicDiseaseTreatmentAll, ),
+             'title': u'поликлиника (обращения по поводу заболевания) свод'},
+
+            {'pattern': 'clinic_disease_single_visit_spec.xls',
+             'pages': (ClinicDiseaseSingleVisitSpec, ),
+             'title': u'поликлиника (разовые посещения в связи с заболеванием) спец.мед.помощь'},
+
+            {'pattern': 'clinic_disease_single_visit_all.xls',
+             'pages': (ClinicDiseaseSingleVisitAll, ),
+             'title': u'поликлиника (разовые посещения в связи с заболеванием) свод'},
+
+            {'pattern': 'clinic_other_purposes_primary.xls',
+             'pages': (ClinicOtherPurposesPrimary, ),
+             'title': u'поликлиника (с иными целями) перв.мед.помощь'},
+
+            {'pattern': 'clinic_prevention_primary.xls',
+             'pages': (ClinicPreventionPrimary, ),
+             'title': u'поликлиника (с профилактической целью) перв.мед.помощь'},
+
+            {'pattern': 'clinic_prevention_spec.xls',
+             'pages': (ClinicPreventionSpec, ),
+             'title': u'поликлиника (с профилактической целью) спец.мед.помощь'},
+
+            {'pattern': 'clinic_prevention_all.xls',
+             'pages': (ClinicPreventionAll, ProphylacticExaminationAdult),
+             'title': u'поликлиника (с профилактической целью) свод'},
+
+            {'pattern': 'clinic_all_primary.xls',
+             'pages': (ClinicAllPrimary, ),
+             'title': u'поликлиника перв.мед.помощь (свод)'},
+
+            {'pattern': 'clinic_all_spec.xls',
+             'pages': (ClinicAllSpec, ),
+             'title': u'поликлиника спец.мед.помощь (свод)'},
+
+            {'pattern': 'clinic_all.xls',
+             'pages': (ClinicAll, ),
+             'title': u'поликлиника свод'},
+        )
+
+        reports_desc = (
+            {'pattern': 'clinic_capitation_all_primary.xls',
+             'pages': (ClinicCapitationAllPrimary, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу перв.мед.помощь (свод)'},
         )
 
         parameters = ReportParameters()
