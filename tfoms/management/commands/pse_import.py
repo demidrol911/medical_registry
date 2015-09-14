@@ -25,7 +25,7 @@ service_query = """
         select ps.id_pk,
         case when p.insurance_policy_series is null or replace(p.insurance_policy_series, ' ', '') = '' then '99'
         else p.insurance_policy_series end || coalesce(p.insurance_policy_number, '') ||
-        coalesce(ms.code, '') || coalesce(idc.idc_code, '') ||
+        coalesce(ms.code, '') || coalesce(idc.idc_code, idc2.idc_code, '') ||
         coalesce(ps.worker_code, '') || coalesce(ps.end_date, '1900-01-01') ||
         coalesce(pe.anamnesis_number, '') as scache
     from provided_service ps
@@ -43,6 +43,8 @@ service_query = """
             on idc.id_pk = ps.basic_disease_fk
         JOIN medical_organization department
             on department.id_pk = ps.department_fk
+        LEFT JOIN idc idc2
+            on idc2.id_pk = pe.basic_disease_fk
     where mr.is_active
         and mr.year = %s
         and mr.period = %s
@@ -71,7 +73,7 @@ def main():
     ERRORS_CODES = get_errors_dict()
 
     pse_dir = 'c:/work/pse'
-    year, period = '2015', '04'
+    year, period = '2015', '08'
     files = os.listdir(pse_dir)
     departments = set([filename[1:-4] for filename in files if '.dbf' in filename])
     registers = []

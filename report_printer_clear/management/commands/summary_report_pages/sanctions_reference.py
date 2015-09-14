@@ -183,6 +183,8 @@ class SanctionsReferencePage(ReportPage):
                               ON ps.event_fk = pe.id_pk
                            JOIN medical_organization mo
                               ON ps.organization_fk = mo.id_pk
+                           JOIN medical_organization dep
+                              ON dep.id_pk = ps.department_fk
                            JOIN medical_service ms
                               ON ms.id_pk = ps.code_fk
                            JOIN provided_service_sanction pss
@@ -209,6 +211,7 @@ class SanctionsReferencePage(ReportPage):
                           AND mr.period = %(period)s
                           AND mr.year = %(year)s
                           AND mr.organization_code = %(organization)s
+                          AND dep.old_code = ANY(%(department)s)
                           AND pss.is_active
                           AND pss.type_fk = 1
                           AND ps.payment_type_fk = 3
@@ -218,23 +221,17 @@ class SanctionsReferencePage(ReportPage):
                          ) AS T
                    JOIN medical_organization mo
                       ON mo.id_pk = T.organization_id
-                   JOIN medical_organization dep
-                      ON dep.id_pk = T.service_department
-
+                   GROUP BY mo.id_pk, T.failure_cause_id, T.failure_cause_number
+                   ORDER BY T.failure_cause_number ASC
                 '''
 
         self.data = MedicalOrganization.objects.raw(
-            query + ((" WHERE dep.old_code = '%s'" % parameters.department)
-                     if parameters.department
-                     else '')
-            + '''
-              GROUP BY mo.id_pk, T.failure_cause_id, T.failure_cause_number
-              ORDER BY T.failure_cause_number ASC
-              ''',
+            query,
             dict(
                 period=parameters.registry_period,
                 year=parameters.registry_year,
-                organization=parameters.organization_code
+                organization=parameters.organization_code,
+                department=parameters.departments
             ))
 
     def print_page(self, sheet, parameters):

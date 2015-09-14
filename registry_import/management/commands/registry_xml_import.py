@@ -52,10 +52,10 @@ DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
                                   '098770', '98710', '98711', '98712', '98715',
                                   '98770', '098770', '098770', '198770'
 )
-HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', )
-DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', )
+HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280069', '280076', '280091', )
+DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', '280069', '280076', '280091', )
 
-filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s28002_(\d{2})(\d{2})\d+.xml'
+filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s(28002|28004)_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
 
 gender_list = Gender.objects.all().values_list('code', flat=True)
@@ -86,7 +86,8 @@ def get_registry_files_dict(files):
     for _file in files:
         matching = registry_regexp.match(_file)
         if matching:
-            file_type, organization, year, period = matching.groups()
+
+            file_type, organization, smo, year, period = matching.groups()
 
             registries[organization].append(_file)
         else:
@@ -501,7 +502,7 @@ def main():
                 continue
 
             services_errors = []
-            _type, organization_code, year, period = get_registry_info(registry)
+            _type, organization_code, smo, year, period = get_registry_info(registry)
 
             print organization, current_year, current_period, _type
 
@@ -901,8 +902,17 @@ def main():
                                     event_uid=new_event['IDCASE'],
                                     service_uid='',
                                     comment=(u'Дата окончания случая диспансеризации '
-                                             u'не свопадает с датой окончания'
+                                             u'не свопадает с датой окончания '
                                              u'услуги приёма терапевта')))
+
+                            if new_event.get('USL_OK', '') in ('1', '2') and new_service.get('CODE_USL', '') in ('056066', '56066', '156066', '56066'):
+                                services_errors.append(set_error(
+                                    '904', field='DATE_2', parent='SLUCH',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid=new_service['IDSERV'],
+                                    comment=(u'Услуга не может оказываться в '
+                                             u'текущих условиях')))
 
 
             """
@@ -937,7 +947,7 @@ def main():
                     hflk.put('COMMENT', rec['comment'].encode('cp1251'))
                     hflk.end('PR')
 
-                hflk.end('FLK_P')
+                hflk.plain_put('</FLK_P>')
                 hflk.close()
 
         if patients_errors:
@@ -961,7 +971,7 @@ def main():
                 lflk.put('COMMENT', rec['comment'].encode('cp1251'))
                 lflk.end('PR')
 
-            lflk.end('FLK_P')
+            lflk.plain_put('</FLK_P>')
             lflk.close()
 
         over_volume = volume and (len(hospital_volume_service) > volume.hospital
@@ -974,7 +984,7 @@ def main():
 
             message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.format(organization)
             message_file = open(message_file_name, 'w')
-            message = (u'ОАО «МСК «Дальмедстрах» сообщает, что в соответствии с п.6 статьи 39 \n'
+            message = (u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
                        u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
                        u'на 2015 год, страховая компания принимает реестры счетов и счета на оплату \n'
@@ -1017,12 +1027,14 @@ def main():
                     filename=person_filename[2:],
                     status=u'Не пройден ФЛК',
                 )
+
                 zipname = TEMP_DIR + 'VM%sS28002_%s.zip' % (
                     organization_code,
                     person_filename[person_filename.index('_') + 1:-4]
                 )
 
                 print errors_files
+
                 with ZipFile(zipname, 'w') as zipfile:
                     for filename in errors_files:
                         zipfile.write(TEMP_DIR + filename, filename, 8)

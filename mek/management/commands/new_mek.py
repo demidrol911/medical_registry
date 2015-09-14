@@ -158,7 +158,8 @@ def get_services(register_element):
                 order by start_date DESC
                 limit 1
             ), 1
-        ) as vmp_nkd
+        ) as vmp_nkd,
+        provided_event.end_date as event_end_date
 
     from
         provided_service
@@ -261,7 +262,15 @@ def identify_patient(register_element):
                     JOIN insurance_policy
                         on version_id_pk = (
                             CASE
-                            when char_length(p1.insurance_policy_number) <= 8 THEN
+                            when char_length(p1.insurance_policy_number) <= 6 THEN
+                                (select max(version_id_pk) from insurance_policy where id = (
+                                    select id from insurance_policy where
+                                        series = p2.insurance_policy_series
+                                        and number = trim(leading '0' from p2.insurance_policy_number)
+                                    order by stop_date DESC NULLS FIRST
+                                    LIMIT 1
+                                ))
+                            when char_length(p1.insurance_policy_number) between 7 and 8 THEN
                                 (select max(version_id_pk) from insurance_policy where id = (
                                     select id from insurance_policy where
                                         series = p2.insurance_policy_series
@@ -827,13 +836,15 @@ def get_payments_sum(service):
     else:
         tariff = float(service.expected_tariff or 0)
 
-    if service.register_type == 3:
-        tariff = float(service.examination_tariff)
+    if service.register_type == 3 and service.event_end_date >= datetime.strptime('2015-06-01', '%Y-%m-%d').date():
+        tariff = float(service.examination_tariff or 0)
 
     term = service.service_term
     nkd = service.nkd or 1
+
     if service.service_group == 20:
-        nkd = service.vmp_nkd
+        nkd = 1
+
     ### Неонатология 11 - я группа
     if service.service_group == 20 and service.vmp_group == 11:
         nkd = 70
@@ -846,8 +857,6 @@ def get_payments_sum(service):
 
         if term == 1:
             duration_coefficient = 70
-            if service.service_group == 20:
-                duration_coefficient = 90
             # КСГ 76, 77, 78
             if service.service_code in (
                     '098964', '098965', '098966',
@@ -857,7 +866,7 @@ def get_payments_sum(service):
             if is_endovideosurgery or service.service_code in ('098913', '098940'):
                 duration_coefficient = 0
 
-            if service.service_group == 20 and service.vmp_group not in (5, 10, 11, 14, 18, 30):
+            if service.service_group == 20:
                 duration_coefficient = 0
 
             if service.service_group == 2 and is_full_paid_pso:
@@ -1078,11 +1087,11 @@ def main():
             checks.underpay_service_term_kind_mismatch(register_element)
             checks.underpay_wrong_gender_examination(register_element)
             checks.underpay_incorrect_examination_events(register_element)
-            checks.underpay_old_examination_services(register_element)
             checks.underpay_hitech_with_small_duration(register_element)
 
         print 'iterate tariff', register_element
         calculate_tariff(register_element)
+        checks.underpay_old_examination_services(register_element)
 
         print u'stomat, outpatient, examin'
         if register_element['status'] == 500:
@@ -1102,7 +1111,8 @@ def main():
             checks.underpay_multi_division_disease_events(register_element)
             checks.underpay_multi_subgrouped_stomatology_events(register_element)
             checks.underpay_outpatient_event(register_element)
-
+            checks.underpay_incorrect_preventive_examination_event(register_element)
+            checks.underpay_repeated_preventive_examination_event(register_element)
         print Sanction.objects.filter(
             service__event__record__register__is_active=True,
             service__event__record__register__year=register_element['year'],

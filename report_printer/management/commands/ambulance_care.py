@@ -75,6 +75,8 @@ def print_act_ambulance(count_services):
         act_book.set_style(VALUE_STYLE)
         for count_in_mo in count_services:
             row_index = ACT_CELL_POSITION[count_in_mo.organization_code]
+            if not count_in_mo.ambulance_kind:
+                continue
             column_index = AMBULANCE_COLUMN_POSITION[count_in_mo.ambulance_kind]
             act_book.write_cella(row_index, column_index, count_in_mo.adult_count)
             act_book.write_cella(row_index, column_index+1, count_in_mo.child_count)

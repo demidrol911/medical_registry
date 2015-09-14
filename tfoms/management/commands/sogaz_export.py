@@ -40,7 +40,7 @@ def get_records(register_element):
     query = """
         select DISTINCT
             provided_service.id_pk,
-            medical_register_record.id as record_uid,
+            medical_register_record.id_pk as record_uid,
             patient.id as patient_uid,
             patient.last_name as patient_first_name,
             patient.first_name as patient_last_name,
@@ -72,7 +72,7 @@ def get_records(register_element):
             patient.weight as weight,
             person.version_id_pk as person_uid,
             person_id_type.code as patient_id_type,
-            provided_event.id as event_uid,
+            provided_event.id_pk as event_uid,
             provided_event.term_fk as event_term_code,
             medical_service_kind.code as event_kind_code,
             provided_event.form_fk as event_form_code,
@@ -192,7 +192,7 @@ def get_records(register_element):
             provided_event.examination_result_fk as examination_result_code,
             provided_event.comment as event_comment,
             provided_service.id_pk as service_pk,
-            provided_service.id as service_uid,
+            provided_service.id_pk as service_uid,
             medical_register.organization_code as service_organization_code,
             service_department.old_code as service_department_code,
             service_division.code as service_division_code,
@@ -262,7 +262,7 @@ def get_records(register_element):
                 on referred.id_pk = provided_event.refer_organization_fk
             left join idc idc_initial
                 on idc_initial.id_pk = provided_event.initial_disease_fk
-            join idc idc_basic
+            LEFT join idc idc_basic
                 on idc_basic.id_pk = provided_event.basic_disease_fk
             left join provided_event_concomitant_disease pecd
                 on pecd.event_fk = provided_event.id_pk
@@ -278,7 +278,7 @@ def get_records(register_element):
                 on examination_result.id_pk = provided_event.examination_result_fk
             left JOIN medical_division service_division
                 on service_division.id_pk = provided_service.division_fk
-            JOIN medical_organization service_department
+            LEFT JOIN medical_organization service_department
                 ON service_department.id_pk = provided_service.department_fk
             LEFT join idc service_idc_basic
                 on service_idc_basic.id_pk = provided_service.basic_disease_fk
@@ -286,9 +286,9 @@ def get_records(register_element):
                 on service_profile.id_pk = provided_service.profile_fk
             LEFT JOin medical_worker_speciality service_worker_speciality
                 on service_worker_speciality.id_pk = provided_service.worker_speciality_fk
-            JOIN medical_service
+            LEFT JOIN medical_service
                 on provided_service.code_fk = medical_service.id_pk
-            JOIN payment_type
+            LEFT JOIN payment_type
                 on provided_service.payment_type_fk = payment_type.id_pk
             left join medical_service_kind
                 on medical_service_kind.id_pk = provided_event.kind_fk
@@ -310,8 +310,8 @@ def get_records(register_element):
 
 
 def main():
-    for period in ('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'):
-        year = '2013'
+    for period in ('01', '02', '03', '04', '05' ):
+        year = '2015'
         print datetime.datetime.now()
         registers = MedicalRegister.objects.filter(
             is_active=True, period=period, year=year
@@ -339,6 +339,7 @@ def main():
 
         print registers
         for index, register_element in enumerate(registers):
+            print u'Новый реестр'
             records = list(get_records(register_element))
             payments_types = [rec.service_payment_type_code for rec in records]
 
@@ -440,9 +441,13 @@ def main():
                 period=register_element[1], organization_code=register_element[2])))[0]
 
             if new_register:
-                #hm_xml.put('COMENTSL', safe_str(comment))
-                hm_xml.end('EXP_CASE')
-                #hm_xml.end('ZAP')
+                new_register = False
+                print u'Проверка на новый реестр'
+                if hm_xml.ended_tags < hm_xml.started_tags:
+                    hm_xml.end('EXP_PROVIDED_SERVICES')
+                    hm_xml.end('EXP_CASE')
+
+            new_register = True
             comment = ''
             invoiced_payment = round(float(register.invoiced_payment_sum or 0))
             accepted_payment = round(float(register.accepted_payment_sum or 0))
@@ -453,25 +458,23 @@ def main():
             if sanctions_mek < 0:
                 sanctions_mek = 0
 
-            new_register = True
             current_record = None
             current_event = None
             event_counter = 0
 
-            #if register.type > 2:
-            #    hm_xml.put('DISP', EXAMINIATIONS[register.type-2].encode('cp1251'))
-
             print register.organization_code, len(records)
-
+            super_index = 0
             for i, record in enumerate(records):
                 event_is_children_profile = '1' if record.event_is_children else '0'
                 if record.event_payment_type_code in ('2', 2):
                     continue
 
                 if record.record_uid != current_record:
-                    if i != 0:
+                    if super_index != 0:
                         #hm_xml.put('COMENTSL', safe_str(comment))
-                        hm_xml.end('EXP_CASE')
+                        if hm_xml.ended_tags < hm_xml.started_tags:
+                            hm_xml.end('EXP_PROVIDED_SERVICES')
+                            hm_xml.end('EXP_CASE')
                         #hm_xml.end('ZAP')
                         event_counter = 0
                     current_record = record.record_uid
@@ -479,7 +482,9 @@ def main():
                 if record.event_uid != current_event:
                     current_event = record.event_uid
                     if event_counter != 0:
-                        hm_xml.end('EXP_CASE')
+                        if hm_xml.ended_tags < hm_xml.started_tags:
+                            hm_xml.end('EXP_PROVIDED_SERVICES')
+                            hm_xml.end('EXP_CASE')
 
                     hm_xml.start('EXP_CASE')
                     patient_id = record.patient_uid
@@ -509,7 +514,7 @@ def main():
                         enp_number = ''
 
                     hm_xml.put('PERSON_ID', record.patient_guid)
-                    hm_xml.put('PERSON_GUID', safe_str(record.patient_uid))
+                    hm_xml.put('PERSON_GUID', safe_str(record.patient_uid).strip(' '))
                     last_name = safe_str(record.patient_last_name)
                     hm_xml.put('SURNAME', last_name)
                     first_name = safe_str(record.patient_first_name)
@@ -567,6 +572,7 @@ def main():
                     else:
                         is_examination = '0'
                     hm_xml.put('IS_DISPANSERISATION', is_examination)
+                    hm_xml.start('EXP_PROVIDED_SERVICES')
 
                     event_counter += 1
 
@@ -595,11 +601,14 @@ def main():
 
                 comment = record.event_comment
                 previous_record_uid = record.event_uid
+                super_index += 1
 
+        hm_xml.end('EXP_PROVIDED_SERVICES')
         hm_xml.end('EXP_CASE')
-        hm_xml.end('EXP_CASES')
+        hm_xml.plain_put('</exp_cases>')
 
         print datetime.datetime.now()
+        print hm_xml.started_tags, hm_xml.ended_tags
 
 
 class Command(BaseCommand):

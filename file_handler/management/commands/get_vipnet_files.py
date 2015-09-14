@@ -26,8 +26,8 @@ ARCHIVE_AND_FILE_NAME_MISMATCH = (u'Имя архива не соответст�
                                   u'файлу.')
 LOGGING_FILE = os.path.join(LOGGING_DIR, 'get_files_log.txt')
 
-ZIP_PATTERN = r'^(hm|hl_m)(280\d{3})s28002_\d+.zip$'
-REGISTER_FILES_PATTERN = r'^(h|l|t|dp|do|dv|dd|dr|ds|du|dv|df)m(280\d{3})s28002_\d+.xml$'
+ZIP_PATTERN = r'^(hm|hl_m)(280\d{3})s(28002|28004)_\d+.zip$'
+REGISTER_FILES_PATTERN = r'^(h|l|t|dp|do|dv|dd|dr|ds|du|dv|df)m(280\d{3})s(28002|28004)_\d+.xml$'
 
 
 def get_completed_mo():

@@ -343,7 +343,6 @@ class SogazMekDetailedPage(ReportPage):
                                THEN T.provided_tariff
                              ELSE 0
                         END) AS sanc_sum_tariff_all
-
                 FROM (
                     SELECT
                          pe.id_pk AS event_id,

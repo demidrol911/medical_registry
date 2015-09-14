@@ -5,7 +5,7 @@ from tfoms import func
 from shutil import copy2
 from helpers.correct import date_correct
 from dbfpy import dbf
-
+import os
 
 ### Экспорт реестра в PSE файла
 # (P - файл пациентов, S - файл услуг, E - файл ошибок)
@@ -14,7 +14,7 @@ class Command(BaseCommand):
         mo = args[0]
         status = args[1]
         print u'Выгрузка в PSE файлы...'
-        target_dir = REESTR_PSE
+        target_dir = REESTR_PSE #os.path.join(REESTR_PSE, '280001')
         templates_path = '%s/templates/dbf_pattern' % BASE_DIR
         services = func.get_services(mo, is_include_operation=True)
         patients = func.get_patients(mo)
@@ -25,7 +25,9 @@ class Command(BaseCommand):
         for index, service in enumerate(services):
             if service['department'] not in services_group:
                 services_group[service['department']] = []
-            if service['group'] != 27:
+            if service['group'] == 27 or service['code'] in ('A06.10.006', 'A06.12.031'):
+                pass
+            else:
                 services_group[service['department']].append(index)
 
         for department in services_group:

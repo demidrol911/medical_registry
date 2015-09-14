@@ -7,18 +7,19 @@ from report_printer.const import MONTH_NAME
 
 class Report():
 
+    _by_department = False
+
     def __init__(self, template='', suffix=''):
         self.template = template
         self.suffix = suffix
-        self.by_department = False
         self.pages = []
         self.filename = ''
 
-    def set_by_department(self, flag):
-        self.by_department = flag
+    def set_by_department(self):
+        self._by_department = True
 
     def is_by_department(self):
-        return self.by_department
+        return self._by_department
 
     def add_page(self, page):
         self.pages.append(page)

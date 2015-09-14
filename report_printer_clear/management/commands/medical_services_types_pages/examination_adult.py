@@ -36,7 +36,7 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                     COUNT(DISTINCT CASE WHEN patient_gender = 2
                                           THEN service_id
                                    END) AS count_services_female,
-
+                    /*
                     SUM(service_tariff) AS total_tariff,
                     SUM(CASE WHEN patient_gender = 1
                                THEN service_tariff
@@ -66,6 +66,82 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                         END) AS total_accepted_male,
                     SUM(CASE WHEN patient_gender = 2
                                THEN service_accepted
+                             ELSE 0
+                        END) AS total_accepted_female
+                    */
+                    SUM(
+                        case when ms_final.code in ('019021', '019022', '019023', '019024')
+                            THEN (
+                                select sum(tariff) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
+                            )
+                            ELSE 0
+                        END
+                    ) AS total_tariff,
+                    SUM(CASE WHEN patient_gender = 1
+                               THEN
+                                case when ms_final.code in ('019021', '019022', '019023', '019024')
+                                    THEN (
+                                        select sum(tariff) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
+                                    )
+                                    ELSE 0
+                                END
+
+
+                             ELSE 0
+                        END) AS total_tariff_male,
+                    SUM(CASE WHEN patient_gender = 2
+                               THEN
+                                case when ms_final.code in ('019021', '019022', '019023', '019024')
+                                    THEN (
+                                        select sum(tariff) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
+                                    )
+                                    ELSE 0
+                                END
+
+                             ELSE 0
+                        END) AS total_tariff_female,
+
+                    SUM(CASE WHEN psc.id_pk is NOT NULL
+                               THEN ROUND(service_tariff*0.07, 2)
+                             ELSE 0 END) AS coeff1_07,
+                    SUM(CASE WHEN psc.id_pk is NOT NULL AND patient_gender = 1
+                               THEN ROUND(service_tariff*0.07, 2)
+                             ELSE 0
+                        END) AS coeff1_07_male,
+                    SUM(CASE WHEN psc.id_pk is NOT NULL AND patient_gender = 2
+                               THEN ROUND(service_tariff*0.07, 2)
+                             ELSE 0
+                        END) AS coeff1_07_female,
+
+                    SUM(
+
+                        case when ms_final.code in ('019021', '019022', '019023', '019024')
+                            THEN (
+                                select sum(accepted_payment) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
+                            )
+                            ELSE 0
+                        END
+
+                    ) AS total_accepted,
+                    SUM(CASE WHEN patient_gender = 1
+                               THEN
+                                case when ms_final.code in ('019021', '019022', '019023', '019024')
+                                    THEN (
+                                        select sum(accepted_payment) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
+                                    )
+                                    ELSE 0
+                                END
+
+                             ELSE 0
+                        END) AS total_accepted_male,
+                    SUM(CASE WHEN patient_gender = 2
+                               THEN
+                                case when ms_final.code in ('019021', '019022', '019023', '019024')
+                                    THEN (
+                                        select sum(accepted_payment) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
+                                    )
+                                    ELSE 0
+                                END
                              ELSE 0
                         END) AS total_accepted_female
 

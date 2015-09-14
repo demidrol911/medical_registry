@@ -82,10 +82,10 @@ def underpay_repeated_service(register_element):
             ps.event_fk as event_id,
 
             row_number() over (PARTITION BY i.id, ps.code_fk, ps.end_date, ps.start_date,
-            ps.basic_disease_fk, ps.worker_code order by format('%%s-%%s-01', mr.year, mr.period)::DATE) as rnum_repeated,
+            ps.basic_disease_fk, ps.worker_code, p.newborn_code order by format('%%s-%%s-01', mr.year, mr.period)::DATE) as rnum_repeated,
 
             row_number() over (PARTITION BY i.id, ps.code_fk, ps.end_date, ps.start_date,
-            ps.basic_disease_fk, ps.worker_code, mr.year, mr.period order by ps.id_pk) as rnum_duplicate,
+            ps.basic_disease_fk, ps.worker_code, p.newborn_code, mr.year, mr.period order by ps.id_pk) as rnum_duplicate,
 
             format('%%s-%%s-01', mr.year, mr.period)::DATE as checking_period
         from provided_service ps
@@ -323,6 +323,7 @@ def underpay_ill_formed_adult_examination(register_element):
                     and mr1.organization_code = %s
                     --and medical_service.group_fk in (7, 9)
                     --and pss.id_pk is NULL
+                    and pe1.end_date < '2015-06-01'
             ) as T
             join provided_service ps
                 on ps.event_fk = T.id_pk
@@ -334,6 +335,7 @@ def underpay_ill_formed_adult_examination(register_element):
             and (primary_count != 1 or specialist_count = 0 or finals_count != 1)
             and pss.id_pk is null
             and (ps.payment_type_fk != 3 or ps.payment_type_fk is null)
+
     """
 
     services = ProvidedService.objects.raw(
@@ -435,8 +437,6 @@ def underpay_cross_dates_services(register_element):
                 on mrr.register_fk = mr.id_pk
             join medical_service ms
                 on ms.id_pk = ps.code_fk
-            LEFT JOIN provided_service_sanction pss
-                on pss.service_fk = ps.id_pk and pss.error_fk = 73
             JOIN (
                 select medical_register_record.patient_fk, ps1.start_date, ps1.end_date, ps1.id_pk
                 from provided_service ps1
@@ -457,7 +457,6 @@ def underpay_cross_dates_services(register_element):
                     and (ms.group_fk not in (27, 5, 3)
                          or ms.group_fk is null
                          )
-                    and ms.code not like 'A%%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
                 or (ps.end_date > T.start_date and ps.end_date < T.end_date)
@@ -467,9 +466,9 @@ def underpay_cross_dates_services(register_element):
             and mr.year = %(year)s
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
-            and pss.id_pk is null
             and pe.term_fk = 3
-            and ms.code not like 'A%%'
+            and (ms.group_fk != 27 or ms.group_fk IS NULL)
+            and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 73) = 0
         order by ps.id_pk
     """
 
@@ -484,8 +483,6 @@ def underpay_cross_dates_services(register_element):
                 on mrr.register_fk = mr.id_pk
             join medical_service ms
                 on ms.id_pk = ps.code_fk
-            LEFT JOIN provided_service_sanction pss
-                on pss.service_fk = ps.id_pk and pss.error_fk = 73
             JOIN (
                 select medical_register_record.patient_fk, ps1.start_date, ps1.end_date, ps1.id_pk
                 from provided_service ps1
@@ -505,7 +502,6 @@ def underpay_cross_dates_services(register_element):
                     and (ms.group_fk not in (27, 5, 3)
                          or ms.group_fk is null
                          )
-                    and ms.code not like 'A%%'
             ) as T on T.patient_fk = mrr.patient_fk and (
                 (ps.start_date > T.start_date and ps.start_date < T.end_date)
                 or (ps.end_date > T.start_date and ps.end_date < T.end_date)
@@ -516,8 +512,8 @@ def underpay_cross_dates_services(register_element):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and pe.term_fk in (1, 2)
-            and pss.id_pk is null
-            and ms.code not like 'A%%'
+            and (ms.group_fk != 27 or ms.group_fk IS NULL)
+            and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 73) = 0
         order by ps.id_pk
     """
 
@@ -595,8 +591,11 @@ def underpay_wrong_date_service(register_element):
                 or (ps.end_date < (format('%%s-%%s-01', mr.year, mr.period)::DATE - interval '3 month') and mrr.is_corrected and not ms.examination_special)
                 or (ps.end_date >= format('%%s-%%s-01', mr.year, mr.period)::DATE + interval '1 month')
                 ) or (
-                    ms.examination_special = True
+                    ms.examination_special = True and ms.code <> '019014'
                         and age(format('%%s-%%s-01', mr.year, mr.period)::DATE - interval '1 month', ps.end_date) > '1 year'
+                ) or (
+                    ms.code in ('019014')
+                    and age(format('%%s-%%s-01', mr.year, mr.period)::DATE - interval '1 month', ps.end_date) > '2 year'
                 )
             )
     """
@@ -629,12 +628,12 @@ def underpay_wrong_age_service(register_element):
             and mr.year = %s
             and mr.period = %s
             and mr.organization_code = %s
-            and NOT (ms.group_fk in (20, 7, 9, 10, 11, 12, 13, 14, 15, 16)
-                or ms.code between '001441' and '001460' or
-                 ms.code in ('098703', '098770', '098940', '098913', '098914', '019018'))
+            and (ms.group_fk NOT in (20, 7, 9, 10, 11, 12, 13, 14, 15, 16) or ms.group_fk is NULL) AND
+                  NOT(ms.code between '001441' and '001460' or
+                         ms.code in ('098703', '098770', '098940', '098913', '098914', '019018'))
             and (
-                (age(ps.end_date, p.birthdate) < '18 year' and substr(ms.code, 1, 1) = '0')
-                or (age(ps.end_date, p.birthdate) >= '18 year' and substr(ms.code, 1, 1) = '1'))
+                (age(CASE WHEN mr.organization_code = '280043' THEN ps.start_date ELSE ps.end_date END, p.birthdate) < '18 year' and substr(ms.code, 1, 1) = '0')
+                or (age(CASE WHEN mr.organization_code = '280043' THEN ps.start_date ELSE ps.end_date END, p.birthdate) >= '18 year' and substr(ms.code, 1, 1) = '1'))
             and pss.id_pk is null
     """
 
@@ -700,8 +699,9 @@ def underpay_not_paid_in_oms(register_element):
         event__record__register__is_active=True,
         event__record__register__year=register_element['year'],
         event__record__register__period=register_element['period'],
-        event__record__register__organization_code=register_element['organization_code']
-    ).extra(where=['(select count(id_pk) from provided_service_sanction where service_fk = provided_service.id_pk and error_fk = 58) = 0'])
+        event__record__register__organization_code=register_element['organization_code'],
+    ).filter(~Q(event__record__register__organization_code='280043'))\
+     .extra(where=['(select count(id_pk) from provided_service_sanction where service_fk = provided_service.id_pk and error_fk = 58) = 0'])
 
     services2 = ProvidedService.objects.filter(
         code__is_paid=False,
@@ -764,6 +764,57 @@ def underpay_examination_event(register_element):
                     and provided_service_sanction.error_fk = T.error_id
         WHERE provided_service_sanction.id_pk is null
     """
+
+    query = '''
+            SELECT provided_service.id_pk, 1, accepted_payment, T.error_id
+            FROM provided_service
+            JOIN (
+                SELECT pe1.id_pk AS event_id,
+                pss.error_fk AS error_id,
+                COUNT(DISTINCT CASE WHEN ps1.payment_type_fk = 3
+                                         AND (ms.examination_primary OR ms.examination_final)
+                                      THEN ps1.id_pk
+                               END) AS excluded_services,
+                COUNT(DISTINCT CASE WHEN ps1.payment_type_fk = 2
+                                      THEN ps1.id_pk
+                               END) AS accepted_services
+                FROM provided_service ps1
+                    JOIN medical_service ms
+                       ON ms.id_pk = ps1.code_fk
+                    JOIN provided_event pe1
+                       ON ps1.event_fk = pe1.id_pk
+                    JOIN medical_register_record
+                       ON pe1.record_fk = medical_register_record.id_pk
+                    JOIN medical_register mr1
+                       ON medical_register_record.register_fk = mr1.id_pk
+                    LEFT JOIN provided_service_sanction pss
+                        ON pss.id_pk = (
+                              SELECT in_pss.id_pk
+                              FROM provided_service in_ps
+                                  JOIN provided_service_sanction in_pss
+                                     ON in_ps.id_pk = in_pss.service_fk
+                                  JOIN medical_error in_me
+                                     ON in_me.id_pk = in_pss.error_fk
+                              WHERE in_ps.event_fk = ps1.event_fk
+                                    AND in_pss.is_active
+                              ORDER BY in_me.weight DESC
+                              LIMIT 1
+                        )
+                WHERE mr1.is_active
+                   AND mr1.year = %s
+                   AND mr1.period = %s
+                   AND mr1.organization_code = %s
+                   AND ms.group_fk IN (7, 9, 11, 12, 13, 15, 16)
+                GROUP BY event_id, error_id
+              ) AS T
+               ON T.event_id = provided_service.event_fk
+            LEFT JOIN provided_service_sanction
+               ON provided_service_sanction.service_fk = provided_service.id_pk
+                  AND provided_service_sanction.error_fk = T.error_id
+            WHERE provided_service_sanction.id_pk IS NULL
+                  AND T.excluded_services > 0
+                  AND T.accepted_services > 0
+    '''
 
     services = ProvidedService.objects.raw(
         query, [register_element['year'], register_element['period'],
@@ -1003,9 +1054,8 @@ def underpay_invalid_outpatient_event(register_element):
                     and medical_register.organization_code = %s
                     and provided_event.term_fk = 3
                     --and department.level <> 3
-                    and ms.reason_fk in (1, 2, 5) and (ms.group_fk != 19
+                    and ms.reason_fk in (1, 2, 5) and (ms.group_fk not in (19, 27)
                         or ms.group_fk is NUll)
-                    and ms.code not like 'A%%'
                 group by provided_event.id_pk
             ) as T
             JOIN provided_service ps
@@ -1560,11 +1610,9 @@ def underpay_wrong_gender_examination(register_element):
                  and mr.year = %(year)s
                  and mr.period = %(period)s
                  and mr.organization_code = %(organization)s
-                 and ((ms.group_fk IN (9, 7) AND ms.examination_final)
-                       or (ms.group_fk IN (11, 12, 13) AND ms.examination_primary)
-                     )
+                 and (ms.examination_primary or ms.examination_final)
                  and ms.is_cost
-                 and pt.gender_fk != ms.gender_fk
+                 and pt.gender_fk <> ms.gender_fk
                  and ps.payment_type_fk = 2
             """
 
@@ -1811,7 +1859,7 @@ def underpay_multi_division_disease_events(register_element):
             ) AS T
             join provided_service ps
                  ON ps.event_fk = T.event_id
-        where (select count(*) from provided_service_sanction where error_fk = 78) = 0
+        where (select count(*) from provided_service_sanction where error_fk = 78 and service_fk = ps.id_pk) = 0
     """
 
     services = ProvidedService.objects.raw(
@@ -1909,17 +1957,23 @@ def underpay_hitech_with_small_duration(register_element):
                     period=register_element['period'],
                     organization=register_element['organization_code']))
 
-    set_sanctions(services, 61)
+    set_sanctions(services, 78)
 
 @howlong
 def underpay_incorrect_examination_events(register_element):
     query = """
         select ps.id_pk from (
-        select event_id, total, required, required_interview, required_therapy, round(total/required::NUMERIC * 100, 0) as service_percentage
+        select event_id, total, required, required_interview, required_therapy, round(total/greatest(required, 1)::NUMERIC * 100, 0) as service_percentage, extra
         from (
             select pe.id_pk event_id,
                 (
-                    select count(provided_service.id_pk)
+                    select count(
+                        case
+                        when aes.service_fk = 8355 and aes.age < 36 and aes.gender_fk = 1 then NULL
+                        when aes.service_fk = 8355 and aes.age < 45 and aes.gender_fk = 2 THEN NULL
+                        ELSE 1
+                        END
+                    )
                     from provided_service
                         join examination_tariff aes
                             on aes.gender_fk = p.gender_fk
@@ -1937,7 +1991,13 @@ def underpay_incorrect_examination_events(register_element):
                     WHERE provided_service.event_fk = pe.id_pk
                 ) total,
                 (
-                    select count(1)
+                    select count(
+                        case
+                        when examination_tariff.service_fk = 8355 and examination_tariff.age < 36 and examination_tariff.gender_fk = 1 then NULL
+                        when examination_tariff.service_fk = 8355 and examination_tariff.age < 45 and examination_tariff.gender_fk = 2 THEN NULL
+                        ELSE 1
+                        END
+                    )
                     from examination_tariff
                     where gender_fk = p.gender_fk
                         and age = extract(YEAR from (select max(end_date) from provided_service where event_fk = pe.id_pk)) - EXTRACT(YEAR FROM p.birthdate)
@@ -1951,9 +2011,28 @@ def underpay_incorrect_examination_events(register_element):
                                  '2015-06-01'
                             )
                 ) required,
+                (
+                    select count(provided_service.id_pk)
+                    from provided_service
+                        LEFT join examination_tariff aes
+                            on aes.gender_fk = p.gender_fk
+                                and aes.service_fk = provided_service.code_fk
+                                and aes.age = extract(YEAR from (select max(end_date) from provided_service where event_fk = pe.id_pk)) - EXTRACT(YEAR FROM p.birthdate)
+                                and mo.regional_coefficient = aes.regional_coefficient
+                                and aes.start_date =
+                                    GREATEST(
+                                        (select max(start_date)
+                                         from examination_tariff
+                                         where start_date <= pe.end_date
+                                         and service_fk = ps.code_fk),
+                                         '2015-06-01'
+                                    )
+                    WHERE provided_service.event_fk = pe.id_pk and provided_service.code_fk <> 8339
+                        and aes.id_pk is null
+                        and provided_service.tariff > 0
+                ) extra,
                 sum(case when ms.code in ('019002') THEN 1 ELSE 0 END) as required_interview,
                 sum(case when ms.code in ('019021', '019023', '019022', '019024') THEN 1 ELSE 0 END) as required_therapy
-
             from provided_service ps
                 JOIN medical_service ms
                     on ps.code_fk = ms.id_pk
@@ -1975,12 +2054,12 @@ def underpay_incorrect_examination_events(register_element):
                 and ms.group_fk = 7
                 and ms.code <> '019001'
                 and pe.end_date >= '2015-06-01'
-            GROUP BY 1, 2, 3
+            GROUP BY 1, 2, 3, 4
         ) as T) as T2
         join provided_service ps
             on ps.event_fk = T2.event_id
-        WHERE service_percentage < 85 or required_interview <> 1 or required_therapy <> 1
-            and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 78) = 0
+        WHERE (service_percentage < 85 or required_interview <> 1 or required_therapy <> 1 or extra > 0)
+            and (select count(1) from provided_service_sanction where error_fk = 78 and service_fk = ps.id_pk) = 0
     """
 
     services = ProvidedService.objects.raw(
@@ -2013,6 +2092,7 @@ def underpay_old_examination_services(register_element):
             and ps.end_date < (select end_date from provided_service where event_fk = pe.id_pk and code_fk = 8347)
             and mr.type = 3
             and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 70) = 0
+            and pe.end_date > '2015-06-01'
     """
 
     services = ProvidedService.objects.raw(
@@ -2020,4 +2100,116 @@ def underpay_old_examination_services(register_element):
                     period=register_element['period'],
                     organization=register_element['organization_code']))
 
-    set_sanctions(services, 70)
+    for service in services:
+        service.payment_type_id = 3
+        service.accepted_payment = 0
+        service.calculated_payment = 0
+        service.save()
+
+        sanction = Sanction.objects.create(
+            type_id=1, service=service,
+            underpayment=service.invoiced_payment,
+            is_active=True,
+            error_id=70)
+
+        SanctionStatus.objects.create(
+            sanction=sanction,
+            type=SanctionStatus.SANCTION_TYPE_ADDED_BY_MEK)
+
+@howlong
+def underpay_incorrect_preventive_examination_event(register_element):
+    query = """
+        select ps.id_pk
+        from
+            (
+                select pe.id_pk event_id,
+                    count(case when ps.code_fk in (10771, 10772) then 1 else NULL END) as "first",
+                    count(case when ps.code_fk in (10773, 10774) then 1 else NULL END) as "last"
+
+                from provided_service ps
+                    join provided_event pe
+                        on pe.id_pk = ps.event_fk
+                    JOIN medical_register_record mrr
+                        on mrr.id_pk = pe.record_fk
+                    JOIN medical_register mr
+                        on mr.id_pk = mrr.register_fk
+                    JOIN patient p
+                        on p.id_pk = mrr.patient_fk
+                    JOIN medical_organization dep
+                        on dep.id_pk = ps.department_fk
+                    JOIN medical_Service ms
+                        on ms.id_pk = ps.code_fk
+                WHERE mr.is_active
+                    and mr.year = %(year)s
+                    and mr.period = %(period)s
+                    and mr.organization_code = %(organization)s
+                    and ps.payment_type_fk = 2
+                    --and mr.status_fk > 4
+                    and ms.group_fk = 9
+                group by pe.id_pk
+            ) as T
+            join provided_service ps
+                on ps.event_fk = T.event_id
+
+        where T.first <> 1 or T.last <> 1
+            and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 34) = 0
+    """
+
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 34)
+
+@howlong
+def underpay_repeated_preventive_examination_event(register_element):
+    query = """
+        select DISTINCT id_pk from (
+        select
+            DISTINCT
+            ps.event_fk as event_id,
+            row_number() over (PARTITION BY i.id, ms.code order by pe.end_date, pe.id_pk, ms.code) as rnum_repeated,
+            p.last_name, p.first_name, p.middle_name
+        from provided_service ps
+            join provided_event pe
+                on ps.event_fk = pe.id_pk
+            join medical_register_record mrr
+                on pe.record_fk = mrr.id_pk
+            join medical_register mr
+                on mrr.register_fk = mr.id_pk
+            JOIN patient p
+                on mrr.patient_fk = p.id_pk
+            join insurance_policy i
+                on i.version_id_pk = p.insurance_policy_fk
+            JOIN medical_service ms
+                on ms.id_pk = ps.code_fk
+        where mr.is_active
+            and mr.organization_code = %(organization)s
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            and ms.group_fk = 11
+            and ps.payment_type_fk = 2
+            and ps.tariff > 0
+            and ms.code in ('119084',
+                '119085',
+                '119086',
+                '119087',
+                '119088',
+                '119089',
+                '119090',
+                '119091'
+            )
+        ) as T
+            join provided_service
+                on event_fk = event_id
+        where rnum_repeated > 1
+            and (select count(1) from provided_service_sanction where service_fk = provided_service.id_pk and error_fk = 67) = 0
+    """
+
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 67)

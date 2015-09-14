@@ -61,8 +61,10 @@ class MedicalServiceTypePage(ReportPage):
                              ELSE ps.quantity
                         END AS service_quantity,
 
-                        ((pe.term_fk = 3 AND ps.payment_kind_fk = 2)
-                          OR pe.term_fk = 4) AS is_capitation,
+                        CASE WHEN (pe.term_fk = 3 AND ps.payment_kind_fk = 2) OR pe.term_fk = 4
+                               THEN True
+                             ELSE False
+                        END AS is_capitation,
 
                         ps.id_pk AS service_id,
                         pe.id_pk AS event_id,
@@ -71,7 +73,8 @@ class MedicalServiceTypePage(ReportPage):
                         mr.organization_code AS mo_code,
                         pt.id_pk AS patient_id,
                         ps.start_date AS service_start_date,
-                        ps.end_date AS service_end_date
+                        ps.end_date AS service_end_date,
+                        pe.division_fk AS event_division_id
                     FROM medical_register mr
                         JOIN medical_register_record mrr
                            ON mr.id_pk = mrr.register_fk

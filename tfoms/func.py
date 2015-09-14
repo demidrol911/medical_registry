@@ -25,7 +25,7 @@ cur_date = datetime.now()
 
 YEAR = '2015'  # str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
-PERIOD = '06'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+PERIOD = '08'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -134,12 +134,12 @@ def get_mo_info(mo_code, department_code=None):
 
 # Коды больниц прикреплённых к указанной больнице
 def get_partial_register(mo_code):
-    return ProvidedService.objects.filter(
+    return list(ProvidedService.objects.filter(
         event__record__register__year=YEAR,
         event__record__register__period=PERIOD,
         event__record__register__is_active=True,
         event__record__register__organization_code=mo_code).\
-        values_list('department__old_code', flat=True).distinct()
+        values_list('department__old_code', flat=True).distinct())
 
 
 # Коды больниц в медицинском реестре за указанный период
@@ -570,6 +570,8 @@ def calculate_capitation(term, mo_code):
         # Повышающий коэффициент для ДГКБ
         if mo_code == '280064' and term == 3:
             result[key]['tariff'] = Decimal(round(float(result[key]['tariff'])*1.95, 2))
+        if mo_code == '280085' and term == 3:
+            result[key]['tariff'] = Decimal(round(float(result[key]['tariff'])*1.185, 2))
 
     for key in result:
         result[key]['coeff'] = 0

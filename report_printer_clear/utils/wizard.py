@@ -40,19 +40,19 @@ class AutomaticReportsWizard():
             parameters.ambulance_capitation = calculate_capitation(4, organization_code)
             parameters.policlinic_capitation_total = self.__calculate_total(parameters.policlinic_capitation[1])
             parameters.ambulance_capitation_total = self.__calculate_total(parameters.ambulance_capitation[1])
-            parameters.department = None
+            parameters.departments = parameters.partial_register
 
             for report in self.reports:
                 report.print_pages(parameters)
                 self.completed_reports.append(report.get_filename())
                 print '-'*70
 
-            for department in parameters.partial_register:
+            for department in get_partial_register(organization_code):
                 print department
                 parameters.report_name = get_mo_name(organization_code, department).\
                     replace('"', '').strip()
-                parameters.partial_register = [department]
-                parameters.department = department
+                parameters.partial_register = [department, ]
+                parameters.departments = [department, ]
                 for report in self.reports:
                     if report.is_by_department():
                         report.print_pages(parameters)
