@@ -162,3 +162,6 @@ class ExcelSheet():
 
     def increment_row_index(self):
         self.position['row'] += 1
+
+    def increment_column_index(self):
+        self.position['column'] += 1
