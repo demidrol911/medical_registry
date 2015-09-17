@@ -37,8 +37,8 @@ class GeneralServicesPage(ReportPage):
         ('xray_or_neurology_coefficient_child', Decimal),
         ('cardiology_coefficient_adult', Decimal),
         ('cardiology_coefficient_child', Decimal),
-        ('pso_to_rsc_coefficient_adult', Decimal),
-        ('pso_to_rsc_coefficient_child', Decimal),
+        ('pso_to_rsc_or_pediatrics_coefficient_adult', Decimal),
+        ('pso_to_rsc_or_pediatrics_coefficient_child', Decimal),
         ('cpg_coefficient_adult', Decimal),
         ('cpg_coefficient_child', Decimal),
         ('accepted_payment_adult', Decimal),
@@ -392,6 +392,9 @@ class GeneralServicesPage(ReportPage):
                 -- КПГ кардиология
                 ROUND(CASE WHEN tc.id_pk = 17 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS cardiology_coefficient,
 
+                -- КПГ Педиатрия
+                ROUND(CASE WHEN tc.id_pk = 18 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS pediatrics_coefficient,
+
                 -- Перевод из ПСО в РСЦ
                 ROUND(CASE WHEN tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS pso_to_rsc_coefficient
 
@@ -521,8 +524,28 @@ class GeneralServicesPage(ReportPage):
             COALESCE(SUM(CASE WHEN NOT is_children_profile THEN cardiology_coefficient END), 0) AS cardiology_coefficient_adult,
             COALESCE(SUM(CASE WHEN is_children_profile THEN cardiology_coefficient END), 0) AS cardiology_coefficient_child,
 
-            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN pso_to_rsc_coefficient END), 0) AS pso_to_rsc_coefficient_adult,
-            COALESCE(SUM(CASE WHEN is_children_profile THEN pso_to_rsc_coefficient END), 0) AS pso_to_rsc_coefficient_child,
+            COALESCE(SUM(CASE
+                             WHEN NOT is_children_profile
+                               THEN (
+                                  CASE
+                                      WHEN organization_code = '280064'
+                                        THEN pediatrics_coefficient
+                                      ELSE pso_to_rsc_coefficient
+                                  END)
+                             ELSE 0
+                         END), 0)  AS pso_to_rsc_or_pediatrics_coefficient_adult,
+
+            COALESCE(SUM(CASE
+                             WHEN is_children_profile
+                               THEN (
+                                  CASE
+                                      WHEN organization_code = '280064'
+                                        THEN pediatrics_coefficient
+                                      ELSE pso_to_rsc_coefficient
+                                  END)
+                             ELSE 0
+                         END), 0) AS pso_to_rsc_or_pediatrics_coefficient_child,
+
 
             0 AS fap_coefficient_adult,
             0 AS fap_coefficient_child,
