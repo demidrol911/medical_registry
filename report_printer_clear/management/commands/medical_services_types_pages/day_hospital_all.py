@@ -100,8 +100,8 @@ class DayHospitalAll(MedicalServiceTypePage):
                       ON tc.id_pk = psc.coefficient_fk
                     JOIN medical_division md
                       ON md.id_pk = event_division_id
-                WHERE (service_term = 2 AND service_group IS NULL)
-                      OR service_group IN (28, 30)
+                WHERE (service_term = 2 AND service_group IS NULL AND is_regional_budget)
+                      OR service_group IN (28, 30, 17)
                 GROUP BY mo_code, group_field
                 '''
         return query

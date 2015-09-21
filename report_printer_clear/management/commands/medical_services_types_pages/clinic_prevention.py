@@ -165,7 +165,7 @@ class ClinicPreventionAll(MedicalServiceTypePage):
                         END) AS total_tariff_child
                 FROM registry_services
                 WHERE service_term = 3
-                      AND service_reason IN (2)
+                      AND service_reason IN (2, 3)
                       AND (service_group = 24 OR service_group IS NULL)
                       AND NOT is_capitation
                 GROUP BY mo_code, group_field

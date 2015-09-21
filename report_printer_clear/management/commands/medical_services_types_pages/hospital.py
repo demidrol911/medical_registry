@@ -174,6 +174,7 @@ class HospitalPage(MedicalServiceTypePage):
                       OR (mo_code IN ('280013', '280043')
                           AND service_group = 31)
                       )
+                      AND is_regional_budget
                 GROUP BY mo_code, group_field
                 '''
         return query
