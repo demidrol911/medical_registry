@@ -129,7 +129,9 @@ def get_mo_info(mo_code, department_code=None):
         mo = MedicalOrganization.objects.get(code=mo_code, old_code=department_code)
     else:
         mo = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
-    return {'code': mo.code, 'name': mo.name, 'is_agma_cathedra': mo.is_agma_cathedra}
+    return {'code': mo.code, 'name': mo.name, 'is_agma_cathedra': mo.is_agma_cathedra,
+            'act_number': mo.act_number, 'act_head_fullname': mo.act_head_fullname,
+            'act_head_position': mo.act_head_position}
 
 
 # Коды больниц прикреплённых к указанной больнице

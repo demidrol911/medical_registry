@@ -4,6 +4,7 @@ from tfoms import func
 from report_printer_clear.utils.page import ReportPage
 from main.models import MedicalOrganization, ProvidedService
 from report_printer_clear.management.commands.defects_report import DefectsPage
+from tfoms.func import get_mo_info
 
 
 class SogazMekDetailedPage(ReportPage):
@@ -483,10 +484,13 @@ class SogazMekDetailedPage(ReportPage):
         ) + ' order by mrr.id'
 
     def print_page(self, sheet, parameters):
-        sheet.set_style({})
+        sheet.set_style({'bold': True})
+        mo_info = get_mo_info(parameters.organization_code)
+        sheet.write_cell(1, 4, mo_info['act_number'])
         sheet.write_cell(2, 1, u'за %s' % parameters.date_string)
         sheet.write_cell(9, 0, parameters.report_name)
         sheet.write_cell(10, 1, parameters.organization_code)
+        sheet.set_style({})
         # Представлены реестры счетов (все поданные)
         sheet.write_cell(12, 2, self.data['inv_sum_tariff'])             # всего подано по тарифу
         sheet.write_cell(13, 4, self.data['inv_sum_tariff_other_mo'])    # заказано в другой мо
