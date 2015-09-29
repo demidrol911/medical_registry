@@ -315,7 +315,7 @@ class SanctionsPage(ReportPage):
         sheet.write('', 'c', 3)
         sheet.set_style({})
         sheet.write(u'подпись', 'c')
-        sheet.write(u'(Е.Л.Дьячкова)', 'r')
+        sheet.write(u'(Е.Л. Дьячкова)', 'r')
 
         sheet.write('', 'r')
         sheet.write(u'МП', 'r')
