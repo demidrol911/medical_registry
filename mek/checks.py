@@ -2213,3 +2213,40 @@ def underpay_repeated_preventive_examination_event(register_element):
                     organization=register_element['organization_code']))
 
     set_sanctions(services, 67)
+
+@howlong
+def underpay_services_at_weekends(register_element):
+    query = """
+        select
+            ps.id_pk
+        from
+            provided_service ps
+            join provided_event pe
+                on pe.id_pk = ps.event_fk
+            join medical_register_record mrr
+                on mrr.id_pk = pe.record_fk
+            join medical_register mr
+                on mrr.register_fk = mr.id_pk
+            JOIN medical_service ms
+                on ms.id_pk = ps.code_fk
+            join medical_organization mo
+                on mo.code = mr.organization_code
+                    and mo.parent_fk is null
+        WHERE mr.is_active
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            and mr.organization_code = %(organization)s
+            and (
+                (pe.term_fk = 3 and (ms.reason_fk != 5 or ms.reason_fk is null)
+                    and extract(DOW FROM ps.start_date) = 0 and (ms.group_fk <> 31 or ms.group_fk is NULL))
+                or (pe.term_fk in (1, 2) and (extract(DOW FROM ps.end_date) = 6
+                    or extract(DOW FROM ps.start_date) IN (6, 0)) and (ms.group_fk <> 31 or ms.group_fk is NULL))
+            )
+    """
+
+    services = ProvidedService.objects.raw(
+        query, dict(year=register_element['year'],
+                    period=register_element['period'],
+                    organization=register_element['organization_code']))
+
+    set_sanctions(services, 52)

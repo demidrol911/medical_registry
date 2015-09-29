@@ -5,6 +5,7 @@ from tfoms.models import (
     ProvidedEvent, ProvidedService, MedicalRegister, IDC, MedicalService,
     MedicalOrganization, Address, Patient)
 from django.db import connection
+import os
 
 from dbfpy import dbf
 
@@ -108,7 +109,11 @@ def get_department_services(year, period, department_code):
 
 def main():
     year = '2015'
+<<<<<<< Updated upstream
     period = '06'
+=======
+    period = '08'
+>>>>>>> Stashed changes
     path = 'd:/work/expertiza_export/%s/%s' % (year, period)
 
     departments = ProvidedService.objects.filter(
@@ -126,6 +131,12 @@ def main():
     print departments
     for department in departments:
         print department
+        p = 'd:/work/expertiza_export/2015/%s/t%s.dbf' % (period, department)
+        print p
+        if os.path.exists(p):
+            print 'ok'
+            continue
+
         if department in pass_departments:
             continue
         if not department:
@@ -190,6 +201,7 @@ def main():
             new.store()
         db.close()
         print connection.queries
+
 
 class Command(BaseCommand):
     help = 'export big XML'

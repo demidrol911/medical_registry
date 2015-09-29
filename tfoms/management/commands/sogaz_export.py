@@ -310,8 +310,8 @@ def get_records(register_element):
 
 
 def main():
-    for period in ('01', '02', '03', '04', '05' ):
-        year = '2015'
+    for period in ('01',):
+        year = '2013'
         print datetime.datetime.now()
         registers = MedicalRegister.objects.filter(
             is_active=True, period=period, year=year
@@ -605,7 +605,7 @@ def main():
 
         hm_xml.end('EXP_PROVIDED_SERVICES')
         hm_xml.end('EXP_CASE')
-        hm_xml.plain_put('</exp_cases>')
+        hm_xml.plain_put('</EXP_CASES>')
 
         print datetime.datetime.now()
         print hm_xml.started_tags, hm_xml.ended_tags

@@ -384,7 +384,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '07'
+    period = '08'
     year = '2015'
     print datetime.datetime.now()
 

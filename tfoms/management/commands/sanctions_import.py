@@ -17,8 +17,13 @@ S_POL, K_U, DS, TN1, SUM_USL, FFOMS, TFOMS, S_PPP, S_SNK, SNILS, SANK_TYPE,\
 DOC_NUMBER, STATUS, S_SNT, S_SNF, SANCTION_DATE,\
 ANAMNESIS_NUMBER, LPU_NUMBER = range(0, 28)
 
+<<<<<<< Updated upstream
 sanction_start_date = '2015-05-01'
 sanction_end_date = '2015-05-31'
+=======
+sanction_start_date = '2015-07-01'
+sanction_end_date = '2015-07-31'
+>>>>>>> Stashed changes
 z = csv.writer(open('d:/work/duplicates_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
 
 
