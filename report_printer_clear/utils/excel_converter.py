@@ -46,3 +46,12 @@ def convert_cell_height(original_height):
     if original_height:
         height = original_height / HEIGHT_MULTIPLIER
     return height
+
+
+def convert_bold(original_bold):
+    if original_bold == 400:
+        return False
+    elif original_bold == 700:
+        return True
+    else:
+        return False

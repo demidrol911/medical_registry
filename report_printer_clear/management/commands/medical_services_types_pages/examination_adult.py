@@ -15,11 +15,24 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                            THEN '1'
                         WHEN ms_final.code IN ('019023', '019024')
                            THEN '2'
-                    END ||
-                    CASE WHEN service_subgroup is NULL
-                           THEN '&' || service_code
+                    END  ||
+                    CASE WHEN event_end_date < '2015-06-01'
+                           THEN (
+                                CASE WHEN service_code = '019001'
+                                       THEN '&primary_reception'
+                                     ELSE ''
+                                END)
+                         WHEN event_end_date >= '2015-06-01'
+                           THEN (
+                                 CASE WHEN service_code = '019002'
+                                        THEN '&interview'
+                                      WHEN service_code not in ( '019002', '019021', '019022', '019023', '019024')
+                                        THEN '&other'
+                                      ELSE ''
+                                 END)
                          ELSE ''
                     END AS group_field,
+
 
                     COUNT(DISTINCT patient_id) AS count_patients,
                     COUNT(DISTINCT CASE WHEN patient_gender = 1
@@ -36,7 +49,7 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                     COUNT(DISTINCT CASE WHEN patient_gender = 2
                                           THEN service_id
                                    END) AS count_services_female,
-                    /*
+
                     SUM(service_tariff) AS total_tariff,
                     SUM(CASE WHEN patient_gender = 1
                                THEN service_tariff
@@ -68,83 +81,6 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                                THEN service_accepted
                              ELSE 0
                         END) AS total_accepted_female
-                    */
-                    SUM(
-                        case when ms_final.code in ('019021', '019022', '019023', '019024')
-                            THEN (
-                                select sum(tariff) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
-                            )
-                            ELSE 0
-                        END
-                    ) AS total_tariff,
-                    SUM(CASE WHEN patient_gender = 1
-                               THEN
-                                case when ms_final.code in ('019021', '019022', '019023', '019024')
-                                    THEN (
-                                        select sum(tariff) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
-                                    )
-                                    ELSE 0
-                                END
-
-
-                             ELSE 0
-                        END) AS total_tariff_male,
-                    SUM(CASE WHEN patient_gender = 2
-                               THEN
-                                case when ms_final.code in ('019021', '019022', '019023', '019024')
-                                    THEN (
-                                        select sum(tariff) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
-                                    )
-                                    ELSE 0
-                                END
-
-                             ELSE 0
-                        END) AS total_tariff_female,
-
-                    SUM(CASE WHEN psc.id_pk is NOT NULL
-                               THEN ROUND(service_tariff*0.07, 2)
-                             ELSE 0 END) AS coeff1_07,
-                    SUM(CASE WHEN psc.id_pk is NOT NULL AND patient_gender = 1
-                               THEN ROUND(service_tariff*0.07, 2)
-                             ELSE 0
-                        END) AS coeff1_07_male,
-                    SUM(CASE WHEN psc.id_pk is NOT NULL AND patient_gender = 2
-                               THEN ROUND(service_tariff*0.07, 2)
-                             ELSE 0
-                        END) AS coeff1_07_female,
-
-                    SUM(
-
-                        case when ms_final.code in ('019021', '019022', '019023', '019024')
-                            THEN (
-                                select sum(accepted_payment) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
-                            )
-                            ELSE 0
-                        END
-
-                    ) AS total_accepted,
-                    SUM(CASE WHEN patient_gender = 1
-                               THEN
-                                case when ms_final.code in ('019021', '019022', '019023', '019024')
-                                    THEN (
-                                        select sum(accepted_payment) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
-                                    )
-                                    ELSE 0
-                                END
-
-                             ELSE 0
-                        END) AS total_accepted_male,
-                    SUM(CASE WHEN patient_gender = 2
-                               THEN
-                                case when ms_final.code in ('019021', '019022', '019023', '019024')
-                                    THEN (
-                                        select sum(accepted_payment) from provided_service where event_fk = registry_services.event_id and payment_type_fk = 2
-                                    )
-                                    ELSE 0
-                                END
-                             ELSE 0
-                        END) AS total_accepted_female
-
                 FROM registry_services
                     LEFT JOIN provided_service_coefficient psc
                       ON psc.service_fk = service_id
@@ -164,14 +100,6 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                                )
                       )
                 WHERE service_group = 7
-                      AND service_code IN (
-                          '019021',
-                          '019023',
-                          '019022',
-                          '019024',
-                          '019001',
-                          '019020'
-                      )
                 GROUP BY mo_code, group_field
                 '''
         return query
@@ -203,12 +131,15 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                           'count_services',
                           'count_services_male',
                           'count_services_female')
+
         return (('1', 4, fields_final),
                 ('2', 21, fields_final),
-                ('1&019001', 52, fields_primary),
-                ('2&019001', 58, fields_primary),
-                ('1&019020', 71, fields_primary),
-                ('2&019020', 77, fields_primary))
+                ('1&primary_reception', 52, fields_primary),
+                ('2&primary_reception', 58, fields_primary),
+                ('1&interview', 73, fields_final),
+                ('2&interview', 88, fields_final),
+                ('1&other', 119, fields_final),
+                ('2&other', 134, fields_final))
 
 
 class ExamAdultSecondStagePage(MedicalServiceTypePage):
@@ -249,3 +180,98 @@ class ExamAdultSecondStagePage(MedicalServiceTypePage):
                 ('019114', 55, fields),
                 ('019115', 59, fields),
                 ('019117', 63, fields))
+
+
+class PreventiveInspectionAdult(MedicalServiceTypePage):
+
+    def __init__(self):
+        self.data = None
+        self.page_number = 0
+
+    def get_query(self):
+        query = MedicalServiceTypePage.get_general_query() + '''
+                SELECT
+                    mo_code AS mo_code,
+                    '0' AS group_field,
+
+                    COUNT(DISTINCT CASE WHEN service_code IN ('019215', '019214')
+                                          THEN service_id
+                                   END) AS count_services_primary,
+                    COUNT(DISTINCT CASE WHEN patient_gender = 1 AND service_code IN ('019215', '019214')
+                                          THEN service_id
+                                   END) AS count_services_primary_male,
+                    COUNT(DISTINCT CASE WHEN patient_gender = 2 AND service_code IN ('019215', '019214')
+                                          THEN service_id
+                                   END) AS count_services_primary_female,
+
+                    COUNT(DISTINCT CASE WHEN service_code IN ('019216', '019217')
+                                          THEN service_id
+                                   END) AS count_services_final,
+                    COUNT(DISTINCT CASE WHEN patient_gender = 1 AND service_code IN ('019216', '019217')
+                                          THEN service_id
+                                   END) AS count_services_final_male,
+                    COUNT(DISTINCT CASE WHEN patient_gender = 2 AND service_code IN ('019216', '019217')
+                                          THEN service_id
+                                   END) AS count_services_final_female,
+
+                    SUM(service_tariff) AS total_tariff,
+                    SUM(CASE WHEN patient_gender = 1
+                               THEN service_tariff
+                             ELSE 0
+                        END) AS total_tariff_male,
+                    SUM(CASE WHEN patient_gender = 2
+                               THEN service_tariff
+                             ELSE 0
+                        END) AS total_tariff_female,
+
+                    SUM(CASE WHEN psc.id_pk is NOT NULL
+                               THEN ROUND(service_tariff*0.07, 2)
+                             ELSE 0 END) AS coeff1_07,
+                    SUM(CASE WHEN psc.id_pk is NOT NULL AND patient_gender = 1
+                               THEN ROUND(service_tariff*0.07, 2)
+                             ELSE 0
+                        END) AS coeff1_07_male,
+                    SUM(CASE WHEN psc.id_pk is NOT NULL AND patient_gender = 2
+                               THEN ROUND(service_tariff*0.07, 2)
+                             ELSE 0
+                        END) AS coeff1_07_female,
+
+                    SUM(service_accepted) AS total_accepted,
+                    SUM(CASE WHEN patient_gender = 1
+                               THEN service_accepted
+                             ELSE 0
+                        END) AS total_accepted_male,
+                    SUM(CASE WHEN patient_gender = 2
+                               THEN service_accepted
+                             ELSE 0
+                        END) AS total_accepted_female
+                FROM registry_services
+                    LEFT JOIN provided_service_coefficient psc
+                      ON psc.service_fk = service_id
+                      AND psc.coefficient_fk = 5
+                WHERE service_group = 9
+                GROUP BY mo_code, group_field
+                '''
+        return query
+
+    def get_output_order_fields(self):
+        fields = ('count_services_primary',
+                  'count_services_primary_male',
+                  'count_services_primary_female',
+
+                  'count_services_final',
+                  'count_services_final_male',
+                  'count_services_final_female',
+
+                  'total_tariff',
+                  'total_tariff_male',
+                  'total_tariff_female',
+
+                  'coeff1_07',
+                  'coeff1_07_male',
+                  'coeff1_07_female',
+
+                  'total_accepted',
+                  'total_accepted_male',
+                  'total_accepted_female')
+        return ('0', 2, fields),

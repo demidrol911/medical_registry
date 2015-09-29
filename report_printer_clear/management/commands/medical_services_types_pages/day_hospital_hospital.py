@@ -101,7 +101,7 @@ class DayHospitalHospital(MedicalServiceTypePage):
                     JOIN medical_division md
                       ON md.id_pk = event_division_id
                 WHERE (service_term = 2 AND service_group IS NULL
-                      AND md.term_fk = 10) OR service_group = 28
+                      AND md.term_fk = 10 AND is_regional_budget) OR service_group = 28
                 GROUP BY mo_code, group_field
                 '''
         return query

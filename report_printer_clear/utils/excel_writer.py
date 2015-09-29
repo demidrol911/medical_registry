@@ -64,7 +64,7 @@ class ExcelBook():
                             'text_wrap': format_cell.alignment.text_wrapped,
                             'font_name': font_cell.name,
                             'font_size': converter.convert_cell_height(font_cell.height),
-                            'bold': font_cell.bold,
+                            'bold': converter.convert_bold(font_cell.weight),
                             'italic': font_cell.italic,
                             'valign': converter.convert_vertical_align(format_cell.alignment.vert_align),
                             'align': converter.convert_horizontal_align(format_cell.alignment.hor_align)
@@ -157,8 +157,20 @@ class ExcelSheet():
     def write_cell(self, row_index, column_index, value):
         self.sheet.write(row_index, column_index, value, self.style)
 
+    def write_rich_text(self, row_index, column_index, *args):
+        new_args = []
+        for arg in args:
+            if isinstance(arg, dict):
+                new_args.append(self.book.add_format(arg))
+            else:
+                new_args.append(arg)
+        self.sheet.write_rich_string(row_index, column_index, *new_args)
+
     def hide_column(self, diapason):
         self.sheet.set_column(diapason, 20, None, {'hidden': 1})
 
     def increment_row_index(self):
         self.position['row'] += 1
+
+    def increment_column_index(self):
+        self.position['column'] += 1

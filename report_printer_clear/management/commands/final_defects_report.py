@@ -3,7 +3,7 @@ from django.core.management.base import BaseCommand
 from defects_report_pages.final_defects import FinalDefectsPage
 from report_printer_clear.utils.report import Report
 from report_printer_clear.utils.report import ReportParameters
-from medical_service_register.path import REESTR_EXP
+from medical_service_register.path import REESTR_DIR
 
 
 class Command(BaseCommand):
@@ -13,7 +13,7 @@ class Command(BaseCommand):
         report.add_page(FinalDefectsPage())
         parameters = ReportParameters()
 
-        path_to_dir = REESTR_EXP
+        path_to_dir = REESTR_DIR
         parameters.path_to_dir = path_to_dir % (
             parameters.registry_year,
             parameters.registry_period
