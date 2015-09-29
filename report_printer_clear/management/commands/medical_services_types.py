@@ -39,7 +39,7 @@ from report_printer_clear.management.commands.medical_services_types_pages.polic
 from report_printer_clear.utils.report import Report, ReportParameters
 
 from medical_services_types_pages.examination_adult import \
-    ExamAdultFirstStagePage, ExamAdultSecondStagePage
+    ExamAdultFirstStagePage, ExamAdultSecondStagePage, PreventiveInspectionAdult
 
 from medical_services_types_pages.acute_care import AcuteCarePage
 
@@ -68,20 +68,21 @@ class Command(BaseCommand):
 
     @howlong
     def handle(self, *args, **options):
-        '''
-        clinic_prevention_spec надо ли включать прививки
-        clinic_prevention_primary надо ли заполнять разделы по терапии, педиатрии и т. д. или заполнить только Центр здоровья
-                           включать ли прививкки. Что включать в посещения врача и фельдшера?
-        clinic_prevention_all - сюда включается профосмотр взрослых, а куда его включать в предыдущих актах?
-        clinic_capitation_prevention_spec - сюда включать прививки?
-        clinic_capitation_prevention_all - сюда включать прививки?
-        '''
-
         reports_desc = (
+            {'pattern': 'stomatology.xls',
+             'pages': (StomatologyPage, ),
+             'title':  u'cтоматология'},
+
+            # Диспансеризация и профосмотры взрослых
             {'pattern': 'examination_adult.xls',
              'pages': (ExamAdultFirstStagePage, ExamAdultSecondStagePage),
              'title': u'диспансеризация взрослых'},
 
+            {'pattern': 'preventive_inspection_adult.xls',
+             'pages': (PreventiveInspectionAdult, ),
+             'title': u'профилактический осмотр взрослого населения'},
+
+            # Диспансеризация и профосмотры несовершеннолетних
             {'pattern': 'examination_children_difficult_situation.xls',
              'pages': (ExamChildrenDifficultSituationPrimaryPage,
                        ExamChildrenDifficultSituationSpecPage),
@@ -91,10 +92,6 @@ class Command(BaseCommand):
              'pages': (ExamChildrenWithoutCarePrimaryPage,
                        ExamChildrenWithoutCareSpecPage),
              'title': u'диспансеризация несовершеннолетних без попечения родителей'},
-
-            {'pattern': 'hospital.xls',
-             'pages': (HospitalPage, ),
-             'title': u'круглосуточный стационар'},
 
             {'pattern': 'periodic_medical_examination.xls',
              'pages': (PeriodicMedicalExamPage, ),
@@ -107,34 +104,6 @@ class Command(BaseCommand):
             {'pattern': 'preventive_medical_examination.xls',
              'pages': (PreventMedicalExamPrimaryPage, PreventMedicalExamSpecPage),
              'title': u'профилактический медицинский осмотр несовершеннолетних'},
-
-            {'pattern': 'acute_care.xls',
-             'pages': (AcuteCarePage, ),
-             'title':  u'СМП финансирование по подушевому нормативу (кол-во вызовов, основной тариф)'},
-
-            {'pattern': 'capitation_ambulatory_care.xls',
-             'pages': (CapitationAmbulatoryCarePage, ),
-             'title': u'подушевой норматив (амбулаторная помощь)'},
-
-            {'pattern': 'capitation_acute_care.xls',
-             'pages': (CapitationAcuteCarePage, ),
-             'title': u'подушевой норматив (СМП)'},
-
-            {'pattern': 'stomatology.xls',
-             'pages': (StomatologyPage, ),
-             'title':  u'cтоматология'},
-
-            {'pattern': 'magnetic_resonance_imaging.xls',
-             'pages': (MriPage, ),
-             'title': u'КТ и МРТ'},
-
-            {'pattern': 'hospital_ambulance.xls',
-             'pages': (HospitalAmbulancePage, ),
-             'title': u'приемное отделение стационара (неотложная помощь)'},
-
-            {'pattern': 'hospital_hmc.xls',
-             'pages': (HospitalHmcPage, ),
-             'title': u'круглосуточный стационар ВМП'},
 
             # Дневной стационар
             {'pattern': 'day_hospital_hospital.xls',
@@ -157,68 +126,28 @@ class Command(BaseCommand):
              'pages': (DayHospitalAll, InvasiveMethodsPage),
              'title': u'дневной стационар свод'},
 
-            # Поликлиника по подушевому
-            {'pattern': 'clinic_capitation_disease_treatment_primary.xls',
-             'pages': (ClinicCapitationDiseaseTreatmentPrimary, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу (обращения по поводу заболевания) перв.мед.помощь'},
+            # Круглосуточный стационар
+            {'pattern': 'hospital.xls',
+             'pages': (HospitalPage, ),
+             'title': u'круглосуточный стационар'},
 
-            {'pattern': 'clinic_capitation_disease_single_visit_spec.xls',
-             'pages': (ClinicCapitationDiseaseSingleVisitSpec, ),
-             'title': u'Поликлиника фин-ние по подушевому нормативу (разовые посещения в связи с '
-                      u'заболеванием) спец.мед.помощь'},
+            {'pattern': 'hospital_hmc.xls',
+             'pages': (HospitalHmcPage, ),
+             'title': u'круглосуточный стационар ВМП'},
 
-            {'pattern': 'clinic_capitation_disease_single_visit_all.xls',
-             'pages': (ClinicCapitationDiseaseSingleVisitAll, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу (разовые посещения в связи с '
-                      u'заболеванием) свод.xls'},
+            # Поликлиника
+            {'pattern': 'magnetic_resonance_imaging.xls',
+             'pages': (MriPage, ),
+             'title': u'КТ и МРТ'},
 
-            {'pattern': 'clinic_capitation_prevention_spec.xls',
-             'pages': (ClinicCapitationPreventionSpec, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу '
-                      u'(посещения с профилактической целью) спец.мед.помощь'},
+            {'pattern': 'hospital_ambulance.xls',
+             'pages': (HospitalAmbulancePage, ),
+             'title': u'приемное отделение стационара (неотложная помощь)'},
 
-            {'pattern': 'clinic_capitation_prevention_all.xls',
-             'pages': (ClinicCapitationPreventionAll, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу '
-                      u'(посещения с профилактической целью) свод'},
-
-            {'pattern': 'clinic_capitation_other_purposes_primary.xls',
-             'pages': (ClinicCapitationOtherPurposesPrimary, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу '
-                      u'(посещения с иными целями) перв.мед.помощь'},
-
-            {'pattern': 'clinic_capitation_all_primary.xls',
-             'pages': (ClinicCapitationAllPrimary, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу перв.мед.помощь (свод)'},
-
-            {'pattern': 'clinic_capitation_all_spec.xls',
-             'pages': (ClinicCapitationAllSpec, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу спец.мед.помощь (свод)'},
-
-            {'pattern': 'clinic_capitation_all.xls',
-             'pages': (ClinicCapitationAll, ),
-             'title': u'Поликлиника фин-ние по подушевому нормативу свод'},
-
-            # Поликлиника за единицу объема
-            {'pattern': 'clinic_emergency_spec.xls',
-             'pages': (ClinicEmergencySpec, EmergencyCareEmergencyDepartment),
-             'title': u'поликлиника (в неотложной форме) спец.мед.помощь'},
-
+            # Поликлиника (за единицу объёма)
             {'pattern': 'clinic_emergency_all.xls',
              'pages': (ClinicEmergencyAll, ),
              'title': u'поликлиника (в неотложной форме) свод'},
-
-            {'pattern': 'clinic_disease_treatment_spec.xls',
-             'pages': (ClinicDiseaseTreatmentSpec, ),
-             'title': u'поликлиника (обращения по поводу заболевания) спец.мед.помощь'},
-
-            {'pattern': 'clinic_disease_treatment_all.xls',
-             'pages': (ClinicDiseaseTreatmentAll, ),
-             'title': u'поликлиника (обращения по поводу заболевания) свод'},
-
-            {'pattern': 'clinic_disease_single_visit_spec.xls',
-             'pages': (ClinicDiseaseSingleVisitSpec, ),
-             'title': u'поликлиника (разовые посещения в связи с заболеванием) спец.мед.помощь'},
 
             {'pattern': 'clinic_disease_single_visit_all.xls',
              'pages': (ClinicDiseaseSingleVisitAll, ),
@@ -228,35 +157,46 @@ class Command(BaseCommand):
              'pages': (ClinicOtherPurposesPrimary, ),
              'title': u'поликлиника (с иными целями) перв.мед.помощь'},
 
-            {'pattern': 'clinic_prevention_primary.xls',
-             'pages': (ClinicPreventionPrimary, ),
-             'title': u'поликлиника (с профилактической целью) перв.мед.помощь'},
-
-            {'pattern': 'clinic_prevention_spec.xls',
-             'pages': (ClinicPreventionSpec, ),
-             'title': u'поликлиника (с профилактической целью) спец.мед.помощь'},
+            {'pattern': 'clinic_disease_treatment_all.xls',
+             'pages': (ClinicDiseaseTreatmentAll, ),
+             'title': u'поликлиника (обращения по поводу заболевания) свод'},
 
             {'pattern': 'clinic_prevention_all.xls',
              'pages': (ClinicPreventionAll, ProphylacticExaminationAdult),
              'title': u'поликлиника (с профилактической целью) свод'},
 
-            {'pattern': 'clinic_all_primary.xls',
-             'pages': (ClinicAllPrimary, ),
-             'title': u'поликлиника перв.мед.помощь (свод)'},
+            # Поликлиника (подушевое)
+            {'pattern': 'clinic_capitation_other_purposes_primary.xls',
+             'pages': (ClinicCapitationOtherPurposesPrimary, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу '
+                      u'(посещения с иными целями) перв.мед.помощь'},
 
-            {'pattern': 'clinic_all_spec.xls',
-             'pages': (ClinicAllSpec, ),
-             'title': u'поликлиника спец.мед.помощь (свод)'},
+            {'pattern': 'clinic_capitation_prevention_all.xls',
+             'pages': (ClinicCapitationPreventionAll, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу '
+                      u'(посещения с профилактической целью) свод'},
 
-            {'pattern': 'clinic_all.xls',
-             'pages': (ClinicAll, ),
-             'title': u'поликлиника свод'},
-        )
+            {'pattern': 'clinic_capitation_disease_single_visit_all.xls',
+             'pages': (ClinicCapitationDiseaseSingleVisitAll, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (разовые посещения в связи с '
+                      u'заболеванием) свод.xls'},
 
-        reports_desc = (
-            {'pattern': 'clinic_capitation_all_primary.xls',
-             'pages': (ClinicCapitationAllPrimary, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу перв.мед.помощь (свод)'},
+            {'pattern': 'clinic_capitation_disease_treatment_primary.xls',
+             'pages': (ClinicCapitationDiseaseTreatmentPrimary, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (обращения по поводу заболевания) перв.мед.помощь'},
+
+            # Подушевое
+            {'pattern': 'capitation_ambulatory_care.xls',
+             'pages': (CapitationAmbulatoryCarePage, ),
+             'title': u'подушевой норматив (амбулаторная помощь)'},
+
+            {'pattern': 'capitation_acute_care.xls',
+             'pages': (CapitationAcuteCarePage, ),
+             'title': u'подушевой норматив (СМП)'},
+
+            {'pattern': 'acute_care.xls',
+             'pages': (AcuteCarePage, ),
+             'title':  u'СМП финансирование по подушевому нормативу (кол-во вызовов, основной тариф)'},
         )
 
         parameters = ReportParameters()
@@ -264,6 +204,8 @@ class Command(BaseCommand):
             parameters.registry_year,
             parameters.registry_period
         )
+
+        print u'будет сделано %s актов...' % len(reports_desc)
 
         for desc in reports_desc:
             print desc['title']

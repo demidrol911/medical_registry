@@ -1,11 +1,13 @@
 #! -*- coding: utf-8 -*-
 from copy import deepcopy
+from datetime import datetime
 from main.funcs import howlong
 
 from main.models import MedicalOrganization
+from report_printer.const import MONTH_NAME
 from report_printer_clear.utils.excel_style import VALUE_STYLE
 from report_printer_clear.utils.page import ReportPage
-from tfoms.func import FAILURE_CAUSES, ERRORS
+from tfoms.func import FAILURE_CAUSES, ERRORS, get_mo_info
 
 
 class SanctionsPage(ReportPage):
@@ -31,6 +33,7 @@ class SanctionsPage(ReportPage):
         'bold': True,
         'border': 1,
         'align': 'center',
+        'valign': 'vcenter',
         'font_size': 11,
         'text_wrap': True
     }
@@ -160,10 +163,24 @@ class SanctionsPage(ReportPage):
         current_error = 0
         total_amount_of_error = deepcopy(zero_sum)
         total_amount = deepcopy(zero_sum)
+        mo_info = get_mo_info(parameters.organization_code)
 
-        sheet.set_style({})
-        sheet.write_cell(6, 5, parameters.report_name)
-        sheet.set_position(13, 0)
+        sheet.set_style({'align': 'center'})
+        current_date = datetime.now()
+        sheet.write_rich_text(3, 0, {'bold': True}, u'Акт ',
+                              u'№ ',
+                              {'underline': True}, mo_info['act_number'],
+                              u' от _.%s.%s г.' % (current_date.month if current_date.month > 9
+                                                   else '0'+str(current_date.month),
+                              current_date.year), {'align': 'center'})
+        sheet.set_style({'bold': True, 'underline': True, 'align': 'center'})
+        sheet.write_cell(4, 0, u'медико-экономического контроля счета за %s'
+                               % MONTH_NAME[parameters.registry_period])
+        sheet.set_style({'align': 'center'})
+        sheet.write_rich_text(6, 0, u'в медицинской организации: ',
+                              {'bold': True}, parameters.report_name,
+                              {'align': 'center'})
+        sheet.set_position(10, 0)
         for item in self.data:
             if current_failure_cause != item.failure_cause_id:
                 SanctionsPage.print_total_amount_of_error(sheet, current_error, total_amount_of_error)
@@ -224,12 +241,14 @@ class SanctionsPage(ReportPage):
             sheet.write(u'Итого по ошибкам', 'c')
             SanctionsPage.print_sum(sheet, total_amount)
 
+        sheet.hide_column('M:M')
         sheet.hide_column('O:P')
+        sheet.hide_column('P:P')
 
         sheet.set_style({})
         sheet.write('', 'r')
         sheet.write('', 'r')
-        SanctionsPage.print_place_for_signature(sheet)
+        SanctionsPage.print_place_for_signature(sheet, mo_info)
 
     @staticmethod
     def add_sum(sum_src, sum_dst):
@@ -276,51 +295,49 @@ class SanctionsPage(ReportPage):
         sheet.write('', 'r')
 
     @staticmethod
-    def print_place_for_signature(sheet):
+    def print_place_for_signature(sheet, mo_info):
         sheet.set_style({})
+        sheet.write('', 'r')
         sheet.write(u'Исполнитель', 'c')
-        sheet.write('', 'c')
-        sheet.write('', 'c')
         sheet.set_style({'bottom': 1})
-        sheet.write('', 'c', 1)
+        sheet.write('', 'c', 3)
         sheet.set_style({})
         sheet.write(u'подпись', 'c')
         sheet.write('()', 'c')
-        sheet.write('', 'c')
 
         sheet.write('', 'r')
         sheet.write('', 'r')
-
-        sheet.write(u'Исполнитель', 'c')
-        sheet.write('', 'c')
+        sheet.write('', 'r')
+        sheet.write(u'Руководитель страховой медицинской организации', 'r')
+        sheet.write('', 'r')
         sheet.write('', 'c')
         sheet.set_style({'bottom': 1})
-        sheet.write('', 'c', 1)
+        sheet.write('', 'c', 3)
         sheet.set_style({})
         sheet.write(u'подпись', 'c')
-        sheet.write('()', 'c')
-        sheet.write('', 'c')
+        sheet.write(u'(Е.Л. Дьячкова)', 'r')
 
         sheet.write('', 'r')
+        sheet.write(u'МП', 'r')
 
-        sheet.write(u'Руководитель страховой медицинской организации', 'c')
         sheet.write('', 'r')
-        sheet.write('', 'c')
-        sheet.write('', 'c')
+        sheet.write('', 'r')
+        sheet.write(u'Должность, подпись руководителя '
+                    u'медицинской организации, ознакомившегося с Актом', 'r')
+        sheet.write('', 'r')
         sheet.write('', 'c')
         sheet.set_style({'bottom': 1})
-        sheet.write('', 'c', 1)
+        sheet.write('', 'c', 3)
         sheet.set_style({})
         sheet.write(u'подпись', 'c')
-        sheet.write(u'(Е.Л.Дьячкова)', 'c')
+        last_name, first_name, middle_name = mo_info['act_head_fullname'].split(' ')
+        sheet.write(u'(%s.%s. %s)' % (first_name[0], middle_name[0], last_name), 'r')
 
         sheet.write('', 'r')
         sheet.write(u'МП', 'r')
         sheet.write('', 'r')
-        sheet.write(u'Должность, подпись руководителя '
-                    u'медицинской организации, ознакомившегося с Актом', 'r')
         sheet.write('', 'r', 2)
-        sheet.write(u'Дата'+'_'*30, 'c')
+        sheet.write(u'Дата       '+'_'*30, 'c')
 
 
 

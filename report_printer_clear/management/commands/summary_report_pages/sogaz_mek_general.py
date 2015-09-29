@@ -2,6 +2,7 @@
 from main.funcs import howlong
 from report_printer_clear.utils.page import ReportPage
 from main.models import MedicalOrganization
+from tfoms.func import get_mo_info
 
 
 class SogazMekGeneralPage(ReportPage):
@@ -141,9 +142,12 @@ class SogazMekGeneralPage(ReportPage):
         return query
 
     def print_page(self, sheet, parameters):
-        sheet.set_style({})
+        mo_info = get_mo_info(parameters.organization_code)
         sheet.set_style({'valign': 'center', 'align': 'center', 'text_wrap': True})
         sheet.write_cell(3, 2, u'за %s' % parameters.date_string)
+        sheet.set_style({'bold': True, 'align': 'center'})
+        sheet.write_cell(4, 2, mo_info['act_number'])
+        sheet.set_style({'valign': 'center', 'align': 'center', 'text_wrap': True, 'bold': True})
         sheet.write_cell(5, 0, parameters.report_name)
         sheet.write_cell(5, 5, parameters.organization_code)
         sheet.set_style({})
@@ -163,3 +167,6 @@ class SogazMekGeneralPage(ReportPage):
         sheet.write_cell(26, 2, self.data['sum_sanction_other_mo'])
         sheet.write_cell(29, 2, self.data['sum_sanction_repeat_mek'])
         sheet.write_cell(31, 5, self.data['sum_accepted'])
+        last_name, first_name, middle_name = mo_info['act_head_fullname'].split(' ')
+        sheet.set_style({'align': 'center'})
+        sheet.write_cell(42, 0, u'%s.%s. %s' % (first_name[0], middle_name[0], last_name))

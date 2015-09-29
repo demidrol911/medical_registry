@@ -632,8 +632,8 @@ def underpay_wrong_age_service(register_element):
                   NOT(ms.code between '001441' and '001460' or
                          ms.code in ('098703', '098770', '098940', '098913', '098914', '019018'))
             and (
-                (age(CASE WHEN mr.organization_code = '280043' THEN ps.start_date ELSE ps.end_date END, p.birthdate) < '18 year' and substr(ms.code, 1, 1) = '0')
-                or (age(CASE WHEN mr.organization_code = '280043' THEN ps.start_date ELSE ps.end_date END, p.birthdate) >= '18 year' and substr(ms.code, 1, 1) = '1'))
+                (age(ps.start_date, p.birthdate) < '18 year' and substr(ms.code, 1, 1) = '0')
+                or (age(ps.start_date, p.birthdate) >= '18 year' and substr(ms.code, 1, 1) = '1'))
             and pss.id_pk is null
     """
 

@@ -306,6 +306,9 @@ class MedicalOrganization(models.Model):
     alternate_tariff_group = models.ForeignKey('TariffGroup',
                                                db_column='alternate_tariff_group_fk',
                                                related_name='alternate_group')
+    act_number = models.CharField(max_length=4)
+    act_head_fullname = models.CharField(max_length=256)
+    act_head_position = models.CharField(max_length=64)
 
     class Meta:
         db_table = "medical_organization"
