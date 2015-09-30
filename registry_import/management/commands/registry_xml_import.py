@@ -684,15 +684,15 @@ def main():
                                              u'подрубрики')))
 
                         if registry_type in (3, 4) and \
-                            not is_examination_result_matching_comment(
-                                new_event.get('RSLT_D'), new_event.get('COMENTSL')):
-                                services_errors.append(set_error(
-                                    '904', field='RSLT_D', parent='SLUCH',
-                                    record_uid=new_record['N_ZAP'],
-                                    event_uid=event['IDCASE'],
-                                    comment=(u'Указанный код результата диспанс'
-                                             u'еризации не совпадает с указанны'
-                                             u'м комментарием')))
+                                not is_examination_result_matching_comment(
+                                        new_event.get('RSLT_D'), new_event.get('COMENTSL')):
+                            services_errors.append(set_error(
+                                '904', field='RSLT_D', parent='SLUCH',
+                                record_uid=new_record['N_ZAP'],
+                                event_uid=event['IDCASE'],
+                                comment=(u'Указанный код результата диспанс'
+                                         u'еризации не совпадает с указанны'
+                                         u'м комментарием')))
 
                         if event['DS2'] and type(event['DS2']) != list:
                             concomitants = [event['DS2']]
@@ -781,6 +781,10 @@ def main():
                         else:
                             services = [event['USL']]
 
+                        divisions_check_list = []
+                        reasons_check_list = []
+                        groups_check_list = []
+
                         for service in services:
                             if service_pk_list:
                                 service_pk = service_pk_list.pop()
@@ -795,8 +799,17 @@ def main():
                             new_service['pk'] = service_pk
                             new_service['event_id'] = new_event['pk']
                             new_service_list.append(new_service)
-                            #print '*', _type
 
+                            service = CODES.get(new_service['CODE_USL'])
+
+                            if new_event['USL_OK'] == '3':
+                                if service.division_id:
+                                    divisions_check_list.append(service.division_id)
+
+                                if service.reason_id:
+                                    reasons_check_list.append(service.reason_id)
+
+                                groups_check_list.append(service.group_id)
 
                             #if new_event.get('USL_OK',
                             #                '') == '1' and new_service.get(
@@ -834,8 +847,8 @@ def main():
 
                             if registry_type == 2 and \
                                     not is_service_code_matching_hitech_method(
-                                    new_service['CODE_USL'],
-                                    new_event['METOD_HMP']):
+                                            new_service['CODE_USL'],
+                                            new_event['METOD_HMP']):
                                 services_errors.append(set_error(
                                     '904', field='CODE_USL', parent='USL',
                                     record_uid=new_record['N_ZAP'],
@@ -856,7 +869,7 @@ def main():
 
                             if registry_type in (1, 2) and \
                                     not is_service_children_profile_matching_event_children_profile(
-                                    new_service.get('DET'), new_event.get('DET')):
+                                            new_service.get('DET'), new_event.get('DET')):
                                 services_errors.append(set_error(
                                     '904', field='CODE_USL', parent='USL',
                                     record_uid=new_record['N_ZAP'],
@@ -868,13 +881,13 @@ def main():
 
                             if new_event.get('USL_OK', '') == '1' \
                                     and new_service[
-                                        'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS\
+                                        'CODE_USL'] not in HOSPITAL_VOLUME_EXCLUSIONS \
                                     and not new_service['CODE_USL'].startswith('A'):
                                 hospital_volume_service.add(new_event['IDCASE'])
 
                             if new_event.get('USL_OK', '') == '2' \
                                     and new_service[
-                                        'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS\
+                                        'CODE_USL'] not in DAY_HOSPITAL_VOLUME_EXCLUSIONS \
                                     and not new_service['CODE_USL'].startswith('A'):
 
                                 day_hospital_volume_service.add(
@@ -913,6 +926,33 @@ def main():
                                     service_uid=new_service['IDSERV'],
                                     comment=(u'Услуга не может оказываться в '
                                              u'текущих условиях')))
+
+                        if len(set(divisions_check_list)) > 1:
+                            services_errors.append(set_error(
+                                '904', field='SLUCH', parent='ZAP',
+                                record_uid=new_record['N_ZAP'],
+                                event_uid=event['IDCASE'],
+                                comment=u'В законченном случае обнаружены услуги'
+                                        u' с разными отделениями поликлиники.'))
+
+                        if len(set(reasons_check_list)) > 1:
+                            services_errors.append(set_error(
+                                '904', field='SLUCH', parent='ZAP',
+                                record_uid=new_record['N_ZAP'],
+                                event_uid=event['IDCASE'],
+                                comment=u'В законченном случае обнаружены поликлинические услуги'
+                                        u' с разной целью обращения/посещения.'))
+
+                        if 19 in groups_check_list and len(set(groups_check_list)) > 1:
+                            services_errors.append(set_error(
+                                '904', field='SLUCH', parent='ZAP',
+                                record_uid=new_record['N_ZAP'],
+                                event_uid=event['IDCASE'],
+                                comment=u'В законченном стоматологическом случае'
+                                        u' обнаружены услуги не относящиеся к стоматологии.'))
+
+
+
 
 
             """

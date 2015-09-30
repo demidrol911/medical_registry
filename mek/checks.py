@@ -32,47 +32,6 @@ def underpay_repeated_service(register_element):
     """
         Санкции на повторно поданные услуги
     """
-    old_query = """
-        select distinct ps1.id_pk
-        from provided_service ps1
-            join provided_event
-                on ps1.event_fk = provided_event.id_pk
-            join medical_register_record
-                on provided_event.record_fk = medical_register_record.id_pk
-            join medical_register mr1
-                on medical_register_record.register_fk = mr1.id_pk
-            JOIN patient p1
-                on medical_register_record.patient_fk = p1.id_pk
-            join insurance_policy i1
-                on i1.version_id_pk = p1.insurance_policy_fk
-            JOIN (
-                select ps.id_pk as pk, i.id as policy, ps.code_fk as code, ps.end_date,
-                    ps.basic_disease_fk as disease, ps.worker_code, mr.year, mr.period
-                from provided_service ps
-                    join provided_event pe
-                        on ps.event_fk = pe.id_pk
-                    join medical_register_record mrr
-                        on pe.record_fk = mrr.id_pk
-                    join medical_register mr
-                        on mrr.register_fk = mr.id_pk
-                    JOIN patient p
-                        on mrr.patient_fk = p.id_pk
-                    join insurance_policy i
-                        on i.version_id_pk = p.insurance_policy_fk
-                where mr.is_active
-                    and mr.organization_code = %(organization)s
-                    and format('%%s-%%s-01', mr.year, mr.period)::DATE between format('%%s-%%s-01', %(year)s, %(period)s)::DATE - interval '5 months' and format('%%s-%%s-01', %(year)s, %(period)s)::DATE  - interval '1 months'
-                    and ps.payment_type_fk in (2, 4)
-            ) as T1 on i1.id = T1.policy and ps1.code_fk = T1.code
-                and ps1.end_date = T1.end_date and ps1.basic_disease_fk = T1.disease
-                and ps1.worker_code = T1.worker_code
-        where mr1.is_active
-            and mr1.year = %(year)s
-            and mr1.period = %(period)s
-            and mr1.organization_code = %(organization)s
-            AND (select count(pss.id_pk) from provided_service_sanction pss
-                 where pss.service_fk = ps1.id_pk and pss.error_fk = 64) = 0
-    """
 
     query = """
         with current_period as (select format('%%s-%%s-01', %(year)s, %(period)s)::DATE as val)
@@ -630,7 +589,7 @@ def underpay_wrong_age_service(register_element):
             and mr.organization_code = %s
             and (ms.group_fk NOT in (20, 7, 9, 10, 11, 12, 13, 14, 15, 16) or ms.group_fk is NULL) AND
                   NOT(ms.code between '001441' and '001460' or
-                         ms.code in ('098703', '098770', '098940', '098913', '098914', '019018'))
+                         ms.code in ('098703', '098770', '098940', '098913', '098914', '098915', '019018'))
             and (
                 (age(ps.start_date, p.birthdate) < '18 year' and substr(ms.code, 1, 1) = '0')
                 or (age(ps.start_date, p.birthdate) >= '18 year' and substr(ms.code, 1, 1) = '1'))
