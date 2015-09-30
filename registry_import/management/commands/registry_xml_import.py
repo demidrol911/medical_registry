@@ -935,7 +935,7 @@ def main():
                                 comment=u'В законченном случае обнаружены услуги'
                                         u' с разными отделениями поликлиники.'))
 
-                        if len(set(reasons_check_list)) > 1:
+                        if 19 not in reasons_check_list and len(set(reasons_check_list)) > 1:
                             services_errors.append(set_error(
                                 '904', field='SLUCH', parent='ZAP',
                                 record_uid=new_record['N_ZAP'],
