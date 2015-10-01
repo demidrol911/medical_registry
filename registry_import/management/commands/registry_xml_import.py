@@ -802,7 +802,7 @@ def main():
 
                             service = CODES.get(new_service['CODE_USL'])
 
-                            if new_event['USL_OK'] == '3':
+                            if new_event.get('USL_OK', '') == '3':
                                 if service.division_id:
                                     divisions_check_list.append(service.division_id)
 
@@ -935,7 +935,7 @@ def main():
                                 comment=u'В законченном случае обнаружены услуги'
                                         u' с разными отделениями поликлиники.'))
 
-                        if 19 not in reasons_check_list and len(set(reasons_check_list)) > 1:
+                        if 19 not in groups_check_list and len(set(reasons_check_list)) > 1:
                             services_errors.append(set_error(
                                 '904', field='SLUCH', parent='ZAP',
                                 record_uid=new_record['N_ZAP'],
