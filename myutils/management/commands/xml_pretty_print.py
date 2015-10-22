@@ -19,7 +19,7 @@ def print_xml(output_file, xml_obj, tab=0):
 
 
 def main():
-    xml_file_name = 'HM280026S28002_150317.xml'
+    xml_file_name = 'HM280009S28004_150919.xml'
     output_dir = ur'C:\work\dir'
     target_dir = ur'c:\work\xml_struct'
 

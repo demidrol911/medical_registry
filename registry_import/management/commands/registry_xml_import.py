@@ -802,7 +802,7 @@ def main():
 
                             service = CODES.get(new_service['CODE_USL'])
 
-                            if new_event.get('USL_OK', '') == '3':
+                            if new_event.get('USL_OK', '') == '3' and not new_service['CODE_USL'].startswith('A'):
                                 if service.division_id:
                                     divisions_check_list.append(service.division_id)
 
