@@ -155,7 +155,13 @@ class ExcelSheet():
             self.position['column'] += 1
 
     def write_cell(self, row_index, column_index, value):
-        self.sheet.write(row_index, column_index, value, self.style)
+        if isinstance(value, Decimal) or isinstance(value, float):
+            self.add_style('num_format', '0.'+'0'*2)
+            value_cell = round(value, 2)
+        else:
+            self.add_style('num_format', '0')
+            value_cell = value
+        self.sheet.write(row_index, column_index, value_cell, self.style)
 
     def write_rich_text(self, row_index, column_index, *args):
         new_args = []

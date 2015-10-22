@@ -1,3 +1,4 @@
+#! -*- coding: utf-8 -*-
 from general import MedicalServiceTypePage
 
 
@@ -182,7 +183,12 @@ class ExamAdultSecondStagePage(MedicalServiceTypePage):
                 ('019117', 63, fields))
 
 
-class PreventiveInspectionAdult(MedicalServiceTypePage):
+class PreventiveInspectionAdultPage(MedicalServiceTypePage):
+
+    """
+    Отчёт включает в себя:
+    1. Профосмотр взрослых (первичный и итоговый приём)
+    """
 
     def __init__(self):
         self.data = None

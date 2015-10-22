@@ -1,3 +1,4 @@
+#! -*- coding: utf-8 -*-
 from main.funcs import howlong
 from main.models import MedicalRegister
 from const import POSITION_REPORT
@@ -7,6 +8,11 @@ from tfoms.func import calculate_capitation
 
 
 class CapitationAmbulatoryCarePage(ReportPage):
+
+    """
+    Отчёт включает в себя:
+    Подушевой норматив по амбулаторной помощи
+    """
 
     def __init__(self):
         self.data = None
@@ -134,6 +140,11 @@ class CapitationAmbulatoryCarePage(ReportPage):
 
 
 class CapitationAcuteCarePage(ReportPage):
+
+    """
+    Отчёт включает в себя:
+    Подушевой норматив по скорой помощи
+    """
 
     def __init__(self):
         self.data = None

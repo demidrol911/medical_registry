@@ -51,7 +51,7 @@ class AmbulanceCareALLPage(ReportPage):
                                            THEN ps.id_pk
                                          ELSE NULL
                                     END) AS count_thrombolysis,
-                     COUNT(DISTINCT (mr.organization_code, pt.id_pk, ms.subgroup_fk)) AS count_patients,
+                     COUNT(DISTINCT (mr.organization_code, pt.id_pk, ms.subgroup_fk, ms.code ILIKE '0%%')) AS count_patients,
                      SUM(ps.tariff) AS total_tariff
 
                 FROM medical_register mr

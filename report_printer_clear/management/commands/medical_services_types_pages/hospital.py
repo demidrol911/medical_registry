@@ -1,7 +1,16 @@
-from report_printer_clear.management.commands.medical_services_types_pages.general import MedicalServiceTypePage
+#! -*- coding: utf-8 -*-
+from general import MedicalServiceTypePage
 
 
 class HospitalPage(MedicalServiceTypePage):
+
+    """
+    Отчёт включает в себя:
+    1. Круглосуточный стационар кроме ВМП
+    2. Неотложная помощь в приёмном отделении только для АОДКБ и АОИБ
+    По неотложной помощи в приёмном отделении учитываются только суммы по основному тарифу
+    и принятая сумма
+    """
 
     def __init__(self):
         self.data = None
@@ -13,48 +22,39 @@ class HospitalPage(MedicalServiceTypePage):
                     mo_code AS mo_code,
                     '0' AS group_field,
 
-                    COUNT(DISTINCT CASE WHEN service_group != 31
-                                             OR service_group is NULL
+                    COUNT(DISTINCT CASE WHEN service_group != 31 OR service_group is NULL
                                           THEN (patient_id, service_tariff_profile)
                                    END) AS count_patients,
                     COUNT(DISTINCT CASE WHEN is_adult
-                                             AND (service_group != 31
-                                                  OR service_group is NULL)
+                                             AND (service_group != 31 OR service_group is NULL)
                                           THEN (patient_id, service_tariff_profile)
                                    END) AS count_patients_adult,
                     COUNT(DISTINCT CASE WHEN NOT is_adult
-                                             AND (service_group != 31
-                                                  OR service_group is NULL)
+                                             AND (service_group != 31 OR service_group is NULL)
                                           THEN (patient_id, service_tariff_profile)
                                    END) AS count_patients_child,
 
-                    COUNT(DISTINCT CASE WHEN service_group != 31
-                                             OR service_group is NULL
+                    COUNT(DISTINCT CASE WHEN service_group != 31 OR service_group is NULL
                                           THEN service_id
                                    END) AS count_services,
                     COUNT(DISTINCT CASE WHEN is_adult
-                                             AND (service_group != 31
-                                                  OR service_group is NULL)
+                                             AND (service_group != 31 OR service_group is NULL)
                                           THEN service_id
                                    END) AS count_services_adult,
                     COUNT(DISTINCT CASE WHEN NOT is_adult
-                                             AND (service_group != 31
-                                                  OR service_group is NULL)
+                                             AND (service_group != 31 OR service_group is NULL)
                                           THEN service_id
                                    END) AS count_services_child,
 
-                    SUM(CASE WHEN service_group != 31
-                                  OR service_group is NULL
+                    SUM(CASE WHEN service_group != 31 OR service_group is NULL
                                THEN service_quantity
                         END) AS count_days,
                     SUM(CASE WHEN is_adult
-                                  AND (service_group != 31
-                                       OR service_group is NULL)
+                                  AND (service_group != 31 OR service_group is NULL)
                                THEN service_quantity
                         END) AS count_days_adult,
                     SUM(CASE WHEN NOT is_adult
-                                   AND (service_group != 31
-                                        OR service_group is NULL)
+                                   AND (service_group != 31 OR service_group is NULL)
                                THEN service_quantity
                         END) AS count_days_child,
 
@@ -68,35 +68,35 @@ class HospitalPage(MedicalServiceTypePage):
 
                     SUM(CASE WHEN psc_curation.id_pk IS NOT NULL
                                   AND psc.coefficient_fk IN (8, 9, 10, 11, 12)
-                               THEN ROUND(0.25*service_tariff*tc.value, 2)
+                               THEN ROUND(0.25 * service_tariff * tc.value, 2)
                              ELSE 0
                         END) +
                         SUM(CASE WHEN psc_curation.id_pk IS NOT NULL
-                                   THEN ROUND(0.25*service_tariff, 2)
+                                   THEN ROUND(0.25 * service_tariff, 2)
                                  ELSE 0
                             END
                     ) AS coeff_kskp,
                     SUM(CASE WHEN is_adult
                                   AND psc_curation.id_pk IS NOT NULL
                                   AND psc.coefficient_fk IN (8, 9, 10, 11, 12)
-                               THEN ROUND(0.25*service_tariff*tc.value, 2)
+                               THEN ROUND(0.25 * service_tariff * tc.value, 2)
                              ELSE 0
                         END) +
                         SUM(CASE WHEN is_adult
                                       AND psc_curation.id_pk IS NOT NULL
-                                   THEN ROUND(0.25*service_tariff, 2)
+                                   THEN ROUND(0.25 * service_tariff, 2)
                                  ELSE 0
                             END
                     ) AS coeff_kskp_adult,
                     SUM(CASE WHEN NOT is_adult
                                   AND psc_curation.id_pk IS NOT NULL
                                   AND psc.coefficient_fk IN (8, 9, 10, 11, 12)
-                               THEN ROUND(0.25*service_tariff*tc.value, 2)
+                               THEN ROUND(0.25 * service_tariff * tc.value, 2)
                              ELSE 0
                         END) +
                         SUM(CASE WHEN NOT is_adult
                                       AND psc_curation.id_pk IS NOT NULL
-                                   THEN ROUND(0.25*service_tariff, 2)
+                                   THEN ROUND(0.25 * service_tariff, 2)
                                  ELSE 0
                             END
                     ) AS coeff_kskp_child,
@@ -174,7 +174,6 @@ class HospitalPage(MedicalServiceTypePage):
                       OR (mo_code IN ('280013', '280043')
                           AND service_group = 31)
                       )
-                      AND is_regional_budget
                 GROUP BY mo_code, group_field
                 '''
         return query

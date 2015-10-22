@@ -75,15 +75,8 @@ class MedicalServiceTypePage(ReportPage):
                         ps.start_date AS service_start_date,
                         ps.end_date AS service_end_date,
                         pe.end_date AS event_end_date,
-                        pe.division_fk AS event_division_id,
+                        pe.division_fk AS event_division_id
 
-                        CASE WHEN pe.term_fk in (1, 2)
-                               THEN (CASE WHEN pe.comment ILIKE '%%P493'
-                                            THEN False
-                                          ELSE True
-                                     END)
-                             ELSE True
-                        END AS is_regional_budget
                     FROM medical_register mr
                         JOIN medical_register_record mrr
                            ON mr.id_pk = mrr.register_fk
@@ -102,6 +95,7 @@ class MedicalServiceTypePage(ReportPage):
                             AND mr.year = %(year)s
                             AND ps.payment_type_fk = 2
                             AND (ms.group_fk != 27 OR ms.group_fk is NULL)
+                            AND (pe.comment NOT ILIKE '%%P493' OR pe.comment IS NULL)
                 )
                 '''
         return query

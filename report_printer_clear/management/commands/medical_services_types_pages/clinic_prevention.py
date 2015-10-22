@@ -1,71 +1,16 @@
+#! -*- coding: utf-8 -*-
 from general import MedicalServiceTypePage
 
 
-class ClinicPreventionPrimary(MedicalServiceTypePage):
+class ClinicPreventionAllPage(MedicalServiceTypePage):
 
-    def __init__(self):
-        self.data = None
-        self.page_number = 0
-
-    def get_query(self):
-        query = MedicalServiceTypePage.get_general_query() + '''
-                SELECT
-                    mo_code AS mo_code,
-                    CASE WHEN service_code IN ('001038', '101038') THEN '0'
-                         WHEN service_code IN ('001039', '101039') THEN '1'
-                    END AS group_field,
-
-                    COUNT(DISTINCT (patient_id, service_code, is_adult)) AS count_patients,
-                    COUNT(DISTINCT CASE WHEN is_adult
-                                          THEN (patient_id, service_code)
-                                   END) AS count_patients_adult,
-                    COUNT(DISTINCT CASE WHEN NOT is_adult
-                                          THEN (patient_id, service_code)
-                                   END) AS count_patients_child,
-
-                    COUNT(DISTINCT service_id) AS count_services,
-                    COUNT(DISTINCT CASE WHEN is_adult
-                                          THEN service_id
-                                   END) AS count_services_adult,
-                    COUNT(DISTINCT CASE WHEN NOT is_adult
-                                          THEN service_id
-                                   END) AS count_services_child,
-
-                    SUM(service_tariff) AS total_tariff,
-                    SUM(CASE WHEN is_adult
-                               THEN service_tariff
-                             ELSE 0
-                        END) AS total_tariff_adult,
-                    SUM(CASE WHEN NOT is_adult
-                               THEN service_tariff
-                             ELSE 0
-                        END) AS total_tariff_child
-                FROM registry_services
-                WHERE service_term = 3
-                      AND service_group = 4
-                      AND NOT is_capitation
-                GROUP BY mo_code, group_field
-                '''
-        return query
-
-    def get_output_order_fields(self):
-        fields = ('count_patients',
-                  'count_patients_adult',
-                  'count_patients_child',
-
-                  'count_services',
-                  'count_services_adult',
-                  'count_services_child',
-
-                  'total_tariff',
-                  'total_tariff_adult',
-                  'total_tariff_child')
-
-        return (('0', 47, fields),
-                ('1', 56, fields))
-
-
-class ClinicPreventionSpec(MedicalServiceTypePage):
+    """
+    Отчёт включает в себя:
+    1. Поликлиника (профосмотр)
+    2. Поликлиника (прививка)
+    3. Профосмотр взрослых (первичный и итоговый) см. ProphylacticExaminationAdultPage
+    4. Центр здоровья
+    """
 
     def __init__(self):
         self.data = None
@@ -76,12 +21,21 @@ class ClinicPreventionSpec(MedicalServiceTypePage):
                 SELECT
                     mo_code AS mo_code,
                     '0' AS group_field,
-                    COUNT(DISTINCT (patient_id, service_division, is_adult)) AS count_patients,
+                    COUNT(DISTINCT CASE WHEN service_group IN (9, 4)
+                                          THEN (0, patient_id, service_code, is_adult)
+                                        ELSE (1, patient_id, service_division::varchar, is_adult)
+                                   END) AS count_patients,
                     COUNT(DISTINCT CASE WHEN is_adult
-                                          THEN (patient_id, service_division)
+                                          THEN (CASE WHEN service_group IN (9, 4)
+                                                       THEN (0, patient_id, service_code)
+                                                     ELSE (1, patient_id, service_division::varchar)
+                                                END)
                                    END) AS count_patients_adult,
                     COUNT(DISTINCT CASE WHEN NOT is_adult
-                                          THEN (patient_id, service_division)
+                                          THEN (CASE WHEN service_group in (9, 4)
+                                                       THEN (0, patient_id, service_code)
+                                                     ELSE (1, patient_id, service_division::varchar)
+                                                END)
                                    END) AS count_patients_child,
 
                     COUNT(DISTINCT service_id) AS count_services,
@@ -102,72 +56,12 @@ class ClinicPreventionSpec(MedicalServiceTypePage):
                              ELSE 0
                         END) AS total_tariff_child
                 FROM registry_services
-                WHERE service_term = 3
-                      AND service_reason IN (2)
-                      AND (service_group = 24 OR service_group IS NULL)
-                      AND NOT is_capitation
-                      AND service_division NOT IN (399, 401, 403)
-                GROUP BY mo_code, group_field
-                '''
-        return query
-
-    def get_output_order_fields(self):
-        fields = ('count_patients',
-                  'count_patients_adult',
-                  'count_patients_child',
-
-                  'count_services',
-                  'count_services_adult',
-                  'count_services_child',
-
-                  'total_tariff',
-                  'total_tariff_adult',
-                  'total_tariff_child')
-
-        return ('0', 2, fields),
-
-
-class ClinicPreventionAll(MedicalServiceTypePage):
-
-    def __init__(self):
-        self.data = None
-        self.page_number = 0
-
-    def get_query(self):
-        query = MedicalServiceTypePage.get_general_query() + '''
-                SELECT
-                    mo_code AS mo_code,
-                    '0' AS group_field,
-                    COUNT(DISTINCT (patient_id, service_division, is_adult)) AS count_patients,
-                    COUNT(DISTINCT CASE WHEN is_adult
-                                          THEN (patient_id, service_division)
-                                   END) AS count_patients_adult,
-                    COUNT(DISTINCT CASE WHEN NOT is_adult
-                                          THEN (patient_id, service_division)
-                                   END) AS count_patients_child,
-
-                    COUNT(DISTINCT service_id) AS count_services,
-                    COUNT(DISTINCT CASE WHEN is_adult
-                                          THEN service_id
-                                   END) AS count_services_adult,
-                    COUNT(DISTINCT CASE WHEN NOT is_adult
-                                          THEN service_id
-                                   END) AS count_services_child,
-
-                    SUM(service_tariff) AS total_tariff,
-                    SUM(CASE WHEN is_adult
-                               THEN service_tariff
-                             ELSE 0
-                        END) AS total_tariff_adult,
-                    SUM(CASE WHEN NOT is_adult
-                               THEN service_tariff
-                             ELSE 0
-                        END) AS total_tariff_child
-                FROM registry_services
-                WHERE service_term = 3
+                WHERE (service_term = 3
                       AND service_reason IN (2, 3)
                       AND (service_group = 24 OR service_group IS NULL)
-                      AND NOT is_capitation
+                      AND NOT is_capitation)
+                      OR (service_group = 9 AND service_code IN ('019214', '019215', '019216', '019217'))
+                      OR service_group = 4
                 GROUP BY mo_code, group_field
                 '''
         return query
@@ -188,7 +82,12 @@ class ClinicPreventionAll(MedicalServiceTypePage):
         return ('0', 2, fields),
 
 
-class ProphylacticExaminationAdult(MedicalServiceTypePage):
+class ProphylacticExaminationAdultPage(MedicalServiceTypePage):
+
+    """
+    Отчёт включает в себя:
+    1. Профосмотр взрослых (первичный и итоговый приём)
+    """
 
     def __init__(self):
         self.data = None

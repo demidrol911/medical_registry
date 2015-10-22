@@ -1,7 +1,15 @@
-from report_printer_clear.management.commands.medical_services_types_pages.general import MedicalServiceTypePage
+#! -*- coding: utf-8 -*-
+from general import MedicalServiceTypePage
 
 
-class DayHospitalHospital(MedicalServiceTypePage):
+class DayHospitalHospitalPage(MedicalServiceTypePage):
+
+    """
+    Отчёт включает в себя три вида помощи
+    1. Первичная (терапия, педиатрия, врач общей практики)
+    2. Специальная (приёмы врачей специалистов) + инвазивные методы по гинекологии
+    3. Инвазивные методы по гинекологии также представлены отдельно (см. InvasiveMethodsPage)
+    """
 
     def __init__(self):
         self.data = None
@@ -101,7 +109,7 @@ class DayHospitalHospital(MedicalServiceTypePage):
                     JOIN medical_division md
                       ON md.id_pk = event_division_id
                 WHERE (service_term = 2 AND service_group IS NULL
-                      AND md.term_fk = 10 AND is_regional_budget) OR service_group = 28
+                      AND md.term_fk = 10) OR service_group = 28
                 GROUP BY mo_code, group_field
                 '''
         return query
@@ -143,6 +151,11 @@ class DayHospitalHospital(MedicalServiceTypePage):
 
 
 class InvasiveMethodsPage(MedicalServiceTypePage):
+
+    """
+    Отчёт включает в себя инвазивные методы по гинекологии.
+    Используется для вынесения данных по инвазивным методам в отдельную колонку
+    """
 
     def __init__(self):
         self.data = None
@@ -186,12 +199,6 @@ class InvasiveMethodsPage(MedicalServiceTypePage):
                                THEN service_accepted
                         END) AS total_accepted_child
                 FROM registry_services
-                    LEFT JOIN provided_service_coefficient psc
-                      ON psc.service_fk = service_id
-                    LEFT JOIN tariff_coefficient tc
-                      ON tc.id_pk = psc.coefficient_fk
-                    JOIN medical_division md
-                      ON md.id_pk = event_division_id
                 WHERE service_group = 28
                 GROUP BY mo_code, group_field
                 '''

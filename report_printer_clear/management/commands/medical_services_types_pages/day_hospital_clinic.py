@@ -1,7 +1,14 @@
-from report_printer_clear.management.commands.medical_services_types_pages.general import MedicalServiceTypePage
+#! -*- coding: utf-8 -*-
+from general import MedicalServiceTypePage
 
 
-class DayHospitalPoliclinic(MedicalServiceTypePage):
+class DayHospitalClinicPage(MedicalServiceTypePage):
+
+    """
+    Отчёт включает в себя три вида помощи
+    1. Первичная (терапия, педиатрия, врач общей практики)
+    2. Специальная (приёмы врачей специалистов) + ЭКО
+    """
 
     def __init__(self):
         self.data = None
@@ -101,7 +108,7 @@ class DayHospitalPoliclinic(MedicalServiceTypePage):
                     JOIN medical_division md
                       ON md.id_pk = event_division_id
                 WHERE (service_term = 2 AND service_group IS NULL
-                      AND md.term_fk = 11 AND is_regional_budget) OR service_group = 17
+                      AND md.term_fk = 11) OR service_group = 17
                 GROUP BY mo_code, group_field
                 '''
         return query

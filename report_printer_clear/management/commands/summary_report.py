@@ -39,7 +39,8 @@ class Command(BaseCommand):
 
         report_wizard_final = AutomaticReportsWizard(
             [report_accepted,
-             report_invoiced, report_defects]
+             report_invoiced,
+             report_defects]
         )
         report_wizard_final.create_reports(8)
 
@@ -51,5 +52,5 @@ class Command(BaseCommand):
 
         print
 
-        print u'После проверки экспертов:'
+        print u'Итоговые:'
         report_wizard_final.print_completed_reports()

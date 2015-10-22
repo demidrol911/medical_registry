@@ -1,7 +1,7 @@
 from general import MedicalServiceTypePage
 
 
-class ClinicOtherPurposesPrimary(MedicalServiceTypePage):
+class ClinicOtherPurposesPrimaryPage(MedicalServiceTypePage):
 
     def __init__(self):
         self.data = None

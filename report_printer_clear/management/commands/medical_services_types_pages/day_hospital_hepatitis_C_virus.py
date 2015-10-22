@@ -1,7 +1,7 @@
-from report_printer_clear.management.commands.medical_services_types_pages.general import MedicalServiceTypePage
+from general import MedicalServiceTypePage
 
 
-class DayHospitalHepatitisCVirus(MedicalServiceTypePage):
+class DayHospitalHepatitisCVirusPage(MedicalServiceTypePage):
 
     def __init__(self):
         self.data = None

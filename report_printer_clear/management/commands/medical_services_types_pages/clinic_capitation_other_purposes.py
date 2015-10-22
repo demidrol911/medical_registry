@@ -1,7 +1,13 @@
+#! -*- coding: utf-8 -*-
 from general import MedicalServiceTypePage
 
 
-class ClinicCapitationOtherPurposesPrimary(MedicalServiceTypePage):
+class ClinicCapitationOtherPurposesPrimaryPage(MedicalServiceTypePage):
+
+    """
+    Отчёт вклчает в себя:
+    1. Поликлиника (посещения с иными целями)
+    """
 
     def __init__(self):
         self.data = None

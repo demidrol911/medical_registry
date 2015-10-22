@@ -3,43 +3,49 @@
 from django.core.management.base import BaseCommand
 from main.funcs import howlong
 from medical_service_register.path import REESTR_EXP
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_all import ClinicAllPrimary, \
-    ClinicAllSpec, ClinicAll
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_all import \
-    ClinicCapitationAll, ClinicCapitationAllPrimary, ClinicCapitationAllSpec
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_disease import \
-    ClinicCapitationDiseaseTreatmentPrimary, ClinicCapitationDiseaseSingleVisitSpec, \
-    ClinicCapitationDiseaseSingleVisitAll
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_other_purposes import \
-    ClinicCapitationOtherPurposesPrimary
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_capitation_prevention import \
-    ClinicCapitationPreventionSpec, ClinicCapitationPreventionAll
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_disease import \
-    ClinicDiseaseTreatmentSpec, ClinicDiseaseTreatmentAll, ClinicDiseaseSingleVisitSpec, ClinicDiseaseSingleVisitAll
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_emergency import ClinicEmergencySpec, \
-    ClinicEmergencyAll, EmergencyCareEmergencyDepartment
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_other_purposes import \
-    ClinicOtherPurposesPrimary
-from report_printer_clear.management.commands.medical_services_types_pages.clinic_prevention import \
-    ClinicPreventionPrimary, ClinicPreventionSpec, ClinicPreventionAll, ProphylacticExaminationAdult
-from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_all import DayHospitalAll
-from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_home import DayHospitalHome
-from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_hospital import \
-    DayHospitalHospital, InvasiveMethodsPage
-from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_hepatitis_C_virus import \
-   DayHospitalHepatitisCVirus
-from report_printer_clear.management.commands.medical_services_types_pages.day_hospital_policlinic import \
-    DayHospitalPoliclinic
-from report_printer_clear.management.commands.medical_services_types_pages.hospital_ambulance import \
-    HospitalAmbulancePage
-from report_printer_clear.management.commands.medical_services_types_pages.hospital_hmc import HospitalHmcPage
-from report_printer_clear.management.commands.medical_services_types_pages.magnetic_resonance_imaging import MriPage
-from report_printer_clear.management.commands.medical_services_types_pages.policlinic import \
-    PoliclinicCapitationVisitOtherPurposesPage, PoliclinicCapitationTreatmentDiseasePage
 from report_printer_clear.utils.report import Report, ReportParameters
 
+from medical_services_types_pages.clinic_capitation_disease import \
+    ClinicCapitationDiseaseTreatmentPrimaryPage, ClinicCapitationDiseaseSingleVisitAllPage
+
+from medical_services_types_pages.clinic_capitation_other_purposes import \
+    ClinicCapitationOtherPurposesPrimaryPage
+
+from medical_services_types_pages.clinic_capitation_prevention import \
+    ClinicCapitationPreventionAllPage
+
+from medical_services_types_pages.clinic_disease import\
+    ClinicDiseaseTreatmentAllPage, ClinicDiseaseSingleVisitAllPage
+
+from medical_services_types_pages.clinic_emergency import \
+    ClinicEmergencyAllPage
+
+from medical_services_types_pages.clinic_other_purposes import \
+    ClinicOtherPurposesPrimaryPage
+
+from medical_services_types_pages.clinic_prevention import \
+    ClinicPreventionAllPage, ProphylacticExaminationAdultPage
+
+from medical_services_types_pages.day_hospital_home import DayHospitalHomePage
+
+from medical_services_types_pages.day_hospital_hospital import \
+    DayHospitalHospitalPage, InvasiveMethodsPage
+
+from medical_services_types_pages.day_hospital_hepatitis_C_virus import \
+    DayHospitalHepatitisCVirusPage
+
+from medical_services_types_pages.day_hospital_clinic import \
+    DayHospitalClinicPage
+
+from medical_services_types_pages.hospital_ambulance import \
+    HospitalAmbulancePage
+
+from medical_services_types_pages.hospital_hmc import HospitalHmcPage
+
+from medical_services_types_pages.magnetic_resonance_imaging import MriPage
+
 from medical_services_types_pages.examination_adult import \
-    ExamAdultFirstStagePage, ExamAdultSecondStagePage, PreventiveInspectionAdult
+    ExamAdultFirstStagePage, ExamAdultSecondStagePage, PreventiveInspectionAdultPage
 
 from medical_services_types_pages.acute_care import AcuteCarePage
 
@@ -79,7 +85,7 @@ class Command(BaseCommand):
              'title': u'диспансеризация взрослых'},
 
             {'pattern': 'preventive_inspection_adult.xls',
-             'pages': (PreventiveInspectionAdult, ),
+             'pages': (PreventiveInspectionAdultPage, ),
              'title': u'профилактический осмотр взрослого населения'},
 
             # Диспансеризация и профосмотры несовершеннолетних
@@ -107,24 +113,20 @@ class Command(BaseCommand):
 
             # Дневной стационар
             {'pattern': 'day_hospital_hospital.xls',
-             'pages': (DayHospitalHospital, InvasiveMethodsPage),
+             'pages': (DayHospitalHospitalPage, InvasiveMethodsPage),
              'title': u'дневной стационар при стационаре'},
 
             {'pattern': 'day_hospital_policlinic.xls',
-             'pages': (DayHospitalPoliclinic, ),
+             'pages': (DayHospitalClinicPage, ),
              'title': u'дневной стационар при поликлинике'},
 
             {'pattern': 'day_hospital_home.xls',
-             'pages': (DayHospitalHome, ),
+             'pages': (DayHospitalHomePage, ),
              'title': u'дневной стационар на дому'},
 
             {'pattern': 'day_hospital_hepatitis_C_virus.xls',
-             'pages': (DayHospitalHepatitisCVirus, ),
+             'pages': (DayHospitalHepatitisCVirusPage, ),
              'title': u'дневной стационар (вирус гепатита С)'},
-
-            {'pattern': 'day_hospital_all.xls',
-             'pages': (DayHospitalAll, InvasiveMethodsPage),
-             'title': u'дневной стационар свод'},
 
             # Круглосуточный стационар
             {'pattern': 'hospital.xls',
@@ -146,43 +148,43 @@ class Command(BaseCommand):
 
             # Поликлиника (за единицу объёма)
             {'pattern': 'clinic_emergency_all.xls',
-             'pages': (ClinicEmergencyAll, ),
+             'pages': (ClinicEmergencyAllPage, ),
              'title': u'поликлиника (в неотложной форме) свод'},
 
             {'pattern': 'clinic_disease_single_visit_all.xls',
-             'pages': (ClinicDiseaseSingleVisitAll, ),
+             'pages': (ClinicDiseaseSingleVisitAllPage, ),
              'title': u'поликлиника (разовые посещения в связи с заболеванием) свод'},
 
             {'pattern': 'clinic_other_purposes_primary.xls',
-             'pages': (ClinicOtherPurposesPrimary, ),
+             'pages': (ClinicOtherPurposesPrimaryPage, ),
              'title': u'поликлиника (с иными целями) перв.мед.помощь'},
 
             {'pattern': 'clinic_disease_treatment_all.xls',
-             'pages': (ClinicDiseaseTreatmentAll, ),
+             'pages': (ClinicDiseaseTreatmentAllPage, ),
              'title': u'поликлиника (обращения по поводу заболевания) свод'},
 
             {'pattern': 'clinic_prevention_all.xls',
-             'pages': (ClinicPreventionAll, ProphylacticExaminationAdult),
+             'pages': (ClinicPreventionAllPage, ProphylacticExaminationAdultPage),
              'title': u'поликлиника (с профилактической целью) свод'},
 
             # Поликлиника (подушевое)
             {'pattern': 'clinic_capitation_other_purposes_primary.xls',
-             'pages': (ClinicCapitationOtherPurposesPrimary, ),
+             'pages': (ClinicCapitationOtherPurposesPrimaryPage, ),
              'title': u'поликлиника фин-ние по подушевому нормативу '
                       u'(посещения с иными целями) перв.мед.помощь'},
 
             {'pattern': 'clinic_capitation_prevention_all.xls',
-             'pages': (ClinicCapitationPreventionAll, ),
+             'pages': (ClinicCapitationPreventionAllPage, ),
              'title': u'поликлиника фин-ние по подушевому нормативу '
                       u'(посещения с профилактической целью) свод'},
 
             {'pattern': 'clinic_capitation_disease_single_visit_all.xls',
-             'pages': (ClinicCapitationDiseaseSingleVisitAll, ),
+             'pages': (ClinicCapitationDiseaseSingleVisitAllPage, ),
              'title': u'поликлиника фин-ние по подушевому нормативу (разовые посещения в связи с '
-                      u'заболеванием) свод.xls'},
+                      u'заболеванием) свод'},
 
             {'pattern': 'clinic_capitation_disease_treatment_primary.xls',
-             'pages': (ClinicCapitationDiseaseTreatmentPrimary, ),
+             'pages': (ClinicCapitationDiseaseTreatmentPrimaryPage, ),
              'title': u'поликлиника фин-ние по подушевому нормативу (обращения по поводу заболевания) перв.мед.помощь'},
 
             # Подушевое

@@ -1,7 +1,7 @@
-from report_printer_clear.management.commands.medical_services_types_pages.general import MedicalServiceTypePage
+from general import MedicalServiceTypePage
 
 
-class DayHospitalHome(MedicalServiceTypePage):
+class DayHospitalHomePage(MedicalServiceTypePage):
 
     def __init__(self):
         self.data = None
@@ -101,7 +101,7 @@ class DayHospitalHome(MedicalServiceTypePage):
                     JOIN medical_division md
                       ON md.id_pk = event_division_id
                 WHERE service_term = 2 AND service_group IS NULL
-                      AND md.term_fk = 12 AND is_regional_budget
+                      AND md.term_fk = 12
                 GROUP BY mo_code, group_field
                 '''
         return query
