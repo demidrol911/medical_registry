@@ -119,7 +119,7 @@ class Command(BaseCommand):
                 'sanctions': func.get_sanctions(mo_code)
             }
             act_name = print_summary(mo_code, data)
-            PseExporter().handle(*[mo_code, 4])
+            PseExporter().handle(*[mo_code, 8])
             elapsed = clock() - start
             print u'Выгружен', mo_code
             print u'Время выполнения: {0:d} мин {1:d} сек'.format(int(elapsed//60), int(elapsed % 60))
