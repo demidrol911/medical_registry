@@ -21,21 +21,30 @@ class ClinicPreventionAllPage(MedicalServiceTypePage):
                 SELECT
                     mo_code AS mo_code,
                     '0' AS group_field,
-                    COUNT(DISTINCT CASE WHEN service_group IN (9, 4)
+                    COUNT(DISTINCT CASE WHEN service_group IN (4)
                                           THEN (0, patient_id, service_code, is_adult)
+                                        WHEN service_group IN (9)
+                                          THEN (2, patient_id, service_group, is_adult)
                                         ELSE (1, patient_id, service_division::varchar, is_adult)
                                    END) AS count_patients,
                     COUNT(DISTINCT CASE WHEN is_adult
-                                          THEN (CASE WHEN service_group IN (9, 4)
-                                                       THEN (0, patient_id, service_code)
-                                                     ELSE (1, patient_id, service_division::varchar)
-                                                END)
+                                          THEN (
+                                             CASE WHEN service_group IN (4)
+                                                    THEN (0, patient_id, service_code, is_adult)
+                                                  WHEN service_group IN (9)
+                                                    THEN (2, patient_id, service_group, is_adult)
+                                                  ELSE (1, patient_id, service_division::varchar, is_adult)
+                                             END
+                                          )
                                    END) AS count_patients_adult,
                     COUNT(DISTINCT CASE WHEN NOT is_adult
-                                          THEN (CASE WHEN service_group in (9, 4)
-                                                       THEN (0, patient_id, service_code)
-                                                     ELSE (1, patient_id, service_division::varchar)
-                                                END)
+                                          THEN (
+                                             CASE WHEN service_group IN (4)
+                                                    THEN (0, patient_id, service_code, is_adult)
+                                                  WHEN service_group IN (9)
+                                                    THEN (2, patient_id, service_group, is_adult)
+                                             ELSE (1, patient_id, service_division::varchar, is_adult)
+                                             END)
                                    END) AS count_patients_child,
 
                     COUNT(DISTINCT service_id) AS count_services,
@@ -46,13 +55,13 @@ class ClinicPreventionAllPage(MedicalServiceTypePage):
                                           THEN service_id
                                    END) AS count_services_child,
 
-                    SUM(service_tariff) AS total_tariff,
+                    SUM(service_accepted) AS total_tariff,
                     SUM(CASE WHEN is_adult
-                               THEN service_tariff
+                               THEN service_accepted
                              ELSE 0
                         END) AS total_tariff_adult,
                     SUM(CASE WHEN NOT is_adult
-                               THEN service_tariff
+                               THEN service_accepted
                              ELSE 0
                         END) AS total_tariff_child
                 FROM registry_services
