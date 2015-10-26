@@ -1077,18 +1077,13 @@ def main():
             checks.underpay_not_paid_in_oms(register_element)
             checks.underpay_invalid_hitech_service_diseases(register_element)
 
-            # -- эта проверка уже не нужна
-            #checks.underpay_wrong_age_adult_examination(register_element)
-
             checks.underpay_wrong_examination_age_group(register_element)
             checks.underpay_wrong_age_examination_children_adopted(register_element)
             checks.underpay_wrong_age_examination_children_difficult(register_element)
             checks.underpay_service_term_mismatch(register_element)
             checks.underpay_service_term_kind_mismatch(register_element)
-            checks.underpay_wrong_gender_examination(register_element)
             checks.underpay_incorrect_examination_events(register_element)
             checks.underpay_hitech_with_small_duration(register_element)
-            #checks.underpay_services_at_weekends(register_element)
 
         print 'iterate tariff', register_element
         calculate_tariff(register_element)
