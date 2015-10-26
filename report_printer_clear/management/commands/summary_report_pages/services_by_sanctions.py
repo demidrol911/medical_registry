@@ -123,7 +123,11 @@ class SanctionsPage(ReportPage):
                               LIMIT 1
                         )
                     JOIN medical_error me
-                       ON me.id_pk = pss.error_fk
+                       ON me.id_pk = COALESCE((SELECT me1.parent_fk
+                                              FROM medical_error me1
+                                              WHERE me1.id_pk = pss.error_fk
+                                                   AND me1.parent_fk IS NOT NULL),
+                                              pss.error_fk)
                     JOIN payment_failure_cause pfc
                        ON pfc.id_pk = me.failure_cause_fk
                 WHERE mr.is_active

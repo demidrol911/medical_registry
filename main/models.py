@@ -1482,6 +1482,7 @@ class SanctionStatus(models.Model):
     SANCTION_TYPE_REMOVED_BY_EXPERT = 5
     SANCTION_TYPE_REMOVED_BY_ECONOMIST = 6
     SANCTION_TYPE_REMOVED_BY_DEVELOPER = 7
+    SANCTION_TYPE_ADDED_MAX_ERROR_BY_MEK = 8
     TYPES = (
         (SANCTION_TYPE_ADDED_BY_MEK, u'Ошибка добавлена на первоначальном МЭК'),
         (SANCTION_TYPE_ADDED_BY_EXPERT, u'Ошибка добавлена врачём-экспертом'),
@@ -1490,6 +1491,7 @@ class SanctionStatus(models.Model):
         (SANCTION_TYPE_REMOVED_BY_EXPERT, u'Ошибка снята врачём-экспертом'),
         (SANCTION_TYPE_REMOVED_BY_ECONOMIST, u'Ошибка снята экономистом'),
         (SANCTION_TYPE_REMOVED_BY_DEVELOPER, u'Ошибка снята программистом'),
+        (SANCTION_TYPE_ADDED_MAX_ERROR_BY_MEK, u'Ошибка проставлена на всём случае с максимальным весом')
     )
 
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')

@@ -1088,7 +1088,7 @@ def main():
             checks.underpay_wrong_gender_examination(register_element)
             checks.underpay_incorrect_examination_events(register_element)
             checks.underpay_hitech_with_small_duration(register_element)
-            checks.underpay_services_at_weekends(register_element)
+            #checks.underpay_services_at_weekends(register_element)
 
         print 'iterate tariff', register_element
         calculate_tariff(register_element)
@@ -1111,9 +1111,9 @@ def main():
             checks.underpay_neurologist_first_phase_exam(register_element)
             checks.underpay_multi_division_disease_events(register_element)
             checks.underpay_multi_subgrouped_stomatology_events(register_element)
-            checks.underpay_outpatient_event(register_element)
             checks.underpay_incorrect_preventive_examination_event(register_element)
             checks.underpay_repeated_preventive_examination_event(register_element)
+            checks.underpay_outpatient_event(register_element)
         print Sanction.objects.filter(
             service__event__record__register__is_active=True,
             service__event__record__register__year=register_element['year'],

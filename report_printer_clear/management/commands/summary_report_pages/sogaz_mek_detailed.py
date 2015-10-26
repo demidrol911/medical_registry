@@ -432,7 +432,7 @@ class SogazMekDetailedPage(ReportPage):
                 pe.term_fk AS term,
                 md.code  AS division_code,
                 msp.code AS profile_code,
-                pss.error_fk AS error_id,
+                me.id_pk AS error_id,
                 (ps.payment_kind_fk = 2 OR pe.term_fk = 4) AS is_capitation
             FROM medical_register mr
                 JOIN medical_register_record mrr
@@ -452,16 +452,27 @@ class SogazMekDetailedPage(ReportPage):
                 LEFT JOIN medical_service_profile msp
                    ON msp.id_pk = ps.profile_fk
                 JOIN provided_service_sanction pss
-                   ON pss.service_fk = ps.id_pk AND pss.error_fk = (
-                            SELECT
-                                pss1.error_fk
-                            FROM provided_service_sanction pss1
-                                JOIN medical_error me1
-                                   ON me1.id_pk = pss1.error_fk
-                            WHERE pss1.is_active
-                                  AND pss1.service_fk = ps.id_pk
-                            ORDER BY me1.weight DESC LIMIT 1
-                   )
+                       ON pss.service_fk = ps.id_pk
+                          AND pss.is_active
+                          AND pss.type_fk = 1
+                          AND pss.error_fk = (
+                              SELECT inner_me.id_pk
+                              FROM medical_error inner_me
+                                  JOIN provided_service_sanction inner_pss
+                                     ON inner_me.id_pk = inner_pss.error_fk
+                                        AND inner_pss.service_fk = ps.id_pk
+
+                              WHERE inner_pss.is_active
+                                  AND inner_pss.type_fk = 1
+                              ORDER BY inner_me.weight DESC
+                              LIMIT 1
+                        )
+                JOIN medical_error me
+                   ON me.id_pk = COALESCE((SELECT me1.parent_fk
+                                          FROM medical_error me1
+                                          WHERE me1.id_pk = pss.error_fk
+                                               AND me1.parent_fk IS NOT NULL),
+                                          pss.error_fk)
             WHERE mr.is_active
                   AND mr.year = %(year)s
                   AND mr.period = %(period)s
