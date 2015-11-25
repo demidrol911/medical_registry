@@ -26,7 +26,8 @@ class ExcelBook():
         if template:
             path_to_template = os.path.join(EXCEL_TEMPLATE_DIR, template)
             template_book = xlrd.open_workbook(path_to_template, formatting_info=True)
-            format_map = template_book.xf_list
+            format_list_map = template_book.xf_list
+            format_map = template_book.format_map
             colour_map = template_book.colour_map
             font_list = template_book.font_list
             for idx, temp_sheet in enumerate(template_book.sheets()):
@@ -53,7 +54,8 @@ class ExcelBook():
                         current_sheet.set_column(column_index, column_index, column_width)
 
                         cell = temp_sheet.cell(row_index, column_index)
-                        format_cell = format_map[cell.xf_index]
+                        format_cell = format_list_map[cell.xf_index]
+                        format_obj = format_map[format_cell.format_key]
                         colour_cell = colour_map[format_cell.background.pattern_colour_index]
                         font_cell = font_list[format_cell.font_index]
                         style = {
@@ -71,6 +73,8 @@ class ExcelBook():
                         }
                         if colour_cell:
                             style['fg_color'] = converter.convert_colour(colour_cell)
+                        if '0.0' in format_obj.format_str:
+                            style['num_format'] = format_obj.format_str
 
                         style_cell = self.book.add_format(style)
                         if unicode(cell.value).startswith('#='):
