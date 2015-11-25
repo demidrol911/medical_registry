@@ -53,7 +53,7 @@ DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
                                   '98770', '098770', '098770', '198770'
 )
 HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280069', '280076', '280091', )
-DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', '280069', '280076', '280091', )
+DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', '280076', '280091', )
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s(28002|28004)_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
@@ -1014,14 +1014,13 @@ def main():
             lflk.plain_put('</FLK_P>')
             lflk.close()
 
-        over_volume = volume and (len(hospital_volume_service) > volume.hospital
-                                  or len(day_hospital_volume_service) > volume.day_hospital)
+        over_volume_hospital = volume and (len(hospital_volume_service) > volume.hospital) \
+            and organization not in HOSPITAL_VOLUME_MO_EXCLUSIONS
+        over_volume_day_hospital = volume and (len(day_hospital_volume_service) > volume.day_hospital) \
+            and organization not in DAY_HOSPITAL_MO_EXCLUSIONS
 
-        if over_volume and organization not in HOSPITAL_VOLUME_MO_EXCLUSIONS \
-                and organization not in DAY_HOSPITAL_MO_EXCLUSIONS:
-
+        if over_volume_hospital or over_volume_day_hospital:
             has_insert = False
-
             message_file_name = TEMP_DIR+u'Ошибка обработки {0}  - сверхобъёмы.txt'.format(organization)
             message_file = open(message_file_name, 'w')
             message = (u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает, что в соответствии с п.6 статьи 39 \n'
@@ -1033,16 +1032,13 @@ def main():
                        u'\n'
                        u'В текущем реестре выполнено:\n'
                        )
-            message += \
-                (u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
-                 len(hospital_volume_service), volume.hospital)) \
-                if len(hospital_volume_service) > volume.hospital \
-                else u''
-            message += \
-                (u'Дневной стационар - {0}, запланировано решением тарифной комисси - {1}\n'.format(
-                 len(day_hospital_volume_service), volume.day_hospital)) \
-                if len(day_hospital_volume_service) > volume.day_hospital \
-                else u''
+            if over_volume_hospital:
+                message += u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'.\
+                    format(len(hospital_volume_service), volume.hospital)
+            if over_volume_day_hospital:
+                message += u'Дневной стационар - {0}, запланировано решением тарифной комисси - {1}\n'.\
+                    format(len(day_hospital_volume_service), volume.day_hospital)
+
             message += u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n'
             print len(hospital_volume_service), volume.hospital, len(day_hospital_volume_service), volume.day_hospital
             message_file.write(message.encode('cp1251'))
