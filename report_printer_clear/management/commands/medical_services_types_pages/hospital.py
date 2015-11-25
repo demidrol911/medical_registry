@@ -101,15 +101,15 @@ class HospitalPage(MedicalServiceTypePage):
                             END
                     ) AS coeff_kskp_child,
 
-                    SUM(CASE WHEN psc.coefficient_fk = 18
+                    SUM(CASE WHEN psc.coefficient_fk IN (18, 13)
                                THEN ROUND(service_tariff * (tc.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_4,
-                    SUM(CASE WHEN is_adult AND psc.coefficient_fk = 18
+                    SUM(CASE WHEN is_adult AND psc.coefficient_fk IN (18, 13)
                                THEN ROUND(service_tariff * (tc.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_4_adult,
-                    SUM(CASE WHEN NOT is_adult AND psc.coefficient_fk = 18
+                    SUM(CASE WHEN NOT is_adult AND psc.coefficient_fk IN (18, 13)
                                THEN ROUND(service_tariff * (tc.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_4_child,
