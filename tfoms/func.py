@@ -25,7 +25,7 @@ cur_date = datetime.now()
 
 YEAR = '2015'  # str(cur_date.year)
 PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
-PERIOD = '09'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+PERIOD = '11'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -472,9 +472,6 @@ def calculate_capitation(term, mo_code):
 
     for key in result:
         result[key]['tariff'] = Decimal(round(result[key]['population']*result[key]['basic_tariff'], 2))
-        # Повышающий коэффициент для Магдагачей
-        if mo_code == '280029':
-            result[key]['tariff'] *= 2
         # Повышающий коэффициент для ДГКБ
         if mo_code == '280064' and term == 3:
             result[key]['tariff'] = Decimal(round(float(result[key]['tariff'])*1.95, 2))
