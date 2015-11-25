@@ -1097,6 +1097,7 @@ def main():
             checks.underpay_invalid_stomatology_event(register_element)
             checks.underpay_repeated_service(register_element)
             checks.underpay_invalid_outpatient_event(register_element)
+            checks.underpay_wrong_clinic_event(register_element)
             checks.underpay_examination_event(register_element)
             checks.underpay_ill_formed_children_examination(register_element)
             checks.underpay_ill_formed_adult_examination(register_element)
