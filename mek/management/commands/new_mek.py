@@ -1028,6 +1028,7 @@ def get_payments_sum(service):
             'provided_tariff': round(provided_tariff, 2)}
 
 
+@howlong
 def main():
     register_element = get_register_element()
 
