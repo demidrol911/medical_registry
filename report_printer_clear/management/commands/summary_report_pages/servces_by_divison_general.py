@@ -13,7 +13,7 @@ from report_printer.excel_style import (
 
 
 class GeneralServicesPage(ReportPage):
-    COUNT_CELL_IN_ACT = 28
+    COUNT_CELL_IN_ACT = 32
     STATISTIC_FIELDS = [
         ('patients_adult', int),
         ('patients_child', int),
@@ -41,6 +41,10 @@ class GeneralServicesPage(ReportPage):
         ('pso_to_rsc_or_pediatrics_coefficient_child', Decimal),
         ('cpg_coefficient_adult', Decimal),
         ('cpg_coefficient_child', Decimal),
+        ('hospital_level_coefficient_adult', Decimal),
+        ('hospital_level_coefficient_child', Decimal),
+        ('index_coefficient_adult', Decimal),
+        ('index_coefficient_child', Decimal),
         ('accepted_payment_adult', Decimal),
         ('accepted_payment_child', Decimal)
     ]
@@ -318,6 +322,7 @@ class GeneralServicesPage(ReportPage):
                            WHEN ps.payment_type_fk = 4 THEN ps.accepted_payment + ps.provided_tariff
                       END, 2) AS service_accepted_payment,
                 ROUND(ps.provided_tariff, 2) AS service_provided_tariff,
+                ROUND(ps.calculated_payment, 2) AS service_calculated_payment,
 
                 CASE
                     WHEN ms.group_fk = 19
@@ -396,7 +401,10 @@ class GeneralServicesPage(ReportPage):
                 ROUND(CASE WHEN tc.id_pk = 18 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS pediatrics_coefficient,
 
                 -- Перевод из ПСО в РСЦ
-                ROUND(CASE WHEN tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS pso_to_rsc_coefficient
+                ROUND(CASE WHEN tc.id_pk = 13 THEN (tc.value-1)*ps.tariff ELSE 0 END, 2) AS pso_to_rsc_coefficient,
+
+                ROUND(CASE WHEN tc_indexation.id_pk in (20, 21, 22) THEN (tc_indexation.value-1)*ps.calculated_payment ELSE 0 END, 2) AS hospital_level_coefficient,
+                ROUND(CASE WHEN tc_indexation.id_pk in (23, 24, 25) THEN (tc_indexation.value-1)*ps.tariff ELSE 0 END, 2) AS index_coefficient
 
             FROM provided_service ps
               JOIN provided_event pe
@@ -436,11 +444,19 @@ class GeneralServicesPage(ReportPage):
             LEFT JOIN provided_service_coefficient psc_curation
                 ON psc_curation.service_fk = ps.id_pk
                    AND psc_curation.coefficient_fk = 7
+            LEFT JOIN provided_service_coefficient psc_indexation
+                ON psc_indexation.service_fk = ps.id_pk
+                   AND psc_indexation.coefficient_fk in (20, 21, 22, 23, 24, 25)
+
             LEFT JOIN provided_service_coefficient psc
                 ON psc.service_fk = ps.id_pk
-                   AND psc.coefficient_fk != 7
+                   AND psc.coefficient_fk not in (7, 20, 21, 22, 23, 24, 25)
+
             LEFT JOIN tariff_coefficient tc
                 ON tc.id_pk = psc.coefficient_fk
+            LEFT JOIN tariff_coefficient tc_indexation
+                ON tc_indexation.id_pk = psc_indexation.coefficient_fk
+
             WHERE mr.is_active
               AND mr.year = %(year)s
               AND mr.period = %(period)s
@@ -549,6 +565,15 @@ class GeneralServicesPage(ReportPage):
 
             0 AS fap_coefficient_adult,
             0 AS fap_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN hospital_level_coefficient END), 0) AS hospital_level_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN hospital_level_coefficient END), 0) AS hospital_level_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile THEN index_coefficient END), 0) AS index_coefficient_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile THEN index_coefficient END), 0) AS index_coefficient_child,
+
+            COALESCE(SUM(CASE WHEN NOT is_children_profile AND NOT is_capitation THEN service_calculated_payment END), 0) AS calculated_payment_adult,
+            COALESCE(SUM(CASE WHEN is_children_profile AND NOT is_capitation THEN service_calculated_payment END), 0) AS calculated_payment_child,
 
             COALESCE(SUM(CASE WHEN NOT is_children_profile AND NOT is_capitation THEN service_accepted_payment END), 0) AS accepted_payment_adult,
             COALESCE(SUM(CASE WHEN is_children_profile AND NOT is_capitation THEN service_accepted_payment END), 0) AS accepted_payment_child
