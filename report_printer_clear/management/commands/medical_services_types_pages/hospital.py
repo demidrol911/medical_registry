@@ -114,29 +114,29 @@ class HospitalPage(MedicalServiceTypePage):
                              ELSE 0
                         END) AS coeff1_4_child,
 
-                    SUM(CASE WHEN psc.coefficient_fk = 16
-                               THEN ROUND(service_tariff * (tc.value - 1), 2)
+                    SUM(CASE WHEN psc_indexation.coefficient_fk IN (20, 21, 22) AND (service_group IS NULL OR service_group = 32)
+                               THEN ROUND(service_calculated * (tc_indexation.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_2,
-                    SUM(CASE WHEN is_adult AND psc.coefficient_fk = 16
-                               THEN ROUND(service_tariff * (tc.value - 1), 2)
+                    SUM(CASE WHEN is_adult AND psc_indexation.coefficient_fk IN (20, 21, 22) AND (service_group IS NULL OR service_group = 32)
+                               THEN ROUND(service_calculated * (tc_indexation.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_2_adult,
-                    SUM(CASE WHEN NOT is_adult AND psc.coefficient_fk = 16
-                               THEN ROUND(service_tariff * (tc.value - 1), 2)
+                    SUM(CASE WHEN NOT is_adult AND psc_indexation.coefficient_fk IN (20, 21, 22) AND (service_group IS NULL OR service_group = 32)
+                               THEN ROUND(service_calculated * (tc_indexation.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_2_child,
 
-                    SUM(CASE WHEN psc.coefficient_fk = 17
-                               THEN ROUND(service_tariff * (tc.value - 1), 2)
+                    SUM(CASE WHEN psc_indexation.coefficient_fk IN (20, 21, 22) AND service_group IN (1, 2)
+                               THEN ROUND(service_calculated * (tc_indexation.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_1,
-                    SUM(CASE WHEN is_adult AND psc.coefficient_fk = 17
-                               THEN ROUND(service_tariff * (tc.value - 1), 2)
+                    SUM(CASE WHEN is_adult AND psc_indexation.coefficient_fk IN (20, 21, 22) AND service_group IN (1, 2)
+                               THEN ROUND(service_calculated * (tc_indexation.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_1_adult,
-                    SUM(CASE WHEN NOT is_adult AND psc.coefficient_fk = 17
-                               THEN ROUND(service_tariff * (tc.value - 1), 2)
+                    SUM(CASE WHEN NOT is_adult AND psc_indexation.coefficient_fk IN (20, 21, 22) AND service_group IN (1, 2)
+                               THEN ROUND(service_calculated * (tc_indexation.value - 1), 2)
                              ELSE 0
                         END) AS coeff1_1_child,
 
@@ -163,12 +163,16 @@ class HospitalPage(MedicalServiceTypePage):
                 FROM registry_services
                     LEFT JOIN provided_service_coefficient psc
                       ON psc.service_fk = service_id
-                         AND psc.coefficient_fk != 7
+                         AND psc.coefficient_fk NOT IN (7, 20, 21, 22, 23, 24, 25)
                     LEFT JOIN provided_service_coefficient psc_curation
                       ON psc_curation.service_fk = service_id
                          AND psc_curation.coefficient_fk = 7
+                    LEFT JOIN provided_service_coefficient psc_indexation
+                      ON psc_indexation.service_fk = service_id AND psc_indexation.coefficient_fk IN (20, 21, 22, 23, 24, 25)
                     LEFT JOIN tariff_coefficient tc
                       ON tc.id_pk = psc.coefficient_fk
+                    LEFT JOIN tariff_coefficient tc_indexation
+                      ON tc_indexation.id_pk = psc_indexation.coefficient_fk
                 WHERE ((service_term = 1
                       AND (service_group != 20 OR service_group IS NULL))
                       OR (mo_code IN ('280013', '280043')

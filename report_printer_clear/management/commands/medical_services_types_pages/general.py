@@ -70,6 +70,7 @@ class MedicalServiceTypePage(ReportPage):
                         pe.id_pk AS event_id,
                         ROUND(ps.tariff, 2) AS service_tariff,
                         ROUND(ps.accepted_payment, 2) AS service_accepted,
+                        ROUND(ps.calculated_payment, 2) AS service_calculated,
                         mr.organization_code AS mo_code,
                         pt.id_pk AS patient_id,
                         ps.start_date AS service_start_date,
