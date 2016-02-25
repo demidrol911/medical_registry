@@ -60,7 +60,11 @@ class HospitalHmcPage(ReportPage):
                 )
                 SELECT
                     mo_code AS mo_code,
-                    service_tariff_profile AS group_field,
+                    CASE WHEN service_tariff_profile IN (60, 63) THEN 60
+                         WHEN service_tariff_profile IN (61, 62) THEN 61
+                         ELSE service_tariff_profile
+                    END AS group_field,
+
                     service_vmp_group AS vmp_group,
 
                     COUNT(DISTINCT (patient_id, is_adult)) AS count_patients,
@@ -106,15 +110,18 @@ class HospitalHmcPage(ReportPage):
         cursor.close()
 
     def print_page(self, sheet, parameters):
-        tariff_profile_order = ((85, 1), (85, 2), (84, 3),
-                                (56, 5), (57, 7), (57, 8),
-                                (57, 9), (58, 10), (58, 11),
-                                (78, 12), (78, 13), (78, 14),
-                                (79, 15), (59, 16), (59, 17),
-                                (86, 18), (86, 19), (60, 21),
-                                (63, 22), (61, 25), (62, 26),
-                                (62, 27), (81, 28), (82, 29),
-                                (83, 30))
+        tariff_profile_order = (
+            (85, 1), (85, 2), (84, 3), (284, 4),
+            (56, 5), (56, 6), (287, 7), (285, 8),
+            (57, 9), (57, 10), (57, 11), (57, 12),
+            (58, 13), (58, 14), (78, 15), (78, 16),
+            (78, 17), (79, 18), (79, 19), (59, 20),
+            (59, 21), (86, 22), (86, 23), (286, 24),
+            (60, 25), (60, 26), (60, 27), (60, 28),
+            (80, 29), (80, 30), (61, 31), (61, 32),
+            (61, 33), (61, 34), (81, 35), (82, 36),
+            (83, 37), (83, 38),
+        )
 
         fields = ('count_patients',
                   'count_patients_adult',

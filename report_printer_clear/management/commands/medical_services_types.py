@@ -24,7 +24,7 @@ from medical_services_types_pages.clinic_other_purposes import \
     ClinicOtherPurposesPrimaryPage
 
 from medical_services_types_pages.clinic_prevention import \
-    ClinicPreventionAllPage, ProphylacticExaminationAdultPage
+    ClinicPreventionAllPage
 
 from medical_services_types_pages.day_hospital_home import DayHospitalHomePage
 
@@ -35,10 +35,10 @@ from medical_services_types_pages.day_hospital_hepatitis_C_virus import \
     DayHospitalHepatitisCVirusPage
 
 from medical_services_types_pages.day_hospital_clinic import \
-    DayHospitalClinicPage
+    DayHospitalClinicPage, DayHospitalClinicTotalPage
 
 from medical_services_types_pages.hospital_ambulance import \
-    HospitalAmbulancePage
+    HospitalAmbulancePage, AmbulanceVisitNursingStaffPage
 
 from medical_services_types_pages.hospital_hmc import HospitalHmcPage
 
@@ -47,7 +47,7 @@ from medical_services_types_pages.magnetic_resonance_imaging import MriPage
 from medical_services_types_pages.examination_adult import \
     ExamAdultFirstStagePage, ExamAdultSecondStagePage, PreventiveInspectionAdultPage
 
-from medical_services_types_pages.acute_care import AcuteCarePage
+from medical_services_types_pages.acute_care import AcuteCarePage, ThrombolysisAcuteCarePage
 
 from medical_services_types_pages.capitation import \
     CapitationAmbulatoryCarePage, CapitationAcuteCarePage
@@ -69,6 +69,8 @@ from medical_services_types_pages.hospital import HospitalPage
 
 from medical_services_types_pages.stomatology import StomatologyPage
 
+from medical_services_types_pages.pregnant import IntegratedPrenatalDiagnosisPage, ScreeningUltrasoundPage
+
 
 class Command(BaseCommand):
 
@@ -86,7 +88,7 @@ class Command(BaseCommand):
 
             {'pattern': 'preventive_inspection_adult.xls',
              'pages': (PreventiveInspectionAdultPage, ),
-             'title': u'профилактический осмотр взрослого населения'},
+             'title': u'сведения об объмах и стоимости профилактического медицинского осмотра взрослого населения'},
 
             # Диспансеризация и профосмотры несовершеннолетних
             {'pattern': 'examination_children_difficult_situation.xls',
@@ -114,15 +116,15 @@ class Command(BaseCommand):
             # Дневной стационар
             {'pattern': 'day_hospital_hospital.xls',
              'pages': (DayHospitalHospitalPage, InvasiveMethodsPage),
-             'title': u'дневной стационар при стационаре'},
+             'title': u'дневной стационар при стационаре (спец.м.п.)'},
 
             {'pattern': 'day_hospital_policlinic.xls',
-             'pages': (DayHospitalClinicPage, ),
-             'title': u'дневной стационар при поликлинике'},
+             'pages': (DayHospitalClinicPage, DayHospitalClinicTotalPage),
+             'title': u'дневной стационар при поликлинике (спец. и перв.м.п.)'},
 
             {'pattern': 'day_hospital_home.xls',
              'pages': (DayHospitalHomePage, ),
-             'title': u'дневной стационар на дому'},
+             'title': u'дневной стационар на дому (перв.м.п.)'},
 
             {'pattern': 'day_hospital_hepatitis_C_virus.xls',
              'pages': (DayHospitalHepatitisCVirusPage, ),
@@ -140,20 +142,20 @@ class Command(BaseCommand):
             # Поликлиника
             {'pattern': 'magnetic_resonance_imaging.xls',
              'pages': (MriPage, ),
-             'title': u'КТ и МРТ'},
+             'title': u'сведения об объемах и стоимости КТ и МРТ'},
 
             {'pattern': 'hospital_ambulance.xls',
              'pages': (HospitalAmbulancePage, ),
-             'title': u'приемное отделение стационара (неотложная помощь)'},
+             'title': u'сведения об объемах и стоимости в приемном отделении стационара (неотложная форма)'},
 
             # Поликлиника (за единицу объёма)
             {'pattern': 'clinic_emergency_all.xls',
              'pages': (ClinicEmergencyAllPage, ),
-             'title': u'поликлиника (в неотложной форме) свод'},
+             'title': u'поликлиника (в неотложной форме) перв.мед.помощь'},
 
             {'pattern': 'clinic_disease_single_visit_all.xls',
              'pages': (ClinicDiseaseSingleVisitAllPage, ),
-             'title': u'поликлиника (разовые посещения в связи с заболеванием) свод'},
+             'title': u'поликлиника (разовые посещения в связи с заболеванием) перв.мед.помощь'},
 
             {'pattern': 'clinic_other_purposes_primary.xls',
              'pages': (ClinicOtherPurposesPrimaryPage, ),
@@ -161,27 +163,26 @@ class Command(BaseCommand):
 
             {'pattern': 'clinic_disease_treatment_all.xls',
              'pages': (ClinicDiseaseTreatmentAllPage, ),
-             'title': u'поликлиника (обращения по поводу заболевания) свод'},
+             'title': u'поликлиника (обращения по поводу заболевания) перв. и спец.мед.помощь'},
 
             {'pattern': 'clinic_prevention_all.xls',
-             'pages': (ClinicPreventionAllPage, ProphylacticExaminationAdultPage),
-             'title': u'поликлиника (с профилактической целью) свод'},
+             'pages': (ClinicPreventionAllPage, ),
+             'title': u'поликлиника (с профилактической целью+вакцинация+проф.взр.населения+ЦЗ) перв.мед.помощь'},
 
             # Поликлиника (подушевое)
             {'pattern': 'clinic_capitation_other_purposes_primary.xls',
              'pages': (ClinicCapitationOtherPurposesPrimaryPage, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу '
-                      u'(посещения с иными целями) перв.мед.помощь'},
+             'title': u'поликлиника фин-ние по подушевому нормативу (посещения с иными целями) перв.мед.помощь'},
 
             {'pattern': 'clinic_capitation_prevention_all.xls',
              'pages': (ClinicCapitationPreventionAllPage, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу '
-                      u'(посещения с профилактической целью) свод'},
+             'title': u'поликлиника фин-ние по подушевому нормативу (посещения с профилактической целью + вакцинация) '
+                      u'перв.мед.помощь'},
 
             {'pattern': 'clinic_capitation_disease_single_visit_all.xls',
              'pages': (ClinicCapitationDiseaseSingleVisitAllPage, ),
-             'title': u'поликлиника фин-ние по подушевому нормативу (разовые посещения в связи с '
-                      u'заболеванием) свод'},
+             'title': u'поликлиника фин-ние по подушевому нормативу '
+                      u'(посещения разовые в связи с заболеванием) перв.мед.помощь'},
 
             {'pattern': 'clinic_capitation_disease_treatment_primary.xls',
              'pages': (ClinicCapitationDiseaseTreatmentPrimaryPage, ),
@@ -199,12 +200,90 @@ class Command(BaseCommand):
             {'pattern': 'acute_care.xls',
              'pages': (AcuteCarePage, ),
              'title':  u'СМП финансирование по подушевому нормативу (кол-во вызовов, основной тариф)'},
+
+            {'pattern': 'thrombolysis.xls',
+             'pages': (ThrombolysisAcuteCarePage, ),
+             'title':  u'СМП вызов с проведением тромболизиса'},
+
+            {'pattern': 'integrated_prenatal_diagnosis.xls',
+             'pages': (IntegratedPrenatalDiagnosisPage, ),
+             'title':  u'сведения об объемах и стоимости комплексной пренатальной (дороовой) диагностики '
+                       u'при сроке беременности 11-14 недель'},
+
+            {'pattern': 'screening_ultrasound.xls',
+             'pages': (ScreeningUltrasoundPage, ),
+             'title':  u'сведения об объемах и стоимости скринингового ультразвукового исследования '
+                       u'при сроке беременности 18-21 неделя'},
+
+            {'pattern': 'ambulance_visit_nursing_staff.xls',
+             'pages': (AmbulanceVisitNursingStaffPage, ),
+             'title': u'сведения об объемах и стоимости посещений к среднему мед.персоналу (неотложная форма)'},
+
+            {'pattern': 'emergency_nursing_staff.xls',
+             'pages': (AmbulanceVisitNursingStaffPage, ),
+             'title': u'поликлиника (в неотложной форме, посещения к среднему мед.персоналу) перв.мед.помощь'},
         )
 
         parameters = ReportParameters()
         parameters.path_to_dir = REESTR_EXP % (
             parameters.registry_year,
             parameters.registry_period
+        )
+
+        reports_desc = (
+            # Поликлиника (подушевое)
+            {'pattern': 'clinic_capitation_other_purposes_primary.xls',
+             'pages': (ClinicCapitationOtherPurposesPrimaryPage, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (посещения с иными целями) перв.мед.помощь'},
+
+            {'pattern': 'clinic_capitation_prevention_all.xls',
+             'pages': (ClinicCapitationPreventionAllPage, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (посещения с профилактической целью + вакцинация) '
+                      u'перв.мед.помощь'},
+
+            {'pattern': 'clinic_capitation_disease_single_visit_all.xls',
+             'pages': (ClinicCapitationDiseaseSingleVisitAllPage, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу '
+                      u'(посещения разовые в связи с заболеванием) перв.мед.помощь'},
+
+            {'pattern': 'clinic_capitation_disease_treatment_primary.xls',
+             'pages': (ClinicCapitationDiseaseTreatmentPrimaryPage, ),
+             'title': u'поликлиника фин-ние по подушевому нормативу (обращения по поводу заболевания) перв.мед.помощь'},
+
+            # Подушевое
+            {'pattern': 'capitation_ambulatory_care.xls',
+             'pages': (CapitationAmbulatoryCarePage, ),
+             'title': u'подушевой норматив (амбулаторная помощь)'},
+
+            {'pattern': 'capitation_acute_care.xls',
+             'pages': (CapitationAcuteCarePage, ),
+             'title': u'подушевой норматив (СМП)'},
+
+            {'pattern': 'acute_care.xls',
+             'pages': (AcuteCarePage, ),
+             'title':  u'СМП финансирование по подушевому нормативу (кол-во вызовов, основной тариф)'},
+
+            {'pattern': 'thrombolysis.xls',
+             'pages': (ThrombolysisAcuteCarePage, ),
+             'title':  u'СМП вызов с проведением тромболизиса'},
+
+            {'pattern': 'integrated_prenatal_diagnosis.xls',
+             'pages': (IntegratedPrenatalDiagnosisPage, ),
+             'title':  u'сведения об объемах и стоимости комплексной пренатальной (дороовой) диагностики '
+                       u'при сроке беременности 11-14 недель'},
+
+            {'pattern': 'screening_ultrasound.xls',
+             'pages': (ScreeningUltrasoundPage, ),
+             'title':  u'сведения об объемах и стоимости скринингового ультразвукового исследования '
+                       u'при сроке беременности 18-21 неделя'},
+
+            {'pattern': 'ambulance_visit_nursing_staff.xls',
+             'pages': (AmbulanceVisitNursingStaffPage, ),
+             'title': u'сведения об объемах и стоимости посещений к среднему мед.персоналу (неотложная форма)'},
+
+            {'pattern': 'emergency_nursing_staff.xls',
+             'pages': (AmbulanceVisitNursingStaffPage, ),
+             'title': u'поликлиника (в неотложной форме, посещения к среднему мед.персоналу) перв.мед.помощь'},
         )
 
         print u'будет сделано %s актов...' % len(reports_desc)

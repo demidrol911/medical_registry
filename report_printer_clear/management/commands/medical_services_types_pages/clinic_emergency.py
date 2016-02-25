@@ -66,5 +66,5 @@ class ClinicEmergencyAllPage(MedicalServiceTypePage):
                   'total_tariff_adult',
                   'total_tariff_child')
 
-        return ('0', 2, fields),
+        return ('0', 3, fields),
 

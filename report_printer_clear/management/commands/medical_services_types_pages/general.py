@@ -53,7 +53,7 @@ class MedicalServiceTypePage(ReportPage):
                         ms.division_fk AS service_division,
                         ms.group_fk AS service_group,
                         ms.subgroup_fk AS service_subgroup,
-                        (ms.code ILIKE '0%%' or ms.code IN ('A06.10.006')) AS is_adult,
+                        ms.code ILIKE '0%%' AS is_adult,
                         ms.code AS service_code,
 
                         CASE WHEN ms.group_fk = 19

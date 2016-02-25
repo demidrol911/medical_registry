@@ -75,8 +75,8 @@ class PrelimMedicalExamPrimaryPage(MedicalServiceTypePage):
                   'total_tariff',
                   'coeff1_07',
                   'total_accepted')
-        return (('119101', 3, fields),
-                ('119119', 9, fields),
+        return (('119101', 5, fields),
+                ('119119', 10, fields),
                 ('119120', 15, fields))
 
 
@@ -180,12 +180,12 @@ class PreventMedicalExamPrimaryPage(MedicalServiceTypePage):
                   'total_tariff_female', 'total_tariff_male',
                   'coeff1_07_female', 'coeff1_07_male',
                   'total_accepted_female', 'total_accepted_male')
-        return (('1', 4, fields),
-                ('2', 16, fields),
-                ('3', 28, fields),
+        return (('1', 10, fields),
+                ('2', 20, fields),
+                ('3', 30, fields),
                 ('4', 40, fields),
-                ('5', 52, fields),
-                ('6', 64, fields))
+                ('5', 50, fields),
+                ('6', 60, fields))
 
 
 class PreventMedicalExamSpecPage(MedicalServiceTypePage):
@@ -224,7 +224,7 @@ class PreventMedicalExamSpecPage(MedicalServiceTypePage):
         return query
 
     def get_output_order_fields(self):
-        return ('0', 91, ('count_patients',
+        return ('0', 87, ('count_patients',
                           'count_patients_female',
                           'count_patients_male',
                           'count_services',

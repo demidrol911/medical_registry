@@ -72,5 +72,5 @@ class DayHospitalHepatitisCVirusPage(MedicalServiceTypePage):
                   'total_accepted',
                   'total_accepted_adult',
                   'total_accepted_child')
-        return (('0', 3, fields),
+        return (('0', 4, fields),
                 ('1', 16, fields))

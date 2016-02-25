@@ -205,11 +205,11 @@ class ExamChildrenWithoutCarePrimaryPage(MedicalServiceTypePage):
                   'total_tariff_female', 'total_tariff_male',
                   'coeff1_07_female', 'coeff1_07_male',
                   'total_accepted_female', 'total_accepted_male')
-        return (('1', 4, fields),
-                ('2', 16, fields),
-                ('3', 28, fields),
-                ('4', 40, fields),
-                ('5', 52, fields),
+        return (('1', 14, fields),
+                ('2', 24, fields),
+                ('3', 34, fields),
+                ('4', 44, fields),
+                ('5', 54, fields),
                 ('6', 64, fields))
 
 

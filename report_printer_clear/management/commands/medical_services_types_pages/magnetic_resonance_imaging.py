@@ -55,9 +55,9 @@ class MriPage(MedicalServiceTypePage):
                   'total_tariff',
                   'total_tariff_adult',
                   'total_tariff_child')
-        return ((52, 3, fields),
-                (53, 13, fields),
-                (54, 23, fields),
-                (55, 33, fields),
-                (56, 43, fields),
+        return ((52, 8, fields),
+                (53, 17, fields),
+                (54, 26, fields),
+                (55, 35, fields),
+                (56, 44, fields),
                 (57, 53, fields))

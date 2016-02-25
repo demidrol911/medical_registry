@@ -16,21 +16,11 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                            THEN '1'
                         WHEN ms_final.code IN ('019023', '019024')
                            THEN '2'
-                    END  ||
-                    CASE WHEN event_end_date < '2015-06-01'
-                           THEN (
-                                CASE WHEN service_code = '019001'
-                                       THEN '&primary_reception'
-                                     ELSE ''
-                                END)
-                         WHEN event_end_date >= '2015-06-01'
-                           THEN (
-                                 CASE WHEN service_code = '019002'
-                                        THEN '&interview'
-                                      WHEN service_code not in ( '019002', '019021', '019022', '019023', '019024')
-                                        THEN '&other'
-                                      ELSE ''
-                                 END)
+                    END ||
+                    CASE WHEN service_code = '019002'
+                            THEN '&interview'
+                         WHEN service_code not in ('019002', '019021', '019022', '019023', '019024')
+                            THEN '&other'
                          ELSE ''
                     END AS group_field,
 
@@ -125,22 +115,13 @@ class ExamAdultFirstStagePage(MedicalServiceTypePage):
                         'total_accepted',
                         'total_accepted_male',
                         'total_accepted_female')
-        fields_primary = ('count_patients',
-                          'count_patients_male',
-                          'count_patients_female',
-
-                          'count_services',
-                          'count_services_male',
-                          'count_services_female')
 
         return (('1', 4, fields_final),
-                ('2', 21, fields_final),
-                ('1&primary_reception', 52, fields_primary),
-                ('2&primary_reception', 58, fields_primary),
-                ('1&interview', 73, fields_final),
-                ('2&interview', 88, fields_final),
-                ('1&other', 119, fields_final),
-                ('2&other', 134, fields_final))
+                ('2', 19, fields_final),
+                ('1&interview', 50, fields_final),
+                ('2&interview', 65, fields_final),
+                ('1&other', 96, fields_final),
+                ('2&other', 111, fields_final))
 
 
 class ExamAdultSecondStagePage(MedicalServiceTypePage):
@@ -165,22 +146,22 @@ class ExamAdultSecondStagePage(MedicalServiceTypePage):
 
     def get_output_order_fields(self):
         fields = ('count_patients', 'count_services', 'total_tariff')
-        return (('019102', 3, fields),
-                ('019103', 7, fields),
-                ('019104', 11, fields),
-                ('019106', 15, fields),
-                ('019107', 19, fields),
-                ('019105', 23, fields),
-                ('019116', 27, fields),
-                ('019108', 31, fields),
-                ('019109', 35, fields),
-                ('019110', 39, fields),
-                ('019111', 43, fields),
-                ('019112', 47, fields),
-                ('019113', 51, fields),
-                ('019114', 55, fields),
-                ('019115', 59, fields),
-                ('019117', 63, fields))
+        return (('019102', 18, fields),
+                ('019103', 22, fields),
+                ('019104', 26, fields),
+                ('019106', 30, fields),
+                ('019107', 34, fields),
+                ('019105', 38, fields),
+                ('019116', 42, fields),
+                ('019108', 46, fields),
+                ('019109', 50, fields),
+                ('019110', 54, fields),
+                ('019111', 58, fields),
+                ('019112', 62, fields),
+                ('019113', 66, fields),
+                ('019114', 70, fields),
+                ('019115', 74, fields),
+                ('019117', 78, fields))
 
 
 class PreventiveInspectionAdultPage(MedicalServiceTypePage):
@@ -280,4 +261,4 @@ class PreventiveInspectionAdultPage(MedicalServiceTypePage):
                   'total_accepted',
                   'total_accepted_male',
                   'total_accepted_female')
-        return ('0', 2, fields),
+        return ('0', 4, fields),

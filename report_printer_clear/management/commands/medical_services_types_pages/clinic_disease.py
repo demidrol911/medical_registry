@@ -9,8 +9,9 @@ class ClinicDiseaseTreatmentAllPage(MedicalServiceTypePage):
     1. Поликлиника (заболевание)
     2. Гемодиализ и перитонеальный диализ при поликлинике
     3. Компьютерная и магнитно-резонансная томография
-    По гемодиализу и перитональному диализу, компьютерной и магнитно-резонансной томографии
-    учитывается только численность пациентов и стоимость
+    4. Комплексаная пренатальная диагностика и скринниговое ультразвуковое исследование
+    По гемодиализу и перитональному диализу, компьютерной и магнитно-резонансной томографии,
+    скриниговому УЗИ и комплексной пренатальной диагностики учитывается только стоимость
     """
 
     def __init__(self):
@@ -22,50 +23,42 @@ class ClinicDiseaseTreatmentAllPage(MedicalServiceTypePage):
                 SELECT
                     mo_code AS mo_code,
                     '0' AS group_field,
-                    COUNT(DISTINCT CASE WHEN service_group = 29
-                                          THEN (patient_id, service_subgroup :: varchar, is_adult)
-                                        WHEN service_group = 5
-                                          THEN (patient_id, service_code, is_adult)
+                    COUNT(DISTINCT CASE WHEN service_group IN (29, 5, 41)
+                                          THEN NULL
                                         ELSE (patient_id, service_division:: varchar, is_adult)
                                    END) AS count_patients,
                     COUNT(DISTINCT CASE WHEN is_adult
                                           THEN (
-                                             CASE WHEN service_group = 29
-                                                    THEN (patient_id, service_subgroup :: varchar, is_adult)
-                                                  WHEN service_group = 5
-                                                    THEN (patient_id, service_code, is_adult)
+                                             CASE WHEN service_group IN (29, 5, 41) THEN NULL
                                                   ELSE (patient_id, service_division:: varchar, is_adult)
                                              END
                                           )
                                    END) AS count_patients_adult,
                     COUNT(DISTINCT CASE WHEN NOT is_adult
                                           THEN (
-                                             CASE WHEN service_group = 29
-                                                    THEN (patient_id, service_subgroup :: varchar, is_adult)
-                                                  WHEN service_group = 5
-                                                    THEN (patient_id, service_code, is_adult)
+                                             CASE WHEN service_group IN (29, 5, 41) THEN NULL
                                                   ELSE (patient_id, service_division :: varchar, is_adult)
                                              END
                                           )
                                    END) AS count_patients_child,
 
-                    COUNT(DISTINCT CASE WHEN service_group NOT IN (29, 5) OR service_group IS NULL
+                    COUNT(DISTINCT CASE WHEN service_group NOT IN (29, 5, 41) OR service_group IS NULL
                                           THEN event_id
                                    END) AS count_treatments,
-                    COUNT(DISTINCT CASE WHEN is_adult AND (service_group NOT IN (29, 5) OR service_group IS NULL)
+                    COUNT(DISTINCT CASE WHEN is_adult AND (service_group NOT IN (29, 5, 41) OR service_group IS NULL)
                                           THEN event_id
                                    END) AS count_treatments_adult,
-                    COUNT(DISTINCT CASE WHEN NOT is_adult AND (service_group NOT IN (29, 5) OR service_group IS NULL)
+                    COUNT(DISTINCT CASE WHEN NOT is_adult AND (service_group NOT IN (29, 5, 41) OR service_group IS NULL)
                                           THEN event_id
                                    END) AS count_treatments_child,
 
-                    COUNT(DISTINCT CASE WHEN service_group NOT IN (29, 5) OR service_group IS NULL
+                    COUNT(DISTINCT CASE WHEN service_group NOT IN (29, 5, 41) OR service_group IS NULL
                                           THEN service_id
                                    END) AS count_services,
-                    COUNT(DISTINCT CASE WHEN is_adult AND (service_group NOT IN (29, 5) OR service_group IS NULL)
+                    COUNT(DISTINCT CASE WHEN is_adult AND (service_group NOT IN (29, 5, 41) OR service_group IS NULL)
                                           THEN service_id
                                    END) AS count_services_adult,
-                    COUNT(DISTINCT CASE WHEN NOT is_adult AND (service_group NOT IN (29, 5) OR service_group IS NULL)
+                    COUNT(DISTINCT CASE WHEN NOT is_adult AND (service_group NOT IN (29, 5, 41) OR service_group IS NULL)
                                           THEN service_id
                                    END) AS count_services_child,
 
@@ -94,7 +87,7 @@ class ClinicDiseaseTreatmentAllPage(MedicalServiceTypePage):
                                       OR inner_ms.group_fk in (24))
                                  AND inner_ms.reason_fk = 1
                            )>1
-                      ) OR service_group IN (29, 5)
+                      ) OR service_group IN (29, 5, 41)
                 GROUP BY mo_code, group_field
                 '''
         return query
