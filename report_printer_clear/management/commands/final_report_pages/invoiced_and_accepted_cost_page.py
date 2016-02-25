@@ -2,7 +2,6 @@ from main.models import MedicalOrganization
 from report_printer.excel_style import VALUE_STYLE
 from report_printer_clear.management.commands.medical_services_types_pages.const import POSITION_REPORT
 from report_printer_clear.utils.page import ReportPage
-from report_printer.const import ACT_CELL_POSITION
 from tfoms.func import get_mo_register, calculate_capitation
 
 
@@ -27,6 +26,7 @@ class InvoicedAndAcceptedCostPage(ReportPage):
                         AND (ps.payment_kind_fk != 2 OR ps.payment_kind_fk IS NULL)) OR pe.term_fk IS NULL) AND
                             (CASE WHEN mr.organization_code IN ('280013', '280043') AND ms.group_fk = 31 THEN False
                               ELSE True END) AS is_clinic,
+                        pe.term_fk = 4 AND (ps.payment_kind_fk != 2 OR ps.payment_kind_fk IS NULL) AS is_acute_care,
                         pe.term_fk = 3 AND ms.group_fk = 19 AS is_stom,
 
                         ps.payment_type_fk = 2 AS is_accepted,
@@ -60,16 +60,19 @@ class InvoicedAndAcceptedCostPage(ReportPage):
                     COALESCE(SUM(CASE WHEN is_hospital THEN invoiced_cost END), 0) AS hospital_invoiced_cost,
                     COALESCE(SUM(CASE WHEN is_day_hospital THEN invoiced_cost END), 0) AS day_hospital_invoiced_cost,
                     COALESCE(SUM(CASE WHEN is_clinic THEN invoiced_cost END), 0) AS clinic_visit_invoiced_cost,
+                    COALESCE(SUM(CASE WHEN is_acute_care THEN invoiced_cost END), 0) AS acutecare_invoiced_cost,
                     COALESCE(SUM(CASE WHEN is_stom THEN invoiced_cost END), 0) AS stom_invoiced_cost,
 
                     COALESCE(SUM(CASE WHEN is_excluded AND is_hospital THEN excluded_cost END), 0) AS hospital_excluded_cost,
                     COALESCE(SUM(CASE WHEN is_excluded AND is_day_hospital THEN excluded_cost END), 0) AS day_hospital_excluded_cost,
                     COALESCE(SUM(CASE WHEN is_excluded AND is_clinic THEN excluded_cost END), 0) AS clinic_visit_excluded_cost,
+                    COALESCE(SUM(CASE WHEN is_excluded AND is_acute_care THEN excluded_cost END), 0) AS acutecare_excluded_cost,
                     COALESCE(SUM(CASE WHEN is_excluded AND is_stom THEN excluded_cost END), 0) AS stom_excluded_cost,
 
                     COALESCE(SUM(CASE WHEN is_accepted AND is_hospital THEN accepted_cost END), 0) AS hospital_accepted_cost,
                     COALESCE(SUM(CASE WHEN is_accepted AND is_day_hospital THEN accepted_cost END), 0) AS day_hospital_accepted_cost,
                     COALESCE(SUM(CASE WHEN is_accepted AND is_clinic THEN accepted_cost END), 0) AS clinic_visit_accepted_cost,
+                    COALESCE(SUM(CASE WHEN is_accepted AND is_acute_care THEN accepted_cost END), 0) AS acutecare_accepted_cost,
                     COALESCE(SUM(CASE WHEN is_accepted AND is_stom THEN accepted_cost END), 0) AS stom_accepted_cost
                 FROM
                    mo_services
@@ -90,7 +93,6 @@ class InvoicedAndAcceptedCostPage(ReportPage):
             capitation_cost[mo_code] = {'clinic_capitation': 0, 'ambulance_capitation': 0}
             clinic_capitation = calculate_capitation(3, mo_code)
             ambulance_capitation = calculate_capitation(4, mo_code)
-            print clinic_capitation
             if clinic_capitation[0]:
                 capitation_cost[mo_code]['clinic_capitation'] = self._calc_capitation_total(clinic_capitation[1])
             if ambulance_capitation[0]:
@@ -114,7 +116,7 @@ class InvoicedAndAcceptedCostPage(ReportPage):
             sheet.write(data_on_mo.day_hospital_invoiced_cost, 'c')
             sheet.write(data_on_mo.clinic_visit_invoiced_cost, 'c')
             sheet.write(capitation_on_mo['clinic_capitation'], 'c')
-            sheet.write(0, 'c')
+            sheet.write(data_on_mo.acutecare_invoiced_cost, 'c')
             sheet.write(capitation_on_mo['ambulance_capitation'], 'c')
             sheet.write(data_on_mo.stom_invoiced_cost, 'c')
             sheet.write(data_on_mo.hospital_invoiced_cost
@@ -128,7 +130,7 @@ class InvoicedAndAcceptedCostPage(ReportPage):
             sheet.write(data_on_mo.day_hospital_excluded_cost, 'c')
             sheet.write(data_on_mo.clinic_visit_excluded_cost, 'c')
             sheet.write(0, 'c')
-            sheet.write(0, 'c')
+            sheet.write(data_on_mo.acutecare_excluded_cost, 'c')
             sheet.write(0, 'c')
             sheet.write(data_on_mo.stom_excluded_cost, 'c')
             sheet.write(data_on_mo.hospital_excluded_cost
@@ -140,7 +142,7 @@ class InvoicedAndAcceptedCostPage(ReportPage):
             sheet.write(data_on_mo.day_hospital_accepted_cost, 'c')
             sheet.write(data_on_mo.clinic_visit_accepted_cost, 'c')
             sheet.write(capitation_on_mo['clinic_capitation'], 'c')
-            sheet.write(0, 'c')
+            sheet.write(data_on_mo.acutecare_accepted_cost, 'c')
             sheet.write(capitation_on_mo['ambulance_capitation'], 'c')
             sheet.write(data_on_mo.stom_accepted_cost, 'c')
             sheet.write(data_on_mo.hospital_accepted_cost
