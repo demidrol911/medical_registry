@@ -1,7 +1,7 @@
 from main.models import MedicalOrganization
 from report_printer.excel_style import VALUE_STYLE
 from report_printer_clear.utils.page import ReportPage
-from report_printer.const import ACT_CELL_POSITION
+from report_printer_clear.management.commands.medical_services_types_pages.const import POSITION_REPORT
 
 
 class FinalReportPage(ReportPage):
@@ -24,7 +24,7 @@ class FinalReportPage(ReportPage):
                                THEN ps.accepted_payment
                              ELSE 0
                         END) AS policlinic_capitation,
-                    SUM(CASE WHEN pe.term_fk = 4
+                    SUM(CASE WHEN pe.term_fk = 4 AND ps.payment_kind_fk = 2
                                THEN ps.accepted_payment
                              ELSE 0
                         END) AS ambulance_capitation
@@ -59,7 +59,7 @@ class FinalReportPage(ReportPage):
         sheet.write_cell(5, 1, parameters.date_string)
         sheet.set_style(VALUE_STYLE)
         for data_on_mo in self.data:
-            sheet.set_position(ACT_CELL_POSITION[data_on_mo.organization_code], 2)
+            sheet.set_position(POSITION_REPORT[data_on_mo.organization_code], 2)
             sheet.write(data_on_mo.tariff, 'c')
             sheet.write(data_on_mo.invoiced_payment, 'c')
             sheet.write(data_on_mo.accepted_payment, 'c')
