@@ -17,7 +17,7 @@ class FinalDefectsPage(ReportPage):
     def calculate(self, parameters):
         self.data = None
         path_to_dir = u'c:/work/defects'
-        border = {'top': 6, 'bottom': 38, 'left': 3, 'right': 34}
+        border = {'top': 6, 'bottom': 45, 'left': 3, 'right': 34}
         counter = 0
         unique_mo_names = []
         filename_pattern = re.compile(ur'^(?P<mo>[\D1234]+?)(?:_?)(?P<sequence_number>\d?)\.(?P<ext>xlsx|xls)$')

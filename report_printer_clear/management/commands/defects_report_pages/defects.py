@@ -19,20 +19,24 @@ class DefectsPage(ReportPage):
         'gemodialis_hospital': [(5, TREATMENT), (6, COUNT_DAYS)],
         'peritondialis_hospital': [(7, TREATMENT), (8, COUNT_DAYS)],
         'day_hospital': [(9, VISIT), (10, COUNT_DAYS)],
-        'policlinic_disease': [(11, VISIT), (12, TREATMENT)],
-        'policlinic_priventive': [(13, VISIT)],
-        'policlinic_ambulance': [(14, VISIT)],
-        'adult_exam': [(15, TREATMENT), (16, VISIT)],
-        'ambulance': [(17, VISIT)],
-        'mrt': [(18, VISIT)],
-        'gemodialis_policlinic': [(19, TREATMENT), (20, COUNT_DAYS)],
-        'peritondialis_policlinic': [(21, TREATMENT), (22, COUNT_DAYS)],
-        'children_exam': [(23, TREATMENT), (24, VISIT)],
-        'prelim_children_exam': [(25, TREATMENT), (26, VISIT)],
-        'period_children_exam': [(27, TREATMENT)],
-        'clinical_exam': [(28, TREATMENT), (29, VISIT)],
-        'stom_disease': [(30, TREATMENT), (31, UET)],
-        'stom_ambulance': [(32, VISIT), (33, UET)]
+        'gemodialis_day_hospital': [(11, TREATMENT), (12, COUNT_DAYS)],
+        'peritondialis_day_hospital': [(13, TREATMENT), (14, COUNT_DAYS)],
+        'policlinic_disease': [(15, VISIT), (16, TREATMENT)],
+        'policlinic_priventive': [(17, VISIT)],
+        'policlinic_ambulance': [(18, VISIT)],
+        'adult_exam': [(19, TREATMENT), (20, VISIT)],
+        'ambulance': [(21, VISIT)],
+        'trombolisis': [(22, VISIT)],
+        'mrt': [(23, VISIT)],
+        'gemodialis_policlinic': [(24, TREATMENT), (25, COUNT_DAYS)],
+        'peritondialis_policlinic': [(26, TREATMENT), (27, COUNT_DAYS)],
+        'children_exam': [(28, TREATMENT), (29, VISIT)],
+        'prelim_children_exam': [(30, TREATMENT), (31, VISIT)],
+        'period_children_exam': [(32, TREATMENT)],
+        'clinical_exam': [(33, TREATMENT), (34, VISIT)],
+        'usg': [(35, TREATMENT), (36, VISIT)],
+        'stom_disease': [(37, TREATMENT), (38, UET)],
+        'stom_ambulance': [(39, VISIT), (40, UET)]
     }
 
     ERRORS_ORDER = [
@@ -312,16 +316,27 @@ class DefectsPage(ReportPage):
                          WHEN T.service_group = 40
                              THEN 'cerebral_angiography'
 
-                         WHEN T.service_code in ('049023', '149023')
+                         WHEN T.service_code in ('049023', '149023', '049028', '049031', '049034',
+                                                 '049035', '049036', '049037', '049038', '049039',
+                                                 '049040', '049041', '049042', '149028', '149031',
+                                                 '149034', '149035', '149036', '149037', '149038',
+                                                 '149039', '149040', '149041', '149042')
                              THEN 'gemodialis_hospital'
 
-                         WHEN T.service_code in ('049024', '149024')
+                         WHEN T.service_code in ('049024', '149024', '049044', '049047', '049050',
+                                                 '149044', '149047', '149050')
                              THEN 'peritondialis_hospital'
 
                          WHEN T.term = 2
                            AND (T.service_group is null
                            OR T.service_group in (17, 28, 30))
                              THEN 'day_hospital'
+
+                         WHEN T.service_code in ('049027', '049030', '049033', '149027', '149030', '149033')
+                             THEN 'gemodialis_day_hospital'
+
+                         WHEN T.service_code in ('049043', '049046', '049049', '149043', '149046', '149049')
+                             THEN 'peritondialis_day_hospital'
 
                          WHEN T.is_policlinic_treatment
                              THEN 'policlinic_disease'
@@ -341,21 +356,26 @@ class DefectsPage(ReportPage):
 
                          WHEN T.service_group = 9
                            AND T.service_code in (
-                                  '019214', '019215', '019216' ,
+                                  '019214', '019215', '019216',
                                   '019217', '019212', '019201'
                                )
                              THEN 'adult_exam'
 
-                         WHEN T.term = 4
+                         WHEN T.term = 4 and (T.service_group != 43 or T.service_group IS NULL)
                              THEN 'ambulance'
+
+                        WHEN T.term = 4 and T.service_group = 43
+                             THEN 'trombolisis'
 
                          WHEN T.service_group = 29
                              THEN 'mrt'
 
-                         WHEN T.service_code in ('049021', '149021')
+                         WHEN T.service_code in ('049021', '149021', '049026', '049029',
+                                                 '049032', '149026', '149029', '149032')
                              THEN 'gemodialis_policlinic'
 
-                         WHEN T.service_code in ('049022', '149022')
+                         WHEN T.service_code in ('049022', '149022', '049045', '049048',
+                                                 '149045', '149048')
                              THEN 'peritondialis_policlinic'
 
                          WHEN T.service_group = 11
@@ -417,6 +437,9 @@ class DefectsPage(ReportPage):
                             and T.service_code in ('019001', '019021', '019023', '019022', '019024')
                             and T.event_end_date < '2015-06-01'
                              THEN 'clinical_exam'
+
+                         WHEN T.service_group = 41
+                           THEN 'usg'
 
                          WHEN T.service_group = 19
                            AND T.stomatology_reason = 12
