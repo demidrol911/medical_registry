@@ -80,6 +80,11 @@ class XmlLikeFileReader(object):
                             items = [items]
 
                         parent[element.tag] = items
+
+                        # костыль для АОДКБ (пока не протестирована) хз как будет работать
+                        # if not element.getchildren():
+                        #    item = element.text
+
                         items.append(item)
 
                     else:

@@ -47,13 +47,13 @@ from zipfile import ZipFile
 cursor = connection.cursor()
 
 ERROR_MESSAGE_BAD_FILENAME = u'Имя файла не соответствует регламентированному'
-HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103')
+HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103', '098975')
 DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
                                   '098770', '98710', '98711', '98712', '98715',
                                   '98770', '098770', '098770', '198770'
 )
-HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280069', '280076', '280091', )
-DAY_HOSPITAL_MO_EXCLUSIONS = ('280029', '280076', '280091', )
+HOSPITAL_VOLUME_MO_EXCLUSIONS = ()
+DAY_HOSPITAL_MO_EXCLUSIONS = ()
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s(28002|28004)_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
@@ -313,7 +313,8 @@ def get_events_objects(events_list):
             hitech_kind=HITECH_KINDS.get(rec.get('VID_HMP'), None),
             hitech_method=HITECH_METHODS.get(rec.get('METOD_HMP'), None),
             examination_result=EXAMINATION_RESULTS.get(rec.get('RSLT_D'), None),
-            record_id=rec.get('record_id'))
+            record_id=rec.get('record_id'),
+            ksg_mo=rec.get('KSG_MO', ''))
         objects.append(event)
 
     return objects
@@ -1026,7 +1027,7 @@ def main():
             message = (u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает, что в соответствии с п.6 статьи 39 \n'
                        u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
                        u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
-                       u'на 2015 год, страховая компания принимает реестры счетов и счета на оплату \n'
+                       u'на 2016 год, страховая компания принимает реестры счетов и счета на оплату \n'
                        u'медицинской помощи в пределах объемов, утвержденных решением комиссии по \n'
                        u'разработке территориальной программы обязательного медицинского страхования Амурской области.\n'
                        u'\n'

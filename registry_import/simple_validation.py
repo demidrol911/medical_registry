@@ -16,7 +16,7 @@ from main.data_cache import (
     HOSPITALIZATIONS, PROFILES, OUTCOMES, RESULTS, SPECIALITIES_NEW,
     SPECIALITIES_OLD, METHODS, TYPES, FAILURE_CUASES, DISEASES, DIVISIONS,
     SPECIALS, CODES, PERSON_ID_TYPES, HITECH_KINDS, HITECH_METHODS,
-    EXAMINATION_RESULTS, ADULT_EXAMINATION_COMMENT_PATTERN)
+    EXAMINATION_RESULTS, ADULT_EXAMINATION_COMMENT_PATTERN, KSGS)
 
 from validator.collection import Collection
 from validator.field import Field
@@ -244,6 +244,16 @@ def get_event_validation(item, registry_type=1):
         ]),
         Field('ED_COL', item['ED_COL'] or ''),
     ])
+
+    if item['USL_OK'] in ('1', '2') and False:
+        event.append([
+            Field('KSG_MO', item['KSG_MO'] or '').append([
+                IsRequired(error=ERROR_MESSAGES['missing value']),
+                IsInList(KSGS, error=ERROR_MESSAGES['wrong value']),
+            ]),
+        ])
+    else:
+        event.append([Field('KSG_MO', item['KSG_MO'] or ''), ])
 
     if registry_type in (1, 2):
         event.append([
