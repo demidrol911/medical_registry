@@ -484,7 +484,6 @@ def underpay_wrong_examination_age_group(register_element):
             and mr.year = %s
             and mr.period = %s
             and mr.organization_code = %s
-            and pe.end_date < '2015-06-01'
             and (date_part('year', ps.end_date) - date_part('year', p.birthdate)) >= 4
             and ((group_fk = 11
                 and ps.tariff > 0
@@ -832,6 +831,43 @@ def underpay_invalid_hitech_service_diseases(register_element):
                  register_element['organization_code']])
 
     set_sanctions(services2, 86)
+
+
+@howlong
+def underpay_invalid_hitech_service_kind(register_element):
+    """
+    Санкции на несоответствие методу ВМП виду
+    (для высокотехнологической медицинской помощи)
+    """
+    query2 = """
+        select ps.id_pk
+        from provided_service ps
+            join provided_event pe
+                on ps.event_fk = pe.id_pk
+            join medical_register_record mrr
+                on mrr.id_pk = pe.record_fk
+            JOIN medical_register mr
+                on mr.id_pk = mrr.register_fk
+            LEFT JOIN hitech_kind_method hkm
+                on hkm.method_fk = pe.hitech_method_fk
+                   and hkm.kind_fk = pe.hitech_kind_fk
+                   and hkm.is_active
+        where
+            mr.is_active
+            and mr.year = %s
+            and mr.period = %s
+            and mr.organization_code = %s
+            and mr.type = 2
+            and hkm.id_pk is NULL
+            and (select id_pk from provided_service_sanction
+                 where service_fk = ps.id_pk and error_fk = 103) is null
+    """
+
+    services2 = ProvidedService.objects.raw(
+        query2, [register_element['year'], register_element['period'],
+                 register_element['organization_code']])
+
+    set_sanctions(services2, 103)
 
 
 @howlong
@@ -1918,3 +1954,92 @@ def underpay_wrong_clinic_event(register_element):
                 register_element['organization_code']])
 
     set_sanctions(services, 100)
+
+
+def check_rsc_pso_ksg(register_element):
+    """
+    Проверяет соответствие КСГ коду услуги
+    """
+    query = """
+            with ksg_control AS (
+            select ms1.id_pk, CASE WHEN ms1.tariff_profile_fk in (288, 295) THEN '66'
+                                   WHEN ms1.tariff_profile_fk in (289, 296) THEN '67'
+                                   WHEN ms1.tariff_profile_fk in (290, 297) THEN '68'
+                                   WHEN ms1.tariff_profile_fk in (291, 298) THEN '87'
+                                   WHEN ms1.tariff_profile_fk in (203, 209) THEN '88'
+                                   WHEN ms1.tariff_profile_fk in (299, 292) THEN '89'
+                                   WHEN ms1.tariff_profile_fk in (300, 293) THEN '90'
+                                   WHEN ms1.tariff_profile_fk in (301, 294) THEN '91'
+                              ELSE NULL END AS prof_ksg
+            from medical_service ms1
+            where ms1.group_fk IN (1, 2)
+            )
+            select distinct ps.id_pk
+            from provided_service ps
+                        JOIN medical_service ms
+                            on ms.id_pk = ps.code_fk
+                        join provided_event pe
+                            on ps.event_fk = pe.id_pk
+                        JOIN medical_register_record mrr
+                            on mrr.id_pk = pe.record_fk
+                        JOIN medical_register mr
+                            on mr.id_pk = mrr.register_fk
+                        JOIN patient p
+                            on p.id_pk = mrr.patient_fk
+                        left Join  ksg_control T ON T.id_pk = ps.code_fk
+
+                    WHERE  mr.is_active
+                        and mr.year = %s
+                        and mr.period = %s
+                        and mr.organization_code = %s
+                        and ms.group_fk in (1, 2)
+                        AND (T.prof_ksg != pe.ksg_smo OR T.prof_ksg is null)
+                        and (select count(1) from provided_service_sanction where service_fk = ps.id_pk
+                             and error_fk = 101) = 0
+
+            """
+    services = ProvidedService.objects.raw(
+        query, [register_element['year'], register_element['period'],
+                register_element['organization_code']])
+
+    set_sanctions(services, 100)
+
+
+def underpay_adult_examination_with_double_services(register_element):
+    """
+    Снять нахрен весь случай по диспансеризации, в котором
+    есть кратные услуги
+    """
+    query = """
+            SELECT DISTINCT ps.id_pk
+            FROM provided_service ps
+            JOIN (
+                SELECT pe.id_pk AS event_id,
+                       ms.code,
+                       count(distinct ps.id_pk) AS count_double
+                FROM provided_service ps
+                    JOIN medical_service ms
+                        ON ms.id_pk = ps.code_fk
+                    JOIN provided_event pe
+                        ON ps.event_fk = pe.id_pk
+                    JOIN medical_register_record mrr
+                        ON mrr.id_pk = pe.record_fk
+                    JOIN medical_register mr
+                        ON mr.id_pk = mrr.register_fk
+                WHERE mr.is_active
+                    AND mr.year = %s
+                    AND mr.period = %s
+                    AND mr.organization_code = %s
+                    AND ps.payment_type_fk = 2
+                    AND ms.group_fk = 7
+                    AND ps.tariff > 0
+                GROUP BY event_id, ms.code
+            ) AS T ON ps.event_fk = T.event_id
+            WHERE T.count_double > 1
+                 AND (select count(1) from provided_service_sanction where service_fk = ps.id_pk
+                 AND error_fk = 102) = 0
+            """
+    services = ProvidedService.objects.raw(
+        query, [register_element['year'], register_element['period'],
+                register_element['organization_code']])
+    set_sanctions(services, 102)

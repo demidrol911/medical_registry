@@ -16,7 +16,7 @@ import re
 
 def get_register_element():
     register_element = MedicalRegister.objects.filter(
-        is_active=True, year='2015', status_id__in=(1, 5, 500),
+        is_active=True, year='2016', status_id__in=(1, 5, 500),
     ) \
         .values('organization_code',
                 'year',
@@ -52,15 +52,7 @@ def get_services(register_element):
         provided_service.payment_type_fk as payment_type_code,
         provided_service.start_date,
         provided_service.end_date,
-
-        (select count(distinct ps2.id_pk)
-                from provided_service ps2
-                    join medical_service ms2
-                        on ms2.id_pk = ps2.code_fk
-                where ps2.event_fk = provided_event.id_pk
-                    and (ms2.group_fk != 27 or ms2.group_fk is null)) 
-                        AS count_services_in_event,
-
+        department.level AS department_level,
         medical_service.code as service_code,
         (
             select min(ps2.start_date)
@@ -80,7 +72,18 @@ def get_services(register_element):
             and provided_event.term_fk=3
             and (medical_service.group_fk = 24 or medical_service.group_fk is NULL)
         THEN tariff_basic.capitation
-        WHEN medical_service.group_fk = 19
+        WHEN -- тарифы по неотложной скорой во внерабочее время запишем в capitation
+             medical_service.group_fk = 19 AND
+            (
+                select count(inner_ps.id_pk)
+                from provided_service inner_ps
+                    join medical_service inner_ms
+                        on inner_ps.code_fk = inner_ms.id_pk
+                where inner_ps.event_fk = provided_event.id_pk
+                    and inner_ms.group_fk = 19 and inner_ms.subgroup_fk = 17
+                    and inner_ps.end_date = provided_service.end_date
+            ) >= 1 THEN COALESCE(medical_service.uet, 0)*tariff_basic.capitation
+        when medical_service.group_fk = 19
             THEN COALESCE(medical_service.uet, 0)*tariff_basic.value
         ELSE
             tariff_basic.value
@@ -93,7 +96,9 @@ def get_services(register_element):
         medical_service.tariff_profile_fk as service_tariff_profile,
         medical_service.reason_fk as reason_code,
         medical_service.vmp_group,
+        department.regional_coefficient :: VARCHAR AS regional_coefficient,
         provided_event.examination_result_fk as examination_result,
+        provided_event.ksg_smo AS ksg_smo,
         COALESCE(
                 (
                     select tariff_nkd.value
@@ -101,20 +106,32 @@ def get_services(register_element):
                     where start_date = (
                         select max(start_date)
                         from tariff_nkd
-                        where start_date <= greatest('2015-01-01'::DATE, provided_service.end_date) and start_date >= '2015-01-01'::DATE
+                        where start_date <= greatest('2016-01-01'::DATE, provided_service.end_date) and start_date >= '2016-01-01'::DATE
                             and profile_fk = medical_service.tariff_profile_fk
                             and is_children_profile = provided_service.is_children_profile
-                            and "level" = department.level
+                            and "level" = (CASE WHEN medical_register.organization_code = '280112'
+                                                     AND provided_event.term_fk = 1
+                                                  THEN 1
+                                                WHEN medical_register.organization_code = '280036'
+                                                     AND provided_service.comment = '100000'
+                                                  THEN 2
+                                                ELSE department.level END)
                     ) and profile_fk = medical_service.tariff_profile_fk
                         and is_children_profile = provided_service.is_children_profile
-                        and (( provided_event.term_fk = 1 and "level" = department.level)
-                            or (provided_event.term_fk = 2)
-                        )
+                        and "level" = (CASE WHEN medical_register.organization_code = '280112'
+                                                 AND provided_event.term_fk = 1
+                                              THEN 1
+                                            WHEN medical_register.organization_code = '280036'
+                                                 AND provided_service.comment = '100000'
+                                              THEN 2
+                                            ELSE department.level END
+                                        )
                     order by start_date DESC
                     limit 1
                 ), 1
         ) as nkd,
-        case when medical_service.tariff_profile_fk IN (12) and medical_register.organization_code in ('280068', '280012', '280059')
+        -- стационар 7) оплата в травматологических центрах
+        case when medical_service.tariff_profile_fk IN (12, 13) and medical_register.organization_code in ('280068', '280012', '280059')
         THEN (
                 case when medical_organization.regional_coefficient = 1.6 then 34661
                 when medical_organization.regional_coefficient = 1.7 then 36827
@@ -122,7 +139,17 @@ def get_services(register_element):
                 END
         ) else 0 end as alternate_tariff,
         medical_organization.is_agma_cathedra,
-        medical_organization.level as level,
+
+        -- Эндоскопия относится по круг стационару к первому уровню, а по дневному стационару ко 2 уровню
+        -- ГП1 без эндоскопии 1 уровень, ГП1 с эндоскопией 2 уровень.
+        -- Подобная структура используется ниже для выбора нкд и тарифов
+        (CASE WHEN medical_register.organization_code = '280112' AND provided_event.term_fk = 1
+                THEN 1
+              WHEN medical_register.organization_code = '280036' AND provided_service.comment = '100000'
+                THEN 2
+              ELSE medical_organization.level
+        END) as level,
+
         patient.insurance_policy_fk as patient_policy,
         patient.birthdate as patient_birthdate,
         person.deathdate as person_deathdate,
@@ -133,20 +160,6 @@ def get_services(register_element):
         provided_event.comment as event_comment,
         provided_service.comment as service_comment,
         medical_register_record.is_corrected as record_is_corrected,
-        CASE medical_service.group_fk
-        when 19 THEN
-            (
-                select 1
-                from provided_service inner_ps
-                    join medical_service inner_ms
-                        on inner_ps.code_fk = inner_ms.id_pk
-                where inner_ps.event_fk = provided_event.id_pk
-                    and inner_ms.group_fk = 19 and inner_ms.subgroup_fk = 17
-                    and inner_ps.end_date = provided_service.end_date
-            )
-        ELSE
-            NULL
-        END as coefficient_4,
         examination_tariff.value as examination_tariff,
         medical_register.type as register_type,
         COALESCE(
@@ -197,22 +210,28 @@ def get_services(register_element):
             on department.id_pk = provided_service.department_fk
         LEFT join tariff_basic
             on tariff_basic.service_fk = provided_service.code_fk
-                and tariff_basic.group_fk = department.tariff_group_fk
+                and tariff_basic.group_fk = (CASE WHEN medical_register.organization_code = '280112'
+                                                       AND provided_event.term_fk = 1
+                                                    THEN  21
+                                                  WHEN medical_register.organization_code = '280036'
+                                                       AND provided_service.comment = '100000'
+                                                    THEN 19
+                                                  ELSE department.tariff_group_fk
+                                              END)
                 and tariff_basic.start_date =
                 GREATEST(
                     (select max(start_date)
                      from tariff_basic
                      where start_date <= provided_service.end_date
-                     and group_fk = department.tariff_group_fk
-                     and service_fk = provided_service.code_fk),
-                    (CASE WHEN (medical_service.tariff_profile_fk = 107
-                               and medical_organization.code = '280005')
-                               or medical_service.code = '001203'
-                               or medical_service.tariff_profile_fk in (
-                                                   268, 269,
-                                                   235, 236, 237)
-                        then '2015-03-01' ELSE '2015-01-01' END) :: DATE
-                )
+                     and group_fk = (CASE WHEN medical_register.organization_code = '280112'
+                                               AND provided_event.term_fk = 1
+                                            THEN  21
+                                          WHEN medical_register.organization_code = '280036'
+                                               AND provided_service.comment = '100000'
+                                            THEN 19
+                                          ELSE department.tariff_group_fk
+                                     END)
+                     and service_fk = provided_service.code_fk), '2016-01-01'::DATE)
 
         LEFT JOIN examination_tariff
             on medical_register.type = 3
@@ -226,7 +245,7 @@ def get_services(register_element):
                          from examination_tariff
                          where start_date <= provided_event.end_date
                          and service_fk = provided_service.code_fk),
-                         '2015-06-01'
+                         '2016-01-01'
                     )
     where medical_register.is_active
         and medical_register.year = %(year)s
@@ -577,33 +596,23 @@ def update_patient_attachment_code(register_element):
 
 
 def update_payment_kind(register_element):
+    # По подушевому оплачиваются все услуги поликлиники, оказанные прикреплённому застрахованному
+    # кроме профилей Травматология и ортопедия, Акушерство и гинекология в Свободненской больнице
+
+    # По подушевому оплачивается вся скорая помощь кроме услуг тромболизиса
     query = """
         update provided_service set payment_kind_fk = T.payment_kind_code
         from (
         select distinct ps1.id_pk service_pk, T1.pk, ps1.payment_type_fk,
             medical_service.code, ps1.end_date, T1.end_date, T1.period,
-            case provided_event.term_fk
-            when 3 then
+            case
+            when provided_event.term_fk = 3 then
                 CASE
-                    ((medical_service.group_fk = 24 and medical_service.reason_fk in (1, 2, 3, 8) and provided_event.term_fk=3)
-                      or (((select count(ps2.id_pk)
-                              from provided_service ps2
-                              join medical_service ms2 on ms2.id_pk = ps2.code_fk
-                              where ps2.event_fk = ps1.event_fk and
-                              (ms2.group_fk != 27 or ms2.group_fk is null)) = 1
-                           and medical_service.reason_fk = 1
-                           and medical_service.group_fk is NULL and provided_event.term_fk=3)
-                           and ps1.department_fk NOT IN (
-                                90,
-                                91,
-                                92,
-                                111,
-                                115,
-                                123,
-                                124,
-                                134))
-                    )
-                    AND ps1.department_fk NOT IN (15, 88, 89)
+                    ((medical_service.group_fk = 24 OR medical_service.group_fk is null)
+                      and medical_service.reason_fk in (1, 2, 3, 8) and provided_event.term_fk=3)
+                      AND not (
+                         mr1.organization_code = '280001' AND medical_service.tariff_profile_fk in (108, 93, 241)
+                      )
                 when TRUE THEN
                     CASE p1.attachment_code = mr1.organization_code -- если пациент прикреплён щас к МО
                     when true THEN -- прикреплён
@@ -628,7 +637,7 @@ def update_payment_kind(register_element):
                 ELSE
                     1
                 END
-            when 4 then 2
+            when provided_event.term_fk = 4 and medical_service.subgroup_fk not in (32, 38, 44, 50) then 2
             else 1
             END as payment_kind_code
         from provided_service ps1
@@ -746,6 +755,125 @@ def update_wrong_date(register_element):
     cursor.close()
 
 
+def update_ksg(register_element):
+    print u'Проставляем КСГ'
+    query_ksg_general = """
+        WITH  mo_services AS
+        (select
+        ps.id_pk AS service_id,
+        pe.id_pk AS event_id,
+        pe.basic_disease_fk AS disease_id,
+        s_idc.id_pk AS secondary_disease_id,
+        ps.code_fk AS code_id,
+        age(ps.start_date, pt.birthdate) AS patient_age,
+        ms.code AS s_code,
+        (CASE WHEN max(ps.quantity) over (PARTITION by pe.id_pk)  >= 3 THEN 1 ELSE 0 END) AS event_duration,
+        pt.gender_fk AS gender,
+        (select count(distinct op.id_pk) from provided_service op join medical_service ms_op ON ms_op.id_pk = op.code_fk where op.event_fk = pe.id_pk AND ms_op.code ilike 'A%%') > 0 AS has_op_event,
+        ms.code ILIKE 'A%%' is_op_service
+        from provided_service ps
+            join provided_event pe
+            on ps.event_fk = pe.id_pk
+            JOIN medical_register_record mrr
+            on mrr.id_pk = pe.record_fk
+            JOIN medical_register mr
+            on mr.id_pk = mrr.register_fk
+            JOIN patient pt
+            ON pt.id_pk = mrr.patient_fk
+            JOIN medical_service ms ON ms.id_pk = ps.code_fk
+            LEFT JOIN provided_event_concomitant_disease conc_d ON conc_d.event_fk = pe.id_pk
+            LEFT JOIN provided_event_complicated_disease comp_d ON comp_d.event_fk = pe.id_pk
+            LEFT JOIN idc s_idc ON (s_idc.id_pk = conc_d.disease_fk or s_idc.id_pk = comp_d.disease_fk)
+        WHERE  mr.is_active
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            and mr.organization_code = %(organization)s
+            and pe.term_fk in (1, 2)
+        )
+
+        update provided_event set ksg_smo = T.ksg_calc
+        from (
+        select
+        event_id,
+        ksg_calc.code AS ksg_calc,
+        ksg_calc.coefficient AS ksg_calc_coeff,
+        ksg_byservice.code AS ksg_s,
+        ksg_bydisease.code AS ksg_d,
+        has_op_event,
+        is_op_service,
+        max(ksg_calc.coefficient) over (PARTITION by event_id) AS max_ksg_coeff,
+        event_duration
+
+        from mo_services
+         -- Рассчёт КСГ по диагнозу
+        left join ksg_grouping ksg_g_bydisease ON
+            (select k.id_pk from ksg_grouping k where
+                mo_services.disease_id = k.disease_fk
+                AND (CASE WHEN k.secondary_disease_fk IS NOT NULL THEN k.secondary_disease_fk = secondary_disease_id ELSE True END)
+                AND (CASE WHEN k.service_fk IS NOT NULL THEN  k.service_fk = code_id ELSE True END)
+                AND (CASE WHEN k.age = 1 THEN patient_age < '28 days'
+                                  when k.age = 2 THEN patient_age < '90 days'
+                                  when k.age = 3 THEN patient_age < '1 years'
+                                  WHEN k.age = 4 THEN patient_age >= '4 years' AND patient_age < '18 years'
+                                  WHEN k.age = 5 THEN patient_age >= '18 years'
+                                  ELSE TRUE END)
+                AND (case WHEN k.gender_fk is not null THEN k.gender_fk = gender ELSE TRUE END)
+                AND (case WHEN k.duration <> 0 THEN k.duration = event_duration ELSE TRUE END)
+                AND k.start_date = '2016-01-01'
+              order by k.secondary_disease_fk DESC NULLS LAST, k.service_fk DESC NULLS LAST, k.age desc, k.duration desc, k.gender_fk DESC NULLS LAST
+              LIMIT 1
+            ) = ksg_g_bydisease.id_pk AND (is_op_service OR (NOT is_op_service AND NOT has_op_event))
+        left join ksg ksg_bydisease ON ksg_bydisease.id_pk = ksg_g_bydisease.ksg_fk
+        -- Рассчёт КСГ по услуге
+        left join ksg_grouping ksg_g_byservice ON
+            (select k.id_pk from ksg_grouping k where
+                mo_services.code_id = k.service_fk
+                AND (CASE WHEN k.disease_fk IS NOT NULL THEN  k.disease_fk = disease_id ELSE True END)
+                AND (CASE WHEN k.secondary_disease_fk IS NOT NULL THEN k.secondary_disease_fk = secondary_disease_id ELSE True END)
+                AND (CASE WHEN k.age = 1 THEN patient_age < '28 days'
+                                  when k.age = 2 THEN patient_age < '90 days'
+                                  when k.age = 3 THEN patient_age < '1 years'
+                                  WHEN k.age = 4 THEN patient_age >= '4 years' AND patient_age < '18 years'
+                                  WHEN k.age = 5 THEN patient_age >= '18 years'
+                                  ELSE TRUE END)
+                AND (case WHEN k.gender_fk is not null THEN k.gender_fk = gender ELSE TRUE END)
+                AND (case WHEN k.duration <> 0 THEN k.duration = event_duration ELSE TRUE END)
+                AND k.start_date = '2016-01-01'
+              order by k.disease_fk DESC NULLS LAST, k.secondary_disease_fk DESC NULLS LAST, k.age desc, k.duration desc, k.gender_fk DESC NULLS LAST
+              LIMIT 1
+            ) = ksg_g_byservice.id_pk
+        left join ksg ksg_byservice ON ksg_byservice.id_pk = ksg_g_byservice.ksg_fk
+        LEFT JOIN ksg ksg_calc ON (
+        CASE WHEN (ksg_byservice.code=12 AND ksg_bydisease.code=9) OR
+                  (ksg_byservice.code=13 AND ksg_bydisease.code=9) OR
+                  (ksg_byservice.code=12 AND ksg_bydisease.code=10) OR
+                  (ksg_byservice.code=73 AND ksg_bydisease.code=19) OR
+                  (ksg_byservice.code=74 AND ksg_bydisease.code=19) OR
+                  (ksg_byservice.code=153 AND ksg_bydisease.code=159) OR
+                  (ksg_byservice.code=280 AND ksg_bydisease.code=279) OR
+                  (ksg_byservice.code=280 AND ksg_bydisease.code=187) OR
+                  (ksg_byservice.code=225 AND ksg_bydisease.code=222) OR
+                  (ksg_byservice.code=35 AND ksg_bydisease.code=224) OR
+                  (ksg_byservice.code=236 AND ksg_bydisease.code=251)
+         THEN ksg_byservice.id_pk
+                 WHEN COALESCE(ksg_bydisease.coefficient, 0) >=  COALESCE(ksg_byservice.coefficient, 0) THEN ksg_bydisease.id_pk
+                 WHEN COALESCE(ksg_bydisease.coefficient, 0)  <  COALESCE(ksg_byservice.coefficient, 0) THEN ksg_byservice.id_pk
+                 ELSE NULL
+                 END
+        ) = ksg_calc.id_pk
+        )AS T
+        where T.event_id = id_pk AND T.ksg_calc is not null AND T.ksg_calc_coeff = T.max_ksg_coeff
+        """
+    cursor = connection.cursor()
+    cursor.execute(query_ksg_general, dict(
+        year=register_element['year'],
+        period=register_element['period'],
+        organization=register_element['organization_code']))
+
+    transaction.commit()
+    cursor.close()
+
+
 @howlong
 def calculate_tariff(register_element):
     min_date_for_stopped_policy = datetime.strptime('2011-01-01', '%Y-%m-%d').date()
@@ -797,37 +925,10 @@ def calculate_tariff(register_element):
             service.save()
 
 
-SERVICE_COMMENT_PATTERN = re.compile(r'^(?P<endovideosurgery>[0-1]?)(?:[0-1]?)'
-                                     r'(?:[0-1]?)(?:[0-1]?)'
-                                     r'(?P<mobile_brigade>[0-1]?)'
-                                     r'(?P<single_visit>[0-1]?)'
-                                     r'(?P<curation_coefficient>[0-1]?)'
-                                     r'(?P<full_paid_pso>[0-1]?)'
-                                     r'(?P<thrombolytic_therapy>[0-1]?)'
-                                     r'(?P<aood_x_ray>[0-1]?)$')
-                                        # Родовспоможение в 11 разряде с 01.06.2015
-
-
 def get_payments_sum(service):
-    tariff = 0
-    accepted_payment = 0
-    comment_match = SERVICE_COMMENT_PATTERN.match(service.service_comment)
-    if comment_match:
-        is_endovideosurgery = comment_match.group('endovideosurgery') == '1'
-        is_mobile_brigade = comment_match.group('mobile_brigade') == '1'
-        is_single_visit = comment_match.group('single_visit') == '1'
-        is_curation_coefficient = comment_match.group('curation_coefficient') == '1'
-        is_full_paid_pso = comment_match.group('full_paid_pso') == '1'
-        is_thrombolytic_therapy = comment_match.group('thrombolytic_therapy') == '1'
-        is_aood_x_ray = comment_match.group('aood_x_ray') == '1'
-    else:
-        is_endovideosurgery = False
-        is_mobile_brigade = False
-        is_single_visit = False
-        is_curation_coefficient = False
-        is_full_paid_pso = False
-        is_thrombolytic_therapy = False
-        is_aood_x_ray = False
+    is_endovideosurgery = (service.service_comment == '100000')
+    is_curation_coefficient = (service.service_comment == '0000001')
+    is_mobile_brigade = (service.service_comment == '000010')
 
     provided_tariff = float(service.tariff)
 
@@ -842,12 +943,88 @@ def get_payments_sum(service):
     term = service.service_term
     nkd = service.nkd or 1
 
-    if service.service_group == 20:
-        nkd = 1
+    # Исключение для ФГКУ 411 ВГ МО РФ
+    if service.organization_code == '280010' and service.service_tariff_profile == 25:
+        tariff = 20493
+    if service.organization_code == '280010' and service.service_tariff_profile in (27, 1):
+        tariff = 17533
 
-    ### Неонатология 11 - я группа
-    if service.service_group == 20 and service.vmp_group == 11:
-        nkd = 70
+    # Исключение для Ивановской
+    if service.organization_code == '280007' and service.service_tariff_profile in (1, ):
+        tariff = 17533
+
+    # Исключение для Белогорской НУЗ
+    if service.organization_code == '280065' and service.service_tariff_profile in (1, 27):
+        if service.service_code[0] == '0':
+            tariff = 17533
+        elif service.service_code[0] == '1':
+            tariff = 18216
+    if service.organization_code == '280084' and service.service_tariff_profile in (27, ) \
+        and service.department_level == 1:
+        if service.service_code[0] == '0':
+            tariff = 24108
+        elif service.service_code[0] == '1':
+            tariff = 25047
+
+    # Исключение для Магдагачи
+    if service.organization_code == '280029' and service.service_tariff_profile in (25, ):
+        if service.service_code[0] == '0':
+            tariff = 21774
+        elif service.service_code[0] == '1':
+            tariff = 26612
+
+    # Рассчёт РСЦ и ПСО по КСГ
+    rsc_tariff = {
+        ('66', '1.6'): 39519,
+        ('67', '1.6'): 78202,
+        ('68', '1.6'): 96848,
+        ('87', '1.6'): 32005,
+        ('88', '1.6'): 78481,
+        ('89', '1.6'): 70132,
+        ('90', '1.6'): 86830,
+        ('91', '1.6'): 125513,
+    }
+
+    pso_tariff = {
+        ('66', '1.6'): 35926,
+        ('67', '1.6'): 71093,
+        ('68', '1.6'): 88044,
+        ('87', '1.6'): 29095,
+        ('88', '1.6'): 71346,
+        ('89', '1.6'): 63756,
+        ('90', '1.6'): 78936,
+        ('91', '1.6'): 114103,
+
+        ('66', '2.2'): 49398,
+        ('67', '2.2'): 97753,
+        ('68', '2.2'): 121061,
+        ('87', '2.2'): 40006,
+        ('88', '2.2'): 98101,
+        ('89', '2.2'): 87665,
+        ('90', '2.2'): 108537,
+        ('91', '2.2'): 156892
+    }
+
+    rsc_pso_nkd = {
+        '66': 12,
+        '67': 12,
+        '68': 12,
+        '87': 7,
+        '88': 30,
+        '89': 30,
+        '90': 30,
+        '91': 30,
+    }
+
+    if service.service_group == 1:
+        print 1, service.ksg_smo, service.regional_coefficient
+        tariff = rsc_tariff.get((service.ksg_smo, service.regional_coefficient), 0)
+        nkd = rsc_pso_nkd.get(service.ksg_smo, 1)
+
+    if service.service_group == 2:
+        print 2, service.ksg_smo, service.regional_coefficient
+        tariff = pso_tariff.get((service.ksg_smo, service.regional_coefficient), 0)
+        nkd = rsc_pso_nkd.get(service.ksg_smo, 1)
 
     if service.service_group in (3, 5):
         term = 3
@@ -857,26 +1034,28 @@ def get_payments_sum(service):
 
         if term == 1:
             duration_coefficient = 70
-            # КСГ 76, 77, 78
-            if service.service_code in (
-                    '098964', '098965', '098966',
-                    '098967', '098968', '098969'):
+            # стационар 3) КСГ 88, 89, 90, 91 менее 50%
+            if service.service_group in (1, 2) and service.ksg_smo in ('88', '89', '90', '91'):
                 duration_coefficient = 50
 
-            if is_endovideosurgery or service.service_code in ('098913', '098940'):
+            # стационар 4) эндовидеохирургия по полному тарифу
+            if is_endovideosurgery:
+                duration_coefficient = 0
+
+            # стационар 8) акушерство и гинекология (койки для беременных и рожениц)
+            if service.service_tariff_profile == 31:
                 duration_coefficient = 0
 
             if service.service_group == 20:
                 duration_coefficient = 0
 
-            if service.service_group == 2 and is_full_paid_pso:
-                duration_coefficient = 0
-
+            # новшество с 4 февраля (нигде не прописанное)
             if (service.organization_code == '280013' and service.service_tariff_profile in (24, 30)) or \
                     (service.organization_code == '280005' and service.service_tariff_profile in (24, 67)):
                 duration_coefficient = 50
 
         elif term == 2:
+            # дневной стационар 2) длительность лечения менее 90% для эндовидеохирургии менне 50%
             duration_coefficient = 90
 
             if is_endovideosurgery:
@@ -887,22 +1066,19 @@ def get_payments_sum(service):
         if duration < duration_coefficient:
             tariff = round(tariff / float(nkd) * float(service.quantity), 2)
 
-        if service.service_tariff_profile == 999:
-            if service.service_code != '098710':
-                tariff = 0
-
         accepted_payment = tariff
 
         if term == 1:
-            # Коэффициент курации
-            if service.quantity >= nkd * 2 and service.service_group != 20 \
+            # стационар 5) Коэффициент сложности лечения пациента КСЛП
+            if service.quantity >= 30 and service.service_group != 20 \
                     and is_curation_coefficient:
                 accepted_payment += round(accepted_payment * 0.25, 2)
                 provided_tariff += round(provided_tariff * 0.25, 2)
                 ProvidedServiceCoefficient.objects.get_or_create(
                     service=service, coefficient_id=7)
 
-            # Коэффициенты КПГ
+            # стационар 6) Управленческий коэффициент (КУ)
+            # КПГ терапия
             if service.service_tariff_profile == 36 and \
                     (service.level == 1 or service.organization_code in ('280027', '280075')):
                 accepted_payment += round(accepted_payment * 0.38, 2)
@@ -910,83 +1086,31 @@ def get_payments_sum(service):
                 ProvidedServiceCoefficient.objects.get_or_create(
                     service=service, coefficient_id=8)
 
+            # КПГ педиатрия
             if service.service_tariff_profile == 10:
                 accepted_payment += round(accepted_payment * 0.34, 2)
                 provided_tariff += round(provided_tariff * 0.34, 2)
                 ProvidedServiceCoefficient.objects.get_or_create(
                     service=service, coefficient_id=9)
 
-            if service.service_tariff_profile == 28 and \
-                    service.organization_code == "280064":
-                accepted_payment += round(accepted_payment * 0.65, 2)
-                provided_tariff += round(provided_tariff * 0.65, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=10)
-
-            if service.service_tariff_profile == 37 and \
-                    service.organization_code == "280064":
-                accepted_payment += round(accepted_payment * 0.8, 2)
-                provided_tariff += round(provided_tariff * 0.8, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=11)
-
-            if service.service_tariff_profile == 38 and \
-                    service.organization_code == "280064":
-                accepted_payment += round(accepted_payment * 0.47, 2)
-                provided_tariff += round(provided_tariff * 0.47, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=12)
-
-            if service.service_group == 2 and is_full_paid_pso:
-                accepted_payment -= round(accepted_payment * 0.4, 2)
-                provided_tariff -= round(provided_tariff * 0.4, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=13)
-
-            if service.service_code in ('098901', '198901', '098912', '198912') and \
-                    service.organization_code in ('280084', '280027') and \
-                    is_full_paid_pso:
-                accepted_payment += round(accepted_payment * 0.3, 2)
-                provided_tariff += round(provided_tariff * 0.3, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=14)
-
-            if service.service_code in ('098901', '198901', '098912', '198912') and \
-                    service.organization_code in ('280084', '280027') and \
-                    is_thrombolytic_therapy:
-                accepted_payment += round(accepted_payment * 1, 2)
-                provided_tariff += round(provided_tariff * 1, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=15)
-
-        # Новые коффициенты по медицинской реабилитации в дневном стационаре
-        if term == 2:
-            if service.service_tariff_profile == 50 and \
-                    service.organization_code in ("280064", "280003"):
-                accepted_payment += round(accepted_payment * 0.2, 2)
-                provided_tariff += round(provided_tariff * 0.2, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=16)
-
-            if service.service_tariff_profile == 2 and \
-                    service.organization_code in ("280064", "280003"):
-                accepted_payment += round(accepted_payment * 0.1, 2)
-                provided_tariff += round(provided_tariff * 0.1, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=17)
-
-            if service.service_tariff_profile == 41 and \
-                    service.organization_code in ("280064", "280003"):
+            # КПГ медицинская реабилитация
+            if service.service_tariff_profile == 280:
                 accepted_payment += round(accepted_payment * 0.4, 2)
                 provided_tariff += round(provided_tariff * 0.4, 2)
                 ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=18)
+                    service=service, coefficient_id=26)
+
+        if term == 2:
+            # дневной стационар 3) Управленческий коэффициент (КУ)
+            # КПГ медицинская реабилитация
+            if service.service_tariff_profile == 282:
+                accepted_payment += round(accepted_payment * 0.4, 2)
+                provided_tariff += round(provided_tariff * 0.4, 2)
+                ProvidedServiceCoefficient.objects.get_or_create(
+                    service=service, coefficient_id=26)
 
     elif term == 3 or term is None:
         quantity = service.quantity or 1
-
-        single_visit_exception_group = (7, 8, 25, 26, 9, 10, 11, 12,
-                                        13, 14, 15, 16)
 
         if service.service_group in (29, 31):
             accepted_payment = tariff
@@ -994,26 +1118,12 @@ def get_payments_sum(service):
             accepted_payment = tariff * float(quantity)
             tariff *= float(quantity)
 
+        # диспансеризации мобильные бригады
         if is_mobile_brigade and service.service_group in (7,  11, 15, 16,  12, 13,  4, 9):
             accepted_payment += round(accepted_payment * 0.07, 2)
             provided_tariff += round(provided_tariff * 0.07, 2)
             ProvidedServiceCoefficient.objects.get_or_create(
                 service=service, coefficient_id=5)
-
-        if service.coefficient_4:
-            accepted_payment += round(accepted_payment * 0.2, 2)
-            provided_tariff += round(provided_tariff * 0.2, 2)
-            ProvidedServiceCoefficient.objects.get_or_create(
-                service=service, coefficient_id=4)
-
-        if service.organization_code == '280005' \
-                and service.service_code in ('001203', '001204') \
-                and service.count_services_in_event > 1:
-                #and is_aood_x_ray\
-            accepted_payment += round(accepted_payment * 1.9, 2)
-            provided_tariff += round(provided_tariff * 1.9, 2)
-            ProvidedServiceCoefficient.objects.get_or_create(
-                service=service, coefficient_id=19)
 
     elif service.event.term_id == 4:
         quantity = service.quantity or 1
@@ -1067,7 +1177,9 @@ def main():
             update_patient_attachment_code(register_element)
             update_payment_kind(register_element)
             update_wrong_date(register_element)
+            update_ksg(register_element)
 
+            checks.check_rsc_pso_ksg(register_element)
             checks.underpay_repeated_service(register_element)
             checks.underpay_wrong_date_service(register_element)
             checks.underpay_duplicate_services(register_element)
@@ -1077,6 +1189,7 @@ def main():
             checks.underpay_wrong_age_service(register_element)
             checks.underpay_not_paid_in_oms(register_element)
             checks.underpay_invalid_hitech_service_diseases(register_element)
+            checks.underpay_invalid_hitech_service_kind(register_element)
 
             checks.underpay_wrong_examination_age_group(register_element)
             checks.underpay_wrong_age_examination_children_adopted(register_element)
@@ -1110,6 +1223,7 @@ def main():
             checks.underpay_multi_subgrouped_stomatology_events(register_element)
             checks.underpay_incorrect_preventive_examination_event(register_element)
             checks.underpay_repeated_preventive_examination_event(register_element)
+            checks.underpay_adult_examination_with_double_services(register_element)
             checks.underpay_outpatient_event(register_element)
         print Sanction.objects.filter(
             service__event__record__register__is_active=True,
