@@ -72,7 +72,7 @@ class AmbulanceCareALLPage(ReportPage):
                     AND mr.year = %(year)s
                     AND ps.payment_type_fk = 2
                     AND pe.term_fk = 4
-                    AND ms.group_fk in (33, 34, 35, 36)
+                    AND ms.group_fk in (33, 34, 35, 36, 43)
                 '''
         return query
 
@@ -95,7 +95,7 @@ class AmbulanceSpecializedPage(AmbulanceCareALLPage):
         AmbulanceCareALLPage.__init__(self)
 
     def get_query(self):
-        return AmbulanceCareALLPage.get_general_query() + ' AND ms.group_fk in (33, 34)'
+        return AmbulanceCareALLPage.get_general_query() + ' AND (ms.group_fk in (33, 34) OR ms.subgroup_fk IN (32, 38))'
 
 
 class AmbulanceMedicalPage(AmbulanceCareALLPage):
@@ -104,7 +104,7 @@ class AmbulanceMedicalPage(AmbulanceCareALLPage):
         AmbulanceCareALLPage.__init__(self)
 
     def get_query(self):
-        return AmbulanceCareALLPage.get_general_query() + ' AND ms.group_fk = 35'
+        return AmbulanceCareALLPage.get_general_query() + ' AND (ms.group_fk = 35 OR ms.subgroup_fk = 44)'
 
 
 class AmbulanceParamedicPage(AmbulanceCareALLPage):
@@ -113,4 +113,4 @@ class AmbulanceParamedicPage(AmbulanceCareALLPage):
         AmbulanceCareALLPage.__init__(self)
 
     def get_query(self):
-        return AmbulanceCareALLPage.get_general_query() + ' AND ms.group_fk = 36'
+        return AmbulanceCareALLPage.get_general_query() + ' AND (ms.group_fk = 36 OR ms.subgroup_fk = 50)'
