@@ -14,24 +14,28 @@ AMBULANCE_COLUMN_POSITION = {
     30: 8,
     31: 10,
     32: 12,
-    33: 14,
-    34: 16,
-    35: 18,
-    36: 20,
-    37: 22,
-    38: 24,
-    39: 26,
-    40: 28,
-    41: 30,
-    42: 32,
-    43: 34,
-    44: 36,
-    45: 38,
-    46: 40,
-    47: 42,
-    48: 44,
-    49: 46,
-    50: 48
+    58: 14,
+    33: 16,
+    34: 18,
+    35: 20,
+    36: 22,
+    37: 24,
+    38: 26,
+    59: 28,
+    39: 30,
+    40: 32,
+    41: 34,
+    42: 36,
+    43: 38,
+    44: 40,
+    60: 42,
+    45: 44,
+    46: 46,
+    47: 48,
+    48: 50,
+    49: 52,
+    50: 54,
+    61: 56
 }
 
 
@@ -70,7 +74,7 @@ def calculate_ambulance_sum():
 
 def print_act_ambulance(count_services):
     reestr_path = REESTR_EXP % (func.YEAR, func.PERIOD)
-    with ExcelWriter(u'%s/скорая_помощь_%s_%s' % (reestr_path, func.YEAR, MONTH_NAME[func.PERIOD]),
+    with ExcelWriter(u'%s/скорая_помощь_%s' % (reestr_path, func.YEAR, MONTH_NAME[func.PERIOD]),
                      template=ur'%s/templates/excel_pattern/ambulance_care.xls' % BASE_DIR) as act_book:
         act_book.set_style(VALUE_STYLE)
         for count_in_mo in count_services:
