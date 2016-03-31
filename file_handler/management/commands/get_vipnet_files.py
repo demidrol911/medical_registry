@@ -31,25 +31,16 @@ REGISTER_FILES_PATTERN = r'^(h|l|t|dp|do|dv|dd|dr|ds|du|dv|df)m(280\d{3})s(28002
 
 
 def get_completed_mo():
-    table = xlrd.open_workbook(IDENT_TABLE)
-
-    sheets = table.sheet_names()
-
     mo_code_match_pattern = re.compile(MO_CODE_PATTERN)
-
     completed = []
-
-    for sheet_name in sheets:
-        work_sheet = table.sheet_by_name(sheet_name)
-        rows_count = work_sheet.nrows
-        current_row = -1
-        while current_row < rows_count-1:
-            current_row += 1
-            row = work_sheet.row(current_row)
-            if mo_code_match_pattern.match(row[1].value) \
-                    and type(row[3].value) is float \
-                    and row[3].value > 0:
-                completed.append(row[1].value)
+    for row in open(IDENT_TABLE):
+        data = row.split(';')
+        if mo_code_match_pattern.match(data[0]):
+            try:
+                if len(data) >= 3 and float(data[2]) > 0:
+                    completed.append(data[0])
+            except ValueError:
+                pass
 
     return completed
 
