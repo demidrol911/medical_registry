@@ -5,6 +5,7 @@ from report_printer.management.commands.targeted_expertise_pages.overdued_nkd_ho
 from report_printer.management.commands.targeted_expertise_pages.doubled_disease import DoubledDisease
 from report_printer.management.commands.targeted_expertise_pages.repaid_by_death import RepaidByDeath
 from report_printer.management.commands.targeted_expertise_pages.complicated_event import ComplicatedEvent
+from report_printer.management.commands.targeted_expertise_pages.oks_onmk import OksOnmkPage
 from report_printer.management.commands.targeted_expertise_pages.report import TargetedExpertisePage
 from report_printer.libs.report import Report
 from report_printer.libs.report import ReportParameters
@@ -21,6 +22,7 @@ class Command(BaseCommand):
     3. Случаи повторного лечения одного и того же заболевания
     4. Услуги оказанные застрахованным за год, полис которых погашен по смерти
     5. Случаи с осложнениями заболевания
+    6. Острый коронарный синдромом (ОКС) и острое нарушение мозгового кровообращения (ОНМК)
     """
 
     def handle(self, *args, **options):
@@ -57,3 +59,7 @@ class Command(BaseCommand):
         complicated_event = ComplicatedEvent()
         complicated_event.print_to_dbf()
         complicated_event.print_to_excel(printing_into_one_file=True)
+
+        oks_onmk = OksOnmkPage()
+        oks_onmk.print_to_dbf()
+        oks_onmk.print_to_excel()
