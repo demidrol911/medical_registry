@@ -52,8 +52,8 @@ DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
                                   '098770', '98710', '98711', '98712', '98715',
                                   '98770', '098770', '098770', '198770'
 )
-HOSPITAL_VOLUME_MO_EXCLUSIONS = ()
-DAY_HOSPITAL_MO_EXCLUSIONS = ()
+HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280076', '280091', '280069')
+DAY_HOSPITAL_MO_EXCLUSIONS = ('280076', '280091', '280069')
 
 filename_pattern = r'^(l|h|t|dp|dv|do|ds|du|df|dd|dr)m?(28\d{4})s(28002|28004)_(\d{2})(\d{2})\d+.xml'
 registry_regexp = re.compile(filename_pattern, re.IGNORECASE)
@@ -551,6 +551,7 @@ def main():
 
             invoiced = False
 
+            idserv_check_list = []
             for item in service_file.find(tags=('SCHET', 'ZAP', )):
                 if 'NSCHET' in item:
                     invoiced = True
@@ -825,6 +826,17 @@ def main():
                                 event_uid=new_event['IDCASE'],
                                 service_uid=new_service['IDSERV']
                             )
+
+                            # Проверка уникальности идентификатора услуги
+                            if new_service['IDSERV'] in idserv_check_list:
+                                services_errors.append(set_error(
+                                    '904', field='CODE_USL', parent='USL',
+                                    record_uid=new_record['N_ZAP'],
+                                    event_uid=new_event['IDCASE'],
+                                    service_uid=new_service['IDSERV'],
+                                    comment=u'Значение не является уникальным'))
+
+                            idserv_check_list.append(new_service['IDSERV'])
 
                             if not is_service_corresponds_registry_type(
                                     new_service['CODE_USL'], registry_type):
