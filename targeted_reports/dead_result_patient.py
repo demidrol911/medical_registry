@@ -81,29 +81,26 @@ from provided_service ps
     LEFT JOIN idc idc2
         on idc2.id_pk = pe.basic_disease_fk
 
-    /*
     left join expertiza e
         on e.policy = trim(format('%%s %%s', p.insurance_policy_series, p.insurance_policy_number))
             and ms.code = e.service_code and ps.end_date = e.end_date and idc.idc_code = e.disease
             and mr.organization_code = e.organization and (kinda = '2' or kindp = '2')
             and e.act_number like 'КЦ%%'
-    */
 
 where mr.is_active
     and mr.year = '2015'
-    and mr.period = '12'
+    --and mr.period = '02'
     and pe.term_fk IN (1, 2)
     and pe.treatment_result_fk in (5, 6, 15, 16)
     and ps.payment_type_fk = 2
-    --and mr.organization_code = '280026'
     and ms.code not like 'A%%'
     --AND (e.act_number like 'КЦ%%' or e.act_number is NULL)
 ORDER BY mo.name, mr.period, dep.old_code, p.last_name, p.first_name, p.middle_name
 
     """
 
-year = '2015'
-period = '12'
+year = '2016'
+period = '02'
 
 cursor_pg.execute(overdue_query, dict(year=year, period=period))
 result = cursor_pg.fetchall()

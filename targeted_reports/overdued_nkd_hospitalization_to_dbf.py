@@ -38,7 +38,7 @@ def get_services(year, period):
                             where start_date = (
                                 select max(start_date)
                                 from tariff_nkd
-                                where start_date <= greatest('2015-01-01'::DATE, ps.end_date) and start_date >= '2015-01-01'::DATE
+                                where start_date <= greatest('2016-01-01'::DATE, ps.end_date) and start_date >= '2016-01-01'::DATE
                                     and profile_fk = ms.tariff_profile_fk
                                     and is_children_profile = ps.is_children_profile
                                     and "level" = dep.level
@@ -78,7 +78,9 @@ def get_services(year, period):
                 COALESCE(adr.extra_number, ''), coalesce(adr.room_number)) as address,
                 case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
 
-                ps.end_date - ps.start_date as c_quantity
+                ps.quantity as c_quantity,
+                pe.term_fk AS term,
+                mr.organization_code AS org_code
             from
                 provided_service ps
                 join provided_event pe
@@ -135,7 +137,7 @@ def get_services(year, period):
             where mr.is_active
                 and mr.year = %(year)s
                 and mr.period = %(period)s
-                --and medical_register.organization_code in ('280041', '280026', '280013')
+                --and mr.organization_code
                 and pe.term_fk in (1, 2)
                 and ps.tariff > 0
                 and ps.payment_type_fk = 2
@@ -161,8 +163,8 @@ def get_services(year, period):
 
 
 def main():
-    year = '2015'
-    period = '12'
+    year = '2016'
+    period = '02'
 
     path = 'c:/work/OVERDUED_NKD_DBF/'
     services = get_services(year, period)
@@ -172,69 +174,91 @@ def main():
     current_term_name = None
     stored_services_id = []
 
+    services_all = {}
     for service in services:
-        print repr(service['last_name'])
+        if service['department'] not in services_all:
+            services_all[service['department']] = {'hosp': 0, 'day_hosp': 0}
+        if service['term'] == 1:
+            services_all[service['department']]['hosp'] += 1
+        if service['term'] == 2:
+            services_all[service['department']]['day_hosp'] += 1
+
+    print services_all
+
+    count_services = 0
+
+    for service in services:
+        #print repr(service['last_name'])
         if service['department'] != current_department:
             current_department = service['department']
-
+            count_services = 0
+            count_all = services_all[service['department']]['hosp']*30.0/100
+            if count_all - int(count_all) > 0:
+                count_all += 1
+            count_all = int(count_all)
+            print service['org_code'], current_department, count_all
             stored_services_id = []
 
             if db:
                 db.close()
 
-            db = dbf.Dbf('%s/t%s.dbf' % (path, current_department), new=True)
-            db.addField(
-                ("COD", "C", 15),
-                ("OTD", "C", 3),
-                ("ERR_ALL", "C", 8),
-                ("SN_POL", "C", 25),
-                ("FAM", "C", 20),
-                ("IM", "C", 20),
-                ("OT", "C", 25),
-                ("DR", "D"),
-                ("DS", "C", 6),
-                ("DS2", "C", 6),
-                ("C_I", "C", 16),
-                ("D_BEG", "D"),
-                ("D_U", "D"),
-                ("K_U", "N", 4),
-                ("F_DOP_R", "N", 10, 2),
-                ("T_DOP_R", "N", 10, 2),
-                ("S_OPL", "N", 10, 2),
-                ("ADRES", "C", 80),
-                ("SPOS", "C", 2),
-                ("GENDER", "C", 1),
-                ("EMPL_NUM", "C", 16),
-                ("HOSP_TYPE", "N", 2),
-                ("OUTCOME", "C", 3),
-            )
+            if count_all > 0 or services_all[service['department']]['day_hosp'] > 0:
+                db = dbf.Dbf('%s/t%s.dbf' % (path, current_department), new=True)
+                db.addField(
+                    ("COD", "C", 15),
+                    ("OTD", "C", 3),
+                    ("ERR_ALL", "C", 8),
+                    ("SN_POL", "C", 25),
+                    ("FAM", "C", 20),
+                    ("IM", "C", 20),
+                    ("OT", "C", 25),
+                    ("DR", "D"),
+                    ("DS", "C", 6),
+                    ("DS2", "C", 6),
+                    ("C_I", "C", 16),
+                    ("D_BEG", "D"),
+                    ("D_U", "D"),
+                    ("K_U", "N", 4),
+                    ("F_DOP_R", "N", 10, 2),
+                    ("T_DOP_R", "N", 10, 2),
+                    ("S_OPL", "N", 10, 2),
+                    ("ADRES", "C", 80),
+                    ("SPOS", "C", 2),
+                    ("GENDER", "C", 1),
+                    ("EMPL_NUM", "C", 16),
+                    ("HOSP_TYPE", "N", 2),
+                    ("OUTCOME", "C", 3),
+                )
 
-        new = db.newRecord()
-        new["COD"] = unicode_to_cp866(service['service_code'])
-        new["OTD"] = service.get('division_code', '000')
-        new["ERR_ALL"] = ''
-        new["SN_POL"] = unicode_to_cp866(service['policy'])
-        new["FAM"] = unicode_to_cp866(service.get('last_name', ''))
-        new["IM"] = unicode_to_cp866(service.get('first_name', ''))
-        new["OT"] = unicode_to_cp866(service.get('middle_name', ''))
-        new["DR"] = service.get('birthdate', '1900-01-01')
-        new["DS"] = unicode_to_cp866(service['disease'])
-        new["DS2"] = unicode_to_cp866(service['concomitant_disease'])
-        new["C_I"] = unicode_to_cp866(service.get('anamnesis_number', ''))
-        new["D_BEG"] = service.get('start_date', '1900-01-01')
-        new["D_U"] = service.get('end_date', '1900-01-01')
-        new["K_U"] = service.get('quantity', 0)
-        new["S_OPL"] = round(float(service.get('accepted_payment', 0)), 2)
-        try:
-            new["ADRES"] = unicode_to_cp866(service.get('address', ''))
-        except:
-            new["ADRES"] = ''
-        new["SPOS"] = service['funding_type']
-        new["GENDER"] = service['gender_code'] or 0
-        new["OUTCOME"] = service['outcome_code'] or ''
-        new["HOSP_TYPE"] = service['hospitalization_code'] or 0
-        new["EMPL_NUM"] = unicode_to_cp866(service['worker_code'] or '')
-        new.store()
+        if (count_services < count_all and service['term'] == 1) or service['term'] == 2:
+            new = db.newRecord()
+            new["COD"] = unicode_to_cp866(service['service_code'])
+            new["OTD"] = service.get('division_code', '000')
+            new["ERR_ALL"] = ''
+            new["SN_POL"] = unicode_to_cp866(service['policy'])
+            new["FAM"] = unicode_to_cp866(service.get('last_name', ''))
+            new["IM"] = unicode_to_cp866(service.get('first_name', ''))
+            new["OT"] = unicode_to_cp866(service.get('middle_name', ''))
+            new["DR"] = service.get('birthdate', '1900-01-01')
+            new["DS"] = unicode_to_cp866(service['disease'])
+            new["DS2"] = unicode_to_cp866(service['concomitant_disease'])
+            new["C_I"] = unicode_to_cp866(service.get('anamnesis_number', ''))
+            new["D_BEG"] = service.get('start_date', '1900-01-01')
+            new["D_U"] = service.get('end_date', '1900-01-01')
+            new["K_U"] = service.get('quantity', 0)
+            new["S_OPL"] = round(float(service.get('accepted_payment', 0)), 2)
+            try:
+                new["ADRES"] = unicode_to_cp866(service.get('address', ''))
+            except:
+                new["ADRES"] = ''
+            new["SPOS"] = service['funding_type']
+            new["GENDER"] = service['gender_code'] or 0
+            new["OUTCOME"] = service['outcome_code'] or ''
+            new["HOSP_TYPE"] = service['hospitalization_code'] or 0
+            new["EMPL_NUM"] = unicode_to_cp866(service['worker_code'] or '')
+            new.store()
+            if service['term'] == 1:
+                count_services += 1
 
     if db:
         db.close()

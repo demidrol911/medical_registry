@@ -87,11 +87,14 @@ with all_data as (
             on p.id_pk = mrr.patient_fk
         JOIN insurance_policy ip
             on ip.version_id_pk = p.insurance_policy_fk
+        join idc ON idc.id_pk = ps.basic_disease_fk
         JOIN (
             select pe1.id_pk as event_id, mr1.organization_code,
                 ip1.id, pe1.term_fk, ps1.basic_disease_fk, ps1.code_fk,
                 pe1.start_date as event_start_date,
-                pe1.end_date as event_end_date, ps1.id_pk as service_id
+                pe1.end_date as event_end_date, ps1.id_pk as service_id,
+                ps1.department_fk AS department_id,
+                format('%%s-%%s-01', mr1.year, mr1.period)::DATE AS checking_period
             FROM provided_service ps1
                 join provided_event pe1
                     on pe1.id_pk = ps1.event_fk
@@ -123,17 +126,21 @@ with all_data as (
                 and ps1.tariff > 0
 
             ) as T on T.id = ip.id and mr.organization_code = T.organization_code and T.term_fk = pe.term_fk
-                and ps.basic_disease_fk = T.basic_disease_fk and ps.code_fk = T.code_fk and T.event_id <> pe.id_pk
+                and ps.basic_disease_fk = T.basic_disease_fk and T.event_id <> pe.id_pk
                 and ps.id_pk <> T.service_id
+               -- and (CASE WHEN checking_period = format('%%s-%%s-01', mr.year, mr.period)::DATE THEN T.event_id < pe.id_pk ELSE True END)
     WHERE mr.is_active
         and mr.year = %(year)s
         and mr.period = %(period)s
-        --and mr.organization_code IN ('280026')
+        and mr.organization_code in ('280076', '280001', '280012', '280039')
+        AND idc.idc_code not like 'Z49%%'
+        and pe.term_fk = 3
         AND ps.payment_type_fk = 2
-        and (( pe.term_fk in (1, 2)
+        and (( pe.term_fk in (1, 2) and ps.code_fk = T.code_fk
             and (pe.end_date - event_start_date between 0 and 89 or pe.end_date - T.event_end_date between 0 and 89 or pe.start_date - T.event_start_date between 0 and 89 or pe.start_date - T.event_end_date  between 0 and 89))
-            or (pe.term_fk = 4 and age(pe.end_date, T.event_end_date) = '0 days')
-            or (pe.term_fk = 3 and (age(pe.end_date, T.event_start_date) between '1 days' and '29 days' or age(pe.start_date, T.event_end_date) between '1 days' and '29 days'))
+            or (pe.term_fk = 4 and ps.code_fk = T.code_fk and age(pe.end_date, T.event_end_date) = '0 days')
+            or (pe.term_fk = 4 and T.term_fk = 4 and (age(pe.end_date, T.event_end_date) BETWEEN '0 days' AND '1 days' OR age(T.event_end_date, pe.end_date) BETWEEN '0 days' AND '1 days'))
+            or (pe.term_fk = 3 and ps.code_fk = T.code_fk and (age(pe.end_date, T.event_start_date) between '1 days' and '29 days' or age(pe.start_date, T.event_end_date) between '1 days' and '29 days'))
         )
         and ps.tariff > 0
         and (pe.term_fk in (1, 2, 4)
@@ -184,7 +191,8 @@ select all_data.event_1 as event_id,
     case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
     mr.period,
     ps.id_pk as service_id,
-    0 as sort
+    ps.tariff,
+    1 as sort
 from all_data
     join provided_event pe
         on pe.id_pk = all_data.event_1
@@ -234,7 +242,7 @@ from all_data
         on aa1.id_pk = aa.parent_fk
     LEFT join administrative_area aa2
         on aa2.id_pk = aa1.parent_fk
-WHERE ms.code not like 'A%%'
+WHERE ms.code not like 'A%%' and ps.payment_type_fk = 2
 
 union
 
@@ -268,10 +276,11 @@ select all_data.event_2 as event_id,
     case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
     mr.period,
     ps.id_pk as service_id,
-    1 as sort
+    ps.tariff,
+    0 as sort
 from all_data
     join provided_event pe
-        on pe.id_pk = all_data.event_2
+        on pe.id_pk = all_data.event_2 and pe.id_pk NOT IN (SELECT DISTINCT event_1 from all_data)
     JOIN provided_service ps
         on ps.event_fk = pe.id_pk
     LEFT JOIN medical_service ms
@@ -318,7 +327,7 @@ from all_data
         on aa1.id_pk = aa.parent_fk
     LEFT join administrative_area aa2
         on aa2.id_pk = aa1.parent_fk
-WHERE ms.code not like 'A%%'
+WHERE ms.code not like 'A%%' and ps.payment_type_fk = 2
 
 order by 2, 4, 3 , last_name, first_name, middle_name, birthdate, sort
     """
@@ -334,8 +343,8 @@ def main():
     total = missed = 0
     l = l1 + l2
 
-    year = '2015'
-    period = '12'
+    year = '2016'
+    period = '02'
 
     path = 'c:/work/REPEATED_DBF/'
     services = get_services(year, period)
@@ -345,12 +354,25 @@ def main():
     current_term_name = None
     stored_services_id = defaultdict(int)
 
+    services_all = {}
+    for service in services:
+        if service['department'] not in services_all:
+            services_all[service['department']] = {'hosp': 0, 'polic': 0, 'skor': 0}
+        if service['term_name'] == 'Стационар, днев. стационар':
+            services_all[service['department']]['hosp'] += 1
+        if service['term_name'] == 'Поликлиника' and service['sort'] == 1 and service['tariff'] > 0:
+            services_all[service['department']]['polic'] += 1
+        if service['term_name'] == 'Скорая помощь':
+            services_all[service['department']]['skor'] += 1
+
+    print services_all
+
     for service in services:
         full_name = '%s %s %s' % (service['last_name'], service['first_name'], service['middle_name'])
         birthdate = service.get('birthdate', None)
 
         t = (service['organization_code'], full_name.decode('utf-8').strip(), birthdate, service['service_code'], service['disease'])
-        print t
+        #print t
 
         if l:
             if t not in l:
@@ -359,77 +381,99 @@ def main():
             else:
                 total += 1
 
-        print repr(service['last_name'])
+        #print repr(service['last_name'])
 
         if service['department'] != current_department or service['term_name'] != current_term_name:
             current_term_name = service['term_name']
             current_department = service['department']
+            count_services = 0
+            count_all = int(round(services_all[service['department']]['polic']*30.0/100, 0))
+            '''
+            if service['department'] == '0309060':
+                count_all = 23
+            else:
+                count_all = 0
+            '''
 
+            '''
+            elif service['department'] == '0310040':
+                count_all = 5
+            else:
+                count_all = 0
+            '''
+            print service['organization_code'], current_department, count_all
 
             if db:
+                print db.name, services_all[service['department']]
                 db.close()
+                db = None
 
+            #if count_all > 0 or services_all[service['department']]['hosp'] > 0 or services_all[service['department']]['skor'] > 0:
             db = dbf.Dbf('%s/t%s - %s.dbf' % (path, current_department, current_term_name.decode('utf-8').encode('cp1251')), new=True)
             db.addField(
-                ("COD", "C", 15),
-                ("OTD", "C", 3),
-                ("ERR_ALL", "C", 8),
-                ("SN_POL", "C", 25),
-                ("FAM", "C", 20),
-                ("IM", "C", 20),
-                ("OT", "C", 25),
-                ("DR", "D"),
-                ("DS", "C", 6),
-                ("DS2", "C", 6),
-                ("C_I", "C", 16),
-                ("D_BEG", "D"),
-                ("D_U", "D"),
-                ("K_U", "N", 4),
-                ("F_DOP_R", "N", 10, 2),
-                ("T_DOP_R", "N", 10, 2),
-                ("S_OPL", "N", 10, 2),
-                ("ADRES", "C", 80),
-                ("SPOS", "C", 2),
-                ("GENDER", "C", 1),
-                ("EMPL_NUM", "C", 16),
-                ("HOSP_TYPE", "N", 2),
-                ("OUTCOME", "C", 3),
-                ("IDCASE", "C", 16),
-                ("IDSERV", "C", 16),
-                ("ISREPEATED", "N", 2),
+                    ("COD", "C", 15),
+                    ("OTD", "C", 3),
+                    ("ERR_ALL", "C", 8),
+                    ("SN_POL", "C", 25),
+                    ("FAM", "C", 20),
+                    ("IM", "C", 20),
+                    ("OT", "C", 25),
+                    ("DR", "D"),
+                    ("DS", "C", 6),
+                    ("DS2", "C", 6),
+                    ("C_I", "C", 16),
+                    ("D_BEG", "D"),
+                    ("D_U", "D"),
+                    ("K_U", "N", 4),
+                    ("F_DOP_R", "N", 10, 2),
+                    ("T_DOP_R", "N", 10, 2),
+                    ("S_OPL", "N", 10, 2),
+                    ("ADRES", "C", 80),
+                    ("SPOS", "C", 2),
+                    ("GENDER", "C", 1),
+                    ("EMPL_NUM", "C", 16),
+                    ("HOSP_TYPE", "N", 2),
+                    ("OUTCOME", "C", 3),
+                    ("IDCASE", "C", 16),
+                    ("IDSERV", "C", 16),
+                    ("ISREPEATED", "N", 2),
             )
+        if True and db is not None and ((count_services < count_all and service['term_name'] == 'Поликлиника') or service['term_name'] != 'Поликлиника'):
+            new = db.newRecord()
+            new["COD"] = unicode_to_cp866(service['service_code'])
+            new["OTD"] = service.get('division_code', '000')
+            new["ERR_ALL"] = ''
+            new["SN_POL"] = unicode_to_cp866(service['policy'])
+            new["FAM"] = unicode_to_cp866(service.get('last_name', ''))
+            new["IM"] = unicode_to_cp866(service.get('first_name', ''))
+            new["OT"] = unicode_to_cp866(service.get('middle_name', ''))
+            new["DR"] = service.get('birthdate', '1900-01-01')
+            new["DS"] = unicode_to_cp866(service['disease'])
+            new["DS2"] = unicode_to_cp866(service['concomitant_disease'])
+            new["C_I"] = unicode_to_cp866(service.get('anamnesis_number', ''))
+            new["D_BEG"] = service.get('start_date', '1900-01-01')
+            new["D_U"] = service.get('end_date', '1900-01-01')
+            new["K_U"] = service.get('quantity', 0)
+            new["S_OPL"] = round(float(service.get('accepted_payment', 0)), 2)
+            try:
+                new["ADRES"] = unicode_to_cp866(service.get('address', ''))
+            except:
+                new["ADRES"] = ''
+            new["SPOS"] = service['funding_type']
+            new["GENDER"] = service['gender_code'] or 0
+            new["OUTCOME"] = service['outcome_code'] or ''
+            new["HOSP_TYPE"] = service['hospitalization_code'] or 0
+            new["EMPL_NUM"] = unicode_to_cp866(service['worker_code'] or '')
+            new["IDCASE"] = service['event_id'] or ''
+            new["IDSERV"] = service['service_id'] or ''
+            new["ISREPEATED"] = int(not bool(service.get('sort')))
+            new.store()
+            if service['term_name'] == 'Поликлиника' and service['sort'] == 1 and service['tariff'] > 0:
+                #count_services = 0
+                count_services += 1
 
-        new = db.newRecord()
-        new["COD"] = unicode_to_cp866(service['service_code'])
-        new["OTD"] = service.get('division_code', '000')
-        new["ERR_ALL"] = ''
-        new["SN_POL"] = unicode_to_cp866(service['policy'])
-        new["FAM"] = unicode_to_cp866(service.get('last_name', ''))
-        new["IM"] = unicode_to_cp866(service.get('first_name', ''))
-        new["OT"] = unicode_to_cp866(service.get('middle_name', ''))
-        new["DR"] = service.get('birthdate', '1900-01-01')
-        new["DS"] = unicode_to_cp866(service['disease'])
-        new["DS2"] = unicode_to_cp866(service['concomitant_disease'])
-        new["C_I"] = unicode_to_cp866(service.get('anamnesis_number', ''))
-        new["D_BEG"] = service.get('start_date', '1900-01-01')
-        new["D_U"] = service.get('end_date', '1900-01-01')
-        new["K_U"] = service.get('quantity', 0)
-        new["S_OPL"] = round(float(service.get('accepted_payment', 0)), 2)
-        try:
-            new["ADRES"] = unicode_to_cp866(service.get('address', ''))
-        except:
-            new["ADRES"] = ''
-        new["SPOS"] = service['funding_type']
-        new["GENDER"] = service['gender_code'] or 0
-        new["OUTCOME"] = service['outcome_code'] or ''
-        new["HOSP_TYPE"] = service['hospitalization_code'] or 0
-        new["EMPL_NUM"] = unicode_to_cp866(service['worker_code'] or '')
-        new["IDCASE"] = service['event_id'] or ''
-        new["IDSERV"] = service['service_id'] or ''
-        new["ISREPEATED"] = int(not bool(service.get('sort')))
-        new.store()
-
-    db.close()
+    if db:
+        db.close()
     print total, missed
 
 main()

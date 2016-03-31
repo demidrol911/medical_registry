@@ -82,8 +82,8 @@ from provided_service ps
         on idc2.id_pk = pe.basic_disease_fk
 
 where mr.is_active
-    and mr.year = '2015'
-    and mr.period in ('12')
+    and mr.year = '2016'
+    and mr.period = '02'
     and mr.organization_code NOT IN ('280075', '280001', '280026', '280003', '280027',  '280084') --'280038', '280085', '280083', '280036', '280066', '280001', '280052'
     and (idc.idc_code IN (
         'I20.0', 'I21.9', 'I22.0', 'I22.1', 'I22.8', 'I22.9', 'I23.8', 'I26.0', 'I26.9',

@@ -32,7 +32,7 @@ from (
                     where start_date = (
                         select max(start_date)
                         from tariff_nkd
-                        where start_date <= greatest('2015-01-01'::DATE, provided_service.end_date) and start_date >= '2015-01-01'::DATE
+                        where start_date <= greatest('2016-01-01'::DATE, provided_service.end_date) and start_date >= '2016-01-01'::DATE
                             and profile_fk = medical_service.tariff_profile_fk
                             and is_children_profile = provided_service.is_children_profile
                             and "level" = department.level
@@ -45,7 +45,7 @@ from (
                     limit 1
                 ), 1
         ) as nkd,
-        provided_service.end_date - provided_service.start_date as quantity
+        provided_service.quantity as quantity
     from
         provided_service
         join provided_event
@@ -72,7 +72,7 @@ from (
     where medical_register.is_active
         and medical_register.year = %(year)s
         and medical_register.period = %(period)s
-        --and medical_register.organization_code in ('280041', '280026', '280013')
+        and medical_register.organization_code = '280069'
         and provided_event.term_fk in (1, 2)
         and provided_service.tariff > 0
         and provided_service.payment_type_fk = 2
@@ -90,8 +90,8 @@ ORDER BY organization_name, term_name, fio
 
     """
 
-year = '2015'
-period = '12'
+year = '2016'
+period = '02'
 cursor_pg.execute(overdue_query, dict(year=year, period=period))
 result = cursor_pg.fetchall()
 

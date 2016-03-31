@@ -121,8 +121,8 @@ def get_services(year, period):
 
 
 def main():
-    year = '2015'
-    period = '12'
+    year = '2016'
+    period = '02'
 
     path = 'c:/work/DEAD_RESULT_DBF/'
     services = get_services(year, period)
