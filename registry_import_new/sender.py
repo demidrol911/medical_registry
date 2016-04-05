@@ -1,5 +1,6 @@
 #! -*- coding: utf-8 -*-
 from shutil import copy2
+from medical_service_register.path import OUTBOX_SUCCESS
 import os
 
 
@@ -25,13 +26,13 @@ class Sender:
         else:
             print u'Нет доступных адресов для получателя %s' % recipient_key
 
-    def send_errors_message(self, errors):
+    def send_errors_message(self, filename, errors):
         """
         Отправить сообщение о фатальных ошибках обработки реестра
         """
         if errors:
             tmp_path = u'C:/REESTR/tmp'
-            file_path = os.path.join(tmp_path, u'ОШИБКИ ОБРАБОТКИ.txt')
+            file_path = os.path.join(tmp_path, filename + '.txt')
             file_errors = open(file_path, 'w')
             for error in errors:
                 file_errors.write(error.encode('cp1251')+'\n')
@@ -42,7 +43,7 @@ class Sender:
         """
         Отправить сообщение об успешной обработке реестра
         """
-        pass
+        self.send_file(OUTBOX_SUCCESS)
 
     def send_file(self, file_path):
         if self.send_path and file_path:

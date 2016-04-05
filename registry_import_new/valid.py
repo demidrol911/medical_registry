@@ -204,6 +204,11 @@ def validate(rules, data):
                     nested_errors = validate(rule, data[key])
                     if nested_errors:
                         errors[key].append(nested_errors)
+                elif type(value) == list:
+                    for v in value:
+                        if not rule(v):
+                            errors[key].append(rule.err_message)
+                            break
                 else:
                     if not rule(value):
                         errors[key].append(rule.err_message)
@@ -212,18 +217,11 @@ def validate(rules, data):
 
 if __name__ == '__main__':
     pet = {
-        "name": {'fam': "whiskers", 'ot': 'hrt'},
+        "name": ["fuzzy", "whiskers", ],
         "type": "cat"
     }
     cat_name_rules = {
         "name": [_in(["fuzzy", "tiger"])]
     }
-    dog_name_rules = {
-        "name": [_in(["spot", "ace", "bandit"])]
-    }
-    valid_rules = {
-        "type": _if(_equals("cat"), _then({'type': _equals('ca')})),
 
-        "name": {'fam': _in(["fuzzy", "tiger"]), 'ot': _equals('hr')}
-    }
-    print validate(valid_rules, pet)
+    print validate(cat_name_rules, pet)
