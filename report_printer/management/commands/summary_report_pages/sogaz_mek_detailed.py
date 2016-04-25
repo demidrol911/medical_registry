@@ -16,7 +16,7 @@ class SogazMekDetailedPage(ReportPage):
         self.policlinic_services = None
         self.ambulance_services = None
         self.pa_services = None
-        self.page_number = 5
+        self.page_number = 4
 
     @howlong
     def calculate(self, parameters):
@@ -132,13 +132,16 @@ class SogazMekDetailedPage(ReportPage):
     
         # Подушевое по скорой
         self.data['accept_sum_ambulance_tariff_capitation'] = parameters.ambulance_capitation_total
+
+        # Флюорография
+        self.data['accept_sum_fluorography'] = parameters.fluorography_total
     
         self.data['accept_sum_tariff_other_mo'] = 0
     
         # Сумма принятая к оплате (с подушевым)
         self.data['accept_sum_tariff_mo'] = self.data['accept_sum_tariff'] +\
             parameters.policlinic_capitation_total + \
-            parameters.ambulance_capitation_total
+            parameters.ambulance_capitation_total + parameters.fluorography_total
     
         # Количество принятых услуг (в акте)
         self.data['accept_count_all'] = self.data['accept_count_hosp'] + self.data['accept_count_day_hosp'] + \
@@ -155,7 +158,8 @@ class SogazMekDetailedPage(ReportPage):
         self.data['accept_sum_tariff_policlinic'] = stat_obj.accept_sum_tariff_policlinic + \
             parameters.policlinic_capitation_total
 
-        self.data['accept_sum_tariff_ambulance'] = parameters.ambulance_capitation_total
+        self.data['accept_sum_tariff_ambulance'] = stat_obj.accept_sum_tariff_ambulance + \
+            parameters.ambulance_capitation_total
     
         ### Снятые с оплаты
     
@@ -295,6 +299,12 @@ class SogazMekDetailedPage(ReportPage):
                                THEN T.accepted_payment
                              ELSE 0
                         END) AS accept_sum_tariff_policlinic, -- принятая сумма по поликлинике
+
+                    SUM(CASE WHEN T.is_paid AND T.is_tariff
+                                  AND T.is_ambulance
+                               THEN T.accepted_payment
+                             ELSE 0
+                        END) AS accept_sum_tariff_ambulance, -- принятая сумма по скорой
 
                     -- Не принятые услуги
                     SUM(CASE WHEN T.is_not_paid AND T.is_tariff
@@ -530,45 +540,48 @@ class SogazMekDetailedPage(ReportPage):
         # Подушевое
         sheet.write_cell(31, 2, self.data['accept_sum_policlinic_tariff_capitation'])
         sheet.write_cell(32, 2, self.data['accept_sum_ambulance_tariff_capitation'])
+        sheet.write_cell(33, 2, self.data['accept_sum_fluorography'])
     
-        sheet.write_cell(33, 3, self.data['accept_sum_tariff_other_mo'])    # заказано в другой мо
-        sheet.write_cell(34, 2, self.data['accept_sum_tariff_mo'])          # принято к оплате
-        sheet.write_cell(35, 1, self.data['accept_count_all'])              # всего принято к оплате
-        sheet.write_cell(35, 4, self.data['accept_sum_tariff_all'])
+        sheet.write_cell(34, 3, self.data['accept_sum_tariff_other_mo'])    # заказано в другой мо
+        sheet.write_cell(35, 2, self.data['accept_sum_tariff_mo'])          # принято к оплате
+        sheet.write_cell(36, 1, self.data['accept_count_all'])              # всего принято к оплате
+        sheet.write_cell(36, 4, self.data['accept_sum_tariff_all'])
     
-        sheet.write_cell(37, 5, self.data['accept_sum_tariff_hosp'])        # принято по стационару
-        sheet.write_cell(37, 7, self.data['accept_count_hosp'])
-        sheet.write_cell(38, 5, self.data['accept_sum_tariff_day_hosp'])    # принято по дневному стационару
-        sheet.write_cell(38, 7, self.data['accept_count_day_hosp'])
-        sheet.write_cell(39, 5, self.data['accept_sum_tariff_policlinic'])  # принято по поликлинике
-        sheet.write_cell(39, 7, self.data['accept_count_policlinic'])
+        sheet.write_cell(38, 5, self.data['accept_sum_tariff_hosp'])        # принято по стационару
+        sheet.write_cell(38, 7, self.data['accept_count_hosp'])
+        sheet.write_cell(39, 5, self.data['accept_sum_tariff_day_hosp'])    # принято по дневному стационару
+        sheet.write_cell(39, 7, self.data['accept_count_day_hosp'])
+        sheet.write_cell(40, 5, self.data['accept_sum_tariff_policlinic'])  # принято по поликлинике
+        sheet.write_cell(40, 7, self.data['accept_count_policlinic'])
     
-        sheet.write_cell(40, 5, self.data['accept_sum_tariff_ambulance'])  # принято по скорой помощи
-        sheet.write_cell(40, 7, self.data['accept_count_ambulance'])
+        sheet.write_cell(41, 5, self.data['accept_sum_tariff_ambulance'])  # принято по скорой помощи
+        sheet.write_cell(41, 7, self.data['accept_count_ambulance'])
+
+        sheet.write_cell(42, 5, self.data['accept_sum_fluorography'])
     
         # Не принятые к оплате реестры счетов
-        sheet.write_cell(41, 5, self.data['sanc_sum_tariff'])             # не принято к оплате
-        sheet.write_cell(42, 5, self.data['sanc_sum_tariff_hosp'])        # не принято по стационару
-        sheet.write_cell(42, 7, self.data['sanc_count_hosp'])
-        sheet.write_cell(43, 5, self.data['sanc_sum_tariff_day_hosp'])    # не принято по дневному стационару
-        sheet.write_cell(43, 7, self.data['sanc_count_day_hosp'])
-        sheet.write_cell(44, 5, self.data['sanc_sum_tariff_policlinic'])  # не принято по поликлинике
-        sheet.write_cell(44, 7, self.data['sanc_count_policlinic'])
+        sheet.write_cell(43, 5, self.data['sanc_sum_tariff'])             # не принято к оплате
+        sheet.write_cell(44, 5, self.data['sanc_sum_tariff_hosp'])        # не принято по стационару
+        sheet.write_cell(44, 7, self.data['sanc_count_hosp'])
+        sheet.write_cell(45, 5, self.data['sanc_sum_tariff_day_hosp'])    # не принято по дневному стационару
+        sheet.write_cell(45, 7, self.data['sanc_count_day_hosp'])
+        sheet.write_cell(46, 5, self.data['sanc_sum_tariff_policlinic'])  # не принято по поликлинике
+        sheet.write_cell(46, 7, self.data['sanc_count_policlinic'])
     
-        sheet.write_cell(45, 5, self.data['sanc_sum_tariff_ambulance'])  # не принято по скорой помощи
-        sheet.write_cell(45, 7, self.data['sanc_count_ambulance'])
+        sheet.write_cell(47, 5, self.data['sanc_sum_tariff_ambulance'])  # не принято по скорой помощи
+        sheet.write_cell(47, 7, self.data['sanc_count_ambulance'])
     
-        sheet.write_cell(46, 5, self.data['pa_sum_tariff'])          # не принято сверх объема
-        sheet.write_cell(46, 7, self.data['pa_count'])
-        sheet.write_cell(47, 3, self.data['sanc_count_all'])              # не подлежит оплате
-        sheet.write_cell(47, 5, self.data['sanc_sum_tariff_all'])
+        sheet.write_cell(48, 5, self.data['pa_sum_tariff'])          # не принято сверх объема
+        sheet.write_cell(48, 7, self.data['pa_count'])
+        sheet.write_cell(49, 3, self.data['sanc_count_all'])              # не подлежит оплате
+        sheet.write_cell(49, 5, self.data['sanc_sum_tariff_all'])
 
-        sheet.set_position(48, 0)
+        sheet.set_position(50, 0)
         self.print_sanctions(sheet, 'hospital')
         self.print_sanctions(sheet, 'day_hospital')
         self.print_sanctions(sheet, 'policlinic')
         self.print_sanctions(sheet, 'ambulance')
-        
+
         sheet.set_style({})
         sheet.write(u'2.3. Не принято к оплате в связи с превышением '
                     u'согласованных объемов медицинских услуг на сумму:', 'c', 8)

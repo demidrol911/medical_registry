@@ -2,7 +2,7 @@ from main.models import MedicalOrganization
 from report_printer.libs.excel_style import VALUE_STYLE
 from report_printer.libs.const import POSITION_REPORT
 from report_printer.libs.page import ReportPage
-from tfoms.func import get_mo_register, calculate_capitation
+from tfoms.func import get_mo_register, calculate_capitation, calculate_fluorography
 
 
 class InvoicedAndAcceptedCostPage(ReportPage):
@@ -90,13 +90,16 @@ class InvoicedAndAcceptedCostPage(ReportPage):
     def _calc_capitation(self):
         capitation_cost = {}
         for mo_code in get_mo_register():
-            capitation_cost[mo_code] = {'clinic_capitation': 0, 'ambulance_capitation': 0}
+            capitation_cost[mo_code] = {'clinic_capitation': 0, 'ambulance_capitation': 0, 'fluorography': 0}
             clinic_capitation = calculate_capitation(3, mo_code)
             ambulance_capitation = calculate_capitation(4, mo_code)
+            fluorography = calculate_fluorography(mo_code)
             if clinic_capitation[0]:
                 capitation_cost[mo_code]['clinic_capitation'] = self._calc_capitation_total(clinic_capitation[1])
             if ambulance_capitation[0]:
                 capitation_cost[mo_code]['ambulance_capitation'] = self._calc_capitation_total(ambulance_capitation[1])
+            if fluorography[0]:
+                capitation_cost[mo_code]['fluorography'] = self._calc_capitation_total(fluorography[1])
         return capitation_cost
 
     def _calc_capitation_total(self, capitation):
@@ -123,6 +126,7 @@ class InvoicedAndAcceptedCostPage(ReportPage):
                         + data_on_mo.day_hospital_invoiced_cost
                         + data_on_mo.clinic_visit_invoiced_cost
                         + capitation_on_mo['clinic_capitation']
+                        + data_on_mo.acutecare_invoiced_cost
                         + capitation_on_mo['ambulance_capitation']
                         + data_on_mo.stom_invoiced_cost, 'c')
 
@@ -135,6 +139,7 @@ class InvoicedAndAcceptedCostPage(ReportPage):
             sheet.write(data_on_mo.stom_excluded_cost, 'c')
             sheet.write(data_on_mo.hospital_excluded_cost
                         + data_on_mo.day_hospital_excluded_cost
+                        + data_on_mo.acutecare_excluded_cost
                         + data_on_mo.clinic_visit_excluded_cost
                         + data_on_mo.stom_excluded_cost, 'c')
 
@@ -144,11 +149,14 @@ class InvoicedAndAcceptedCostPage(ReportPage):
             sheet.write(capitation_on_mo['clinic_capitation'], 'c')
             sheet.write(data_on_mo.acutecare_accepted_cost, 'c')
             sheet.write(capitation_on_mo['ambulance_capitation'], 'c')
+            sheet.write(capitation_on_mo['fluorography'], 'c')
             sheet.write(data_on_mo.stom_accepted_cost, 'c')
             sheet.write(data_on_mo.hospital_accepted_cost
                         + data_on_mo.day_hospital_accepted_cost
                         + data_on_mo.clinic_visit_accepted_cost
                         + capitation_on_mo['clinic_capitation']
+                        + data_on_mo.acutecare_accepted_cost
                         + capitation_on_mo['ambulance_capitation']
-                        + data_on_mo.stom_accepted_cost, 'c')
+                        + data_on_mo.stom_accepted_cost +
+                        capitation_on_mo['fluorography'], 'c')
 

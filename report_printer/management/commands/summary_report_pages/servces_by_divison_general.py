@@ -41,6 +41,7 @@ class GeneralServicesPage(ReportPage):
         self.page_number = 0
         self.policlinic_capitation = None
         self.ambulance_capitation = None
+        self.fluorography = None
 
     @howlong
     def calculate(self, parameters):
@@ -62,6 +63,11 @@ class GeneralServicesPage(ReportPage):
             self.ambulance_capitation = self._convert_capitation(parameters.ambulance_capitation[1])
         else:
             self.ambulance_capitation = []
+
+        if parameters.fluorography[0]:
+            self.fluorography = self._convert_capitation(parameters.fluorography[1])
+        else:
+            self.fluorography = []
 
     def _construct_query(self):
         query = '''
@@ -595,6 +601,12 @@ class GeneralServicesPage(ReportPage):
             self._print_capitation(sheet, u'Подушевой норматив по амбул. мед. помощи', self.policlinic_capitation)
             self._print_capitation(sheet, u'Подушевой норматив по скорой мед. помощи', self.ambulance_capitation)
             self._print_total(sheet, u'Итого по подушевому нормативу', total_capitation)
+        if self.fluorography and parameters.include_fluorography:
+            self._accumulate_total(self.fluorography, total_by_mo)
+            sheet.set_style(TITLE_STYLE)
+            sheet.write(u'ФЛЮОРОГРАФИЯ', 'r', self.COUNT_CELL_IN_ACT)
+            self._print_capitation(sheet, u'Флюорография', self.fluorography)
+        if self.policlinic_capitation or self.ambulance_capitation or self.fluorography:
             self._print_total(sheet, u'Итого по МО c подушевым', total_by_mo)
 
     def _reset_total(self):

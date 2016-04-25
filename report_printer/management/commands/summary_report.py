@@ -3,7 +3,6 @@ from django.core.management.base import BaseCommand
 from report_printer.management.commands.defects_report_pages.defects import DefectsPage
 from report_printer.management.commands.summary_report_pages.sanctions_identify import SanctionsIdentifyPage
 
-from summary_report_pages.order146 import Order146Page
 from summary_report_pages.sanctions_reference import SanctionsReferencePage
 from summary_report_pages.services_by_division import AcceptedServicesPage, InvoicedServicesPage
 from summary_report_pages.services_by_sanctions import SanctionsPage
@@ -27,7 +26,6 @@ class Command(BaseCommand):
         report_accepted.add_page(SanctionsPage())
         report_accepted.add_page(SanctionsReferencePage())
         report_accepted.add_page(SanctionsIdentifyPage())
-        report_accepted.add_page(Order146Page())
         report_accepted.add_page(SogazMekDetailedPage())
         report_accepted.add_page(SogazMekGeneralPage())
 

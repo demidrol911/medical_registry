@@ -19,13 +19,11 @@ from main.models import (
     TariffCoefficient,
     ProvidedEventConcomitantDisease
 )
+from main.funcs import dictfetchall
 
 ### Отчётный год и период
-cur_date = datetime.now()
-
-YEAR = '2015'  # str(cur_date.year)
-PERIOD_INT = cur_date.month if cur_date.day > 25 else cur_date.month - 1
-PERIOD = '11'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+YEAR = '2016'  # str(cur_date.year)
+PERIOD = '03'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -409,27 +407,19 @@ def get_treatment_events(mo_code):
     return [row[0] for row in cursor.fetchall()]
 
 
-### Новая функция для рассчета тарифа по подушевому
 def calculate_capitation(term, mo_code):
+    """
+    Новая функция для рассчета тарифа по подушевому
+    """
     tariff = TariffCapitation.objects.filter(
         term=term, organization__code=mo_code,
         start_date__lte=DATE_ATTACHMENT,
+        start_date__gte='2016-01-01',
         is_children_profile=True
     )
-    result = {
-        'men1': {},
-        'fem1': {},
-        'men2': {},
-        'fem2': {},
-        'men3': {},
-        'fem3': {},
-        'men4': {},
-        'fem4': {},
-        'men5': {},
-        'fem5': {}
-    }
+    result = {'adult': {}, 'child': {}}
 
-    if tariff and mo_code not in ('280070', ):
+    if tariff:
         if term == 3:
             population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
                 get_attachment_count(DATE_ATTACHMENT)
@@ -440,60 +430,68 @@ def calculate_capitation(term, mo_code):
         return False, result
 
     # Чмсленность
-    result['men1']['population'] = population[1]['men']
-    result['fem1']['population'] = population[1]['fem']
+    result['adult']['population'] = population[4]['men'] + population[4]['fem'] + \
+        population[5]['men'] + population[5]['fem']
 
-    result['men2']['population'] = population[2]['men']
-    result['fem2']['population'] = population[2]['fem']
+    result['child']['population'] = population[1]['men'] + population[1]['fem'] + \
+        population[2]['men'] + population[2]['fem'] + \
+        population[3]['men'] + population[3]['fem']
 
-    result['men3']['population'] = population[3]['men']
-    result['fem3']['population'] = population[3]['fem']
-
-    result['men4']['population'] = population[4]['men']
-    result['fem4']['population'] = population[4]['fem']
-
-    result['men5']['population'] = population[5]['men']
-    result['fem5']['population'] = population[5]['fem']
-
-    result['men1']['basic_tariff'] = tariff.filter(age_group=1, gender=1).order_by('-start_date')[0].value
-    result['fem1']['basic_tariff'] = tariff.filter(age_group=1, gender=2).order_by('-start_date')[0].value
-
-    result['men2']['basic_tariff'] = tariff.filter(age_group=2, gender=1).order_by('-start_date')[0].value
-    result['fem2']['basic_tariff'] = tariff.filter(age_group=2, gender=2).order_by('-start_date')[0].value
-
-    result['men3']['basic_tariff'] = tariff.filter(age_group=3, gender=1).order_by('-start_date')[0].value
-    result['fem3']['basic_tariff'] = tariff.filter(age_group=3, gender=2).order_by('-start_date')[0].value
-
-    result['men4']['basic_tariff'] = tariff.filter(age_group=4, gender=1).order_by('-start_date')[0].value
-    result['fem4']['basic_tariff'] = tariff.filter(age_group=4, gender=2).order_by('-start_date')[0].value
-
-    result['men5']['basic_tariff'] = tariff.filter(age_group=5, gender=1).order_by('-start_date')[0].value
-    result['fem5']['basic_tariff'] = tariff.filter(age_group=5, gender=2).order_by('-start_date')[0].value
+    result['adult']['basic_tariff'] = tariff.order_by('-start_date')[0].value
+    result['child']['basic_tariff'] = tariff.order_by('-start_date')[0].value
 
     for key in result:
         result[key]['tariff'] = Decimal(round(result[key]['population']*result[key]['basic_tariff'], 2))
-        # Повышающий коэффициент для ДГКБ
-        if mo_code == '280064' and term == 3:
-            result[key]['tariff'] = Decimal(round(float(result[key]['tariff'])*1.95, 2))
-        if mo_code == '280085' and term == 3:
-            result[key]['tariff'] = Decimal(round(float(result[key]['tariff'])*1.185, 2))
 
     for key in result:
         result[key]['coeff'] = 0
-
-    if term == 3:
-        fap = TariffFap.objects.filter(organization__code=mo_code,
-                                       start_date__lte=DATE_ATTACHMENT,
-                                       is_children_profile=True)
-        if fap:
-            coeff = fap.order_by('-start_date')[0].value
-            for key in result:
-                result[key]['coeff'] = Decimal(round(float(result[key]['tariff'])*float(coeff-1), 2))
 
     for key in result:
         result[key]['accepted'] = Decimal(round(result[key]['tariff'] + result[key].get('coeff', 0), 2))
 
     return True, result
+
+
+def calculate_fluorography(mo_code):
+    if mo_code == '280085':
+        query = """
+            select count(distinct case when age(f.start_date, f.birthdate) >= '18 years' THEN f.insurance_policy_fk END) AS adult_population,
+                  count(distinct case when age(f.start_date, f.birthdate) < '18 years' THEN f.insurance_policy_fk END) AS child_population
+                from fluorography f
+                join medical_organization mo ON mo.code = f.attachment_code and mo.parent_fk is null
+                where mo.code <> '280085'
+            """
+    else:
+        query = """
+            select count(distinct case when age(f.start_date, f.birthdate) >= '18 years' THEN f.insurance_policy_fk END) AS adult_population,
+                 count(distinct case when age(f.start_date, f.birthdate) < '18 years' THEN f.insurance_policy_fk END) AS child_population
+                from fluorography f
+                join medical_organization mo ON mo.code = f.attachment_code and mo.parent_fk is null
+                where mo.code = %(organization_code)s
+            """
+    cursor = connection.cursor()
+    cursor.execute(query, dict(organization_code=mo_code))
+    data = dictfetchall(cursor)
+    result = {'adult': {}, 'child': {}}
+    if data[0]['adult_population'] or data[0]['child_population']:
+        result['adult']['population'] = data[0]['adult_population']
+        result['child']['population'] = data[0]['child_population']
+
+        result['adult']['basic_tariff'] = 222 if mo_code == '280085' else -222
+        result['child']['basic_tariff'] = 222 if mo_code == '280085' else -222
+
+        for key in result:
+            result[key]['tariff'] = Decimal(round(result[key]['population']*result[key]['basic_tariff'], 2))
+
+        for key in result:
+            result[key]['coeff'] = 0
+
+        for key in result:
+            result[key]['accepted'] = result[key]['tariff']
+
+        return True, result
+    else:
+        return False, {}
 
 
 ### Устанавливает статус реестру

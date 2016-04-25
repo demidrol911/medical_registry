@@ -9,7 +9,7 @@ class SogazMekGeneralPage(ReportPage):
 
     def __init__(self):
         self.data = None
-        self.page_number = 6
+        self.page_number = 5
 
     @howlong
     def calculate(self, parameters):
@@ -32,7 +32,7 @@ class SogazMekGeneralPage(ReportPage):
         self.data['sum_sanction_repeat_mek'] = 0
         self.data['sum_accepted'] = stat_obj.sum_accepted + \
             parameters.policlinic_capitation_total + \
-            parameters.ambulance_capitation_total
+            parameters.ambulance_capitation_total + parameters.fluorography_total
 
         self.data['no_nl'] = stat_obj.no_nl
         self.data['no_su'] = stat_obj.no_su
