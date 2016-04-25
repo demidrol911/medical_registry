@@ -23,6 +23,8 @@ class DoubledDisease(FilterReportPage):
                         on p.id_pk = mrr.patient_fk
                     JOIN insurance_policy ip
                         on ip.version_id_pk = p.insurance_policy_fk
+                    JOIN medical_service ms
+                        ON ms.id_pk = ps.code_fk
                     JOIN (
                         select pe1.id_pk as event_id, mr1.organization_code,
                             ip1.id, pe1.term_fk, ps1.basic_disease_fk, ps1.code_fk,
@@ -59,7 +61,6 @@ class DoubledDisease(FilterReportPage):
                             )
                             and ps1.payment_type_fk in (2)
                             and ps1.tariff > 0
-
                         ) as T on T.id = ip.id and mr.organization_code = T.organization_code and T.term_fk = pe.term_fk
                             and ps.basic_disease_fk = T.basic_disease_fk and T.event_id <> pe.id_pk
                             and ps.id_pk <> T.service_id
@@ -67,13 +68,12 @@ class DoubledDisease(FilterReportPage):
                     and mr.year = %(year)s
                     and mr.period = %(period)s
                     AND ps.payment_type_fk = 2
+                    AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
                     and (( pe.term_fk in (1, 2) and ps.code_fk = T.code_fk
-                          and format('%%s-%%s-01', mr.year, mr.period)::DATE <> checking_period
                           and (pe.end_date - event_start_date between 0 and 89 or pe.end_date - T.event_end_date between 0 and 89 or pe.start_date - T.event_start_date between 0 and 89 or pe.start_date - T.event_end_date  between 0 and 89))
                         or (pe.term_fk = 4 and ps.code_fk = T.code_fk and age(pe.end_date, T.event_end_date) = '0 days')
                         or (pe.term_fk = 4 and T.term_fk = 4 and (age(pe.end_date, T.event_end_date) BETWEEN '0 days' AND '1 days' OR age(T.event_end_date, pe.end_date) BETWEEN '0 days' AND '1 days'))
                         or (pe.term_fk = 3 and ps.code_fk = T.code_fk
-                            and format('%%s-%%s-01', mr.year, mr.period)::DATE <> checking_period
                             and (age(pe.end_date, T.event_start_date) between '1 days' and '29 days' or age(pe.start_date, T.event_end_date) between '1 days' and '29 days'))
                     )
                     and ps.tariff > 0
@@ -107,7 +107,6 @@ class DoubledDisease(FilterReportPage):
             p.birthdate,
             p.gender_fk as gender_code,
             idc.idc_code as disease,
-            pecd_idc.idc_code as concomitant_disease,
             pe.anamnesis_number,
             ps.start_date,
             ps.end_date,
@@ -126,7 +125,17 @@ class DoubledDisease(FilterReportPage):
             mr.period,
             ps.id_pk as service_id,
             pe.term_fk AS event_term,
-            0 as sort
+            format('%%s %%s %%s %%s', ip.id, CASE WHEN pe.term_fk = 4 THEN NULL
+                                                  ELSE (select max(ps_inner.code_fk)
+                                                        from provided_service ps_inner
+                                                             join medical_service ms_inner
+                                                                  ON ms_inner.id_pk = ps_inner.code_fk
+                                                        where ps_inner.event_fk = pe.id_pk
+                                                        and ps_inner.accepted_payment > 0
+                                                        and (ms_inner.group_fk not in (3, 5, 42)
+                                                             or ms_inner.group_fk is null))
+                                             END, idc.idc_code, mo.code) AS unique_hash,
+            0 AS sort
         from all_data
             join provided_event pe
                 on pe.id_pk = all_data.event_1
@@ -150,10 +159,6 @@ class DoubledDisease(FilterReportPage):
                 on dep.id_pk = ps.department_fk
             LEFT JOIN medical_division md
                 on ps.division_fk = md.id_pk
-            LEFT JOIN provided_event_concomitant_disease pecd
-                on pecd.event_fk = pe.id_pk
-            LEFT JOIN idc pecd_idc
-                on pecd.disease_fk = pecd_idc.id_pk
             LEFT JOIN insurance_policy i
                 on i.version_id_pk = p.insurance_policy_fk
             LEFT JOIN person per
@@ -177,6 +182,7 @@ class DoubledDisease(FilterReportPage):
             LEFT join administrative_area aa2
                 on aa2.id_pk = aa1.parent_fk
         WHERE ms.code not like 'A%%'
+              AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
 
         union
 
@@ -194,7 +200,6 @@ class DoubledDisease(FilterReportPage):
             p.birthdate,
             p.gender_fk as gender_code,
             idc.idc_code as disease,
-            pecd_idc.idc_code as concomitant_disease,
             pe.anamnesis_number,
             ps.start_date,
             ps.end_date,
@@ -213,7 +218,17 @@ class DoubledDisease(FilterReportPage):
             mr.period,
             ps.id_pk as service_id,
             pe.term_fk AS event_term,
-            1 as sort
+            format('%%s %%s %%s %%s', ip.id, CASE WHEN pe.term_fk = 4 THEN NULL
+                                                  ELSE (select max(ps_inner.code_fk)
+                                                        from provided_service ps_inner
+                                                             join medical_service ms_inner
+                                                                  ON ms_inner.id_pk = ps_inner.code_fk
+                                                        where ps_inner.event_fk = pe.id_pk
+                                                        and ps_inner.accepted_payment > 0
+                                                        and (ms_inner.group_fk not in (3, 5, 42)
+                                                             or ms_inner.group_fk is null))
+                                             END, idc.idc_code, mo.code) AS unique_hash,
+            1 AS sort
         from all_data
             join provided_event pe
                 on pe.id_pk = all_data.event_2 and pe.id_pk NOT IN (SELECT DISTINCT event_1 from all_data)
@@ -237,10 +252,6 @@ class DoubledDisease(FilterReportPage):
                 on dep.id_pk = ps.department_fk
             LEFT JOIN medical_division md
                 on ps.division_fk = md.id_pk
-            LEFT JOIN provided_event_concomitant_disease pecd
-                on pecd.event_fk = pe.id_pk
-            LEFT JOIN idc pecd_idc
-                on pecd.disease_fk = pecd_idc.id_pk
             LEFT JOIN insurance_policy i
                 on i.version_id_pk = p.insurance_policy_fk
             LEFT JOIN person per
@@ -264,13 +275,44 @@ class DoubledDisease(FilterReportPage):
             LEFT join administrative_area aa2
                 on aa2.id_pk = aa1.parent_fk
         WHERE ms.code not like 'A%%'
+              AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
+        order by unique_hash, start_date ASC
         '''
         return query
+
+    def prepare_data(self, data):
+        """
+        Отрезает лишние экспертизы
+        """
+        check_repeated = {}
+        valid_data = []
+        for item in data:
+            if item['accepted_payment'] > 0:
+                if not item['unique_hash'] in check_repeated:
+                    check_repeated[item['unique_hash']] = {'first': 0, 'second': 0}
+                if not check_repeated[item['unique_hash']]['first']:
+                    check_repeated[item['unique_hash']]['first'] = item['event_id']
+                else:
+                    if not check_repeated[item['unique_hash']]['second']:
+                        check_repeated[item['unique_hash']]['second'] = item['event_id']
+
+        for item in data:
+            check = check_repeated.get(item['unique_hash'], None)
+            if check and (item['event_id'] == check['first'] or item['event_id'] == check['second']):
+                valid_data.append(item)
+
+        for unique_hash in check_repeated:
+            if not check_repeated[unique_hash]['first'] \
+                    or not check_repeated[unique_hash]['second']:
+                print u'Хэш пустой', unique_hash
+            if check_repeated[unique_hash]['first'] == check_repeated[unique_hash]['second']:
+                print u'Хэш одинаковый', unique_hash
+        return valid_data
 
     def get_dbf_struct(self):
         return {
             'path': u'C:/work/REPEATED_DBF',
-            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort'),
+            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date'),
             'stop_fields': ('department', 'term_name'),
             'titles': (
                 ("COD", "C", 15),
@@ -306,7 +348,7 @@ class DoubledDisease(FilterReportPage):
     def get_excel_struct(self):
         return {
             'path': u'C:/work/REPEATED',
-            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort'),
+            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date'),
             'stop_fields': ('mo_name', 'term_name'),
             'titles': [
                 u'МО', u'Подразделение', u'Условия', u'Фамилия', u'Имя', u'Отчество',
@@ -318,7 +360,7 @@ class DoubledDisease(FilterReportPage):
         }
 
     def get_statistic_param(self):
-        return {'group_by': ['mo_name', 'event_term'], 'field': 'event_id', 'filter': 'sort == 0'}
+        return {'group_by': ['mo_name', 'event_term'], 'field': 'unique_hash', 'filter': 'accepted_payment > 0'}
 
     def print_item_dbf(self, db, item):
         new = db.newRecord()
@@ -331,7 +373,7 @@ class DoubledDisease(FilterReportPage):
         new["OT"] = unicode_to_cp866(item.get('middle_name', ''))
         new["DR"] = item.get('birthdate', '1900-01-01')
         new["DS"] = unicode_to_cp866(item['disease'])
-        new["DS2"] = unicode_to_cp866(item['concomitant_disease'])
+        new["DS2"] = ''
         new["C_I"] = unicode_to_cp866(item.get('anamnesis_number', ''))
         new["D_BEG"] = item.get('start_date', '1900-01-01')
         new["D_U"] = item.get('end_date', '1900-01-01')

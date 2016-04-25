@@ -44,18 +44,18 @@ class TargetedExpertisePage(ReportPage):
             item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
                                              (self.doubled_disease_data['event_term'] == 1)]
             if not item.empty:
-                sheet.write_cell(row, 1, item['event_id'])
+                sheet.write_cell(row, 1, item['unique_hash'])
             item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
                                              (self.doubled_disease_data['event_term'] == 2)]
             if not item.empty:
-                sheet.write_cell(row, 2, item['event_id'])
+                sheet.write_cell(row, 2, item['unique_hash'])
 
             item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
                                              (self.doubled_disease_data['event_term'] == 3)]
             if not item.empty:
-                sheet.write_cell(row, 3, item['event_id'])
+                sheet.write_cell(row, 3, item['unique_hash'])
 
             item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
                                              (self.doubled_disease_data['event_term'] == 4)]
             if not item.empty:
-                sheet.write_cell(row, 4, item['event_id'])
+                sheet.write_cell(row, 4, item['unique_hash'])

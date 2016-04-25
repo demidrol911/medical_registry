@@ -40,59 +40,68 @@ class FilterReportPage:
         cursor.execute(self.get_query(),
                        dict(year=self.parameters.registry_year,
                             period=self.parameters.registry_period))
-        self.data = DataFrame.from_dict(dictfetchall(cursor), orient='columns')
+        self.data = DataFrame.from_dict(self.prepare_data(dictfetchall(cursor)), orient='columns')
         cursor.close()
 
+    def prepare_data(self, data):
+        return data
+
     def print_to_excel(self, printing_into_one_file=False):
-        self.current_value_stop_fields_excel = {field: None for field in self.excel_struct['stop_fields']}
-        book = None
-        excel_data = self.data.sort(list(self.excel_struct['stop_fields'] + self.excel_struct['order_fields']))
-        for idx, i in enumerate(excel_data.index):
-            item = excel_data.loc[i]
-            stop = (printing_into_one_file and idx == 0) or False
-            for field in self.current_value_stop_fields_excel:
-                if item[field] != self.current_value_stop_fields_excel[field]:
-                    stop = True
-                    self.current_value_stop_fields_excel[field] = item[field]
-            if stop:
-                if book:
-                    book.__exit__(0, 0, 0)
-                if printing_into_one_file:
-                    report_name = 'ALL_DATA'
-                else:
-                    report_name = self.excel_struct['file_pattern'] % \
-                       tuple(item[field] for field in self.excel_struct['stop_fields'])
-                book = ExcelBook(self.excel_struct['path'], report_name.replace('"', '').strip())
-                book.create_book()
-                sheet = book.get_sheet(0)
-                for field in self.excel_struct['titles'][:-1]:
-                    sheet.write(field, 'c')
-                sheet.write(self.excel_struct['titles'][-1], 'r')
-            self.print_item_excel(sheet, item)
-        if book:
-            book.__exit__(0, 0, 0)
+        if self.data.empty:
+            print u'Нет данных'
+        else:
+            self.current_value_stop_fields_excel = {field: None for field in self.excel_struct['stop_fields']}
+            book = None
+            excel_data = self.data.sort(list(self.excel_struct['stop_fields'] + self.excel_struct['order_fields']))
+            for idx, i in enumerate(excel_data.index):
+                item = excel_data.loc[i]
+                stop = (printing_into_one_file and idx == 0) or False
+                for field in self.current_value_stop_fields_excel:
+                    if item[field] != self.current_value_stop_fields_excel[field]:
+                        stop = True
+                        self.current_value_stop_fields_excel[field] = item[field]
+                if stop:
+                    if book:
+                        book.__exit__(0, 0, 0)
+                    if printing_into_one_file:
+                        report_name = 'ALL_DATA'
+                    else:
+                        report_name = self.excel_struct['file_pattern'] % \
+                           tuple(item[field] for field in self.excel_struct['stop_fields'])
+                    book = ExcelBook(self.excel_struct['path'], report_name.replace('"', '').strip())
+                    book.create_book()
+                    sheet = book.get_sheet(0)
+                    for field in self.excel_struct['titles'][:-1]:
+                        sheet.write(field, 'c')
+                    sheet.write(self.excel_struct['titles'][-1], 'r')
+                self.print_item_excel(sheet, item)
+            if book:
+                book.__exit__(0, 0, 0)
 
     def print_to_dbf(self):
-        self.current_value_stop_fields_dbf = {field: None for field in self.dbf_struct['stop_fields']}
-        db = None
-        dbf_data = self.data.sort(list(self.dbf_struct['stop_fields'] + self.dbf_struct['order_fields']))
-        for i in dbf_data.index:
-            item = dbf_data.loc[i]
-            stop = False
-            for field in self.current_value_stop_fields_dbf:
-                if item[field] != self.current_value_stop_fields_dbf[field]:
-                    stop = True
-                    self.current_value_stop_fields_dbf[field] = item[field]
-            if stop:
-                if db:
-                    db.close()
-                report_name = self.dbf_struct['file_pattern'] % \
-                    tuple(item[field] for field in self.dbf_struct['stop_fields'])
-                db = dbf.Dbf('%s/%s.dbf' % (self.dbf_struct['path'], report_name), new=True)
-                db.addField(*self.dbf_struct['titles'])
-            self.print_item_dbf(db, item)
-        if db:
-            db.close()
+        if self.data.empty:
+            print u'Нет данных'
+        else:
+            self.current_value_stop_fields_dbf = {field: None for field in self.dbf_struct['stop_fields']}
+            db = None
+            dbf_data = self.data.sort(list(self.dbf_struct['stop_fields'] + self.dbf_struct['order_fields']))
+            for i in dbf_data.index:
+                item = dbf_data.loc[i]
+                stop = False
+                for field in self.current_value_stop_fields_dbf:
+                    if item[field] != self.current_value_stop_fields_dbf[field]:
+                        stop = True
+                        self.current_value_stop_fields_dbf[field] = item[field]
+                if stop:
+                    if db:
+                        db.close()
+                    report_name = self.dbf_struct['file_pattern'] % \
+                        tuple(item[field] for field in self.dbf_struct['stop_fields'])
+                    db = dbf.Dbf('%s/%s.dbf' % (self.dbf_struct['path'], report_name), new=True)
+                    db.addField(*self.dbf_struct['titles'])
+                self.print_item_dbf(db, item)
+            if db:
+                db.close()
 
     def calculate_statistic(self):
         stat_param = self.get_statistic_param()

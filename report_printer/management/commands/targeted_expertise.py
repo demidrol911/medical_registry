@@ -27,11 +27,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dead_patient_report = DeadResultPatient()
-        dead_patient_report.print_to_excel(printing_into_one_file=True)
+        dead_patient_report.print_to_excel()
         dead_patient_report.print_to_dbf()
 
         overdued_hkd_hospitalization = OverduedNkdHospitalization()
-        overdued_hkd_hospitalization.print_to_excel(printing_into_one_file=True)
+        overdued_hkd_hospitalization.print_to_excel()
         overdued_hkd_hospitalization.print_to_dbf()
 
         doubled_disease = DoubledDisease()
@@ -58,7 +58,7 @@ class Command(BaseCommand):
 
         complicated_event = ComplicatedEvent()
         complicated_event.print_to_dbf()
-        complicated_event.print_to_excel(printing_into_one_file=True)
+        complicated_event.print_to_excel()
 
         oks_onmk = OksOnmkPage()
         oks_onmk.print_to_dbf()

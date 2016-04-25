@@ -1,7 +1,7 @@
 from report_printer.libs.report import ReportParameters
 from tfoms.func import get_mo_code, get_mo_name, \
     change_register_status, calculate_capitation, \
-    get_partial_register
+    get_partial_register, calculate_fluorography
 from medical_service_register.path import REESTR_DIR, REESTR_EXP
 
 
@@ -38,6 +38,8 @@ class AutomaticReportsWizard():
             parameters.partial_register = get_partial_register(organization_code)
             parameters.policlinic_capitation = calculate_capitation(3, organization_code)
             parameters.ambulance_capitation = calculate_capitation(4, organization_code)
+            parameters.fluorography = calculate_fluorography(organization_code)
+            parameters.fluorography_total = self.__calculate_total(parameters.fluorography[1])
             parameters.policlinic_capitation_total = self.__calculate_total(parameters.policlinic_capitation[1])
             parameters.ambulance_capitation_total = self.__calculate_total(parameters.ambulance_capitation[1])
             parameters.departments = parameters.partial_register
