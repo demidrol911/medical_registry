@@ -1,7 +1,7 @@
 #! -*- coding: utf-8 -*-
 from main.funcs import howlong
 from main.models import MedicalRegister
-from const import POSITION_REPORT
+from report_printer.libs.const import POSITION_REPORT
 from report_printer.libs.excel_style import VALUE_STYLE
 from report_printer.libs.page import ReportPage
 from tfoms.func import calculate_capitation

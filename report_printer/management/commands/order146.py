@@ -71,6 +71,8 @@ from medical_services_types_pages.stomatology import StomatologyPage
 
 from medical_services_types_pages.pregnant import IntegratedPrenatalDiagnosisPage, ScreeningUltrasoundPage
 
+from medical_services_types_pages.fluorography import FluorographyPage
+
 
 class Command(BaseCommand):
 
@@ -222,6 +224,10 @@ class Command(BaseCommand):
             {'pattern': 'emergency_nursing_staff.xls',
              'pages': (AmbulanceVisitNursingStaffPage, ),
              'title': u'поликлиника (в неотложной форме, посещения к среднему мед.персоналу) перв.мед.помощь'},
+
+            {'pattern': 'fluorography.xls',
+             'pages': (FluorographyPage, ),
+             'title':  u'флюорография'},
         )
 
         parameters = ReportParameters()
