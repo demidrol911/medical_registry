@@ -111,6 +111,7 @@ class ComplicatedEvent(FilterReportPage):
                 AND mr.year = %(year)s
                 AND mr.period = %(period)s
                 AND (ms.group_fk != 27 or ms.group_fk is null)
+                AND ps.payment_type_fk = 2
                 AND (SELECT count(distinct pecmd.id_pk) FROM provided_event_complicated_disease pecmd
                     WHERE pecmd.event_fk = pe.id_pk) != 0
             '''
