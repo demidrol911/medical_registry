@@ -3,7 +3,7 @@ from valid import _length, _pattern, validate, _required, _in, _isdate
 from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, DEPARTMENTS, DISEASES, METHODS, CODES, \
     TERMS, FORMS, HOSPITALIZATIONS, DIVISIONS, PROFILES, RESULTS, OUTCOMES, SPECIALITIES_NEW, HITECH_KINDS, \
     HITECH_METHODS, EXAMINATION_RESULTS, ADULT_EXAMINATION_COMMENT_PATTERN, KIND_TERM_DICT, \
-    OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, EXAMINATION_HEALTH_GROUP_EQUALITY
+    OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS
 
 import re
 from datetime import datetime
@@ -156,7 +156,7 @@ class RegistryValidator:
             errors['ID_PAC'] = [u'904;Значение не является уникальным']
         self.patient_unique['ID_PAC'].append(patient['ID_PAC'])
 
-        return handle_errors(errors, parent='PERS')
+        return errors
 
     def validate_record(self, record):
         self.current_record = record
@@ -192,6 +192,11 @@ class RegistryValidator:
         if self.registry_type in (3, 4) and not CheckFunction.is_examination_result_matching_comment(
                 event.get('RSLT_D'), event.get('COMENTSL')):
             errors['RSLT_D'] = [u'904;Указанный код результата диспансеризации не совпадает с указанным комментарием']
+
+        # Проверка КСГ
+        if (event.get('USL_OK', '') == '1' and event['KSG_MO'] not in HOSPITAL_KSGS) \
+                or (event.get('USL_OK', '') == '2' and event['KSG_MO'] not in DAY_HOSPITAL_KSGS):
+            errors['KSG_MO'] = [u'904;Значение не соответствует справочному.']
 
         # Проверка наличия уточнения в диагнозах
         if event['LPU'] != '280043':
@@ -255,7 +260,7 @@ class RegistryValidator:
         # Проверка на соответствие даты окончания случая по диспансеризации дате итогового приёма терапевта
         if service['CODE_USL'] in ('019021', '019023', '019022', '019024', '19021', '19023', '19022', '19024',) \
                 and service['DATE_OUT'] != self.current_event['DATE_2']:
-            errors['DATE_2'] = [u'904;Дата окончания случая диспансеризации не свопадает с '
+            errors['DATE_2'] = [u'904;Дата окончания случая диспансеризации не совпадает с '
                                 u'датой окончания услуги приёма терапевта']
 
         # Проверка на соответствие кода услуги условиям оказания

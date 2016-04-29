@@ -8,11 +8,11 @@ from main.funcs import safe_int, safe_date, safe_float
 from main.models import Patient, MedicalRegisterRecord, ProvidedEvent, ProvidedService, MedicalRegister, \
     MedicalRegisterImport, MedicalRegisterStatus, ProvidedEventConcomitantDisease, ProvidedEventComplicatedDisease, \
     ProvidedEventSpecial
-from django.db import connection
+from django.db import connection, transaction
 from datetime import datetime
 
 
-TEST_MODE = True
+TEST_MODE = False
 
 
 class RegistryDb:
@@ -57,7 +57,7 @@ class RegistryDb:
             agent_middle_name=patient.get('OT_P', '').upper(),
             agent_birthdate=safe_date(patient.get('DR_P', None)),
             agent_gender=GENDERS.get(patient.get('W_P'), None),
-            newborn_code=patient.get('NOVOR', ''),
+            newborn_code=patient.get('NOVOR', '0'),
             insurance_policy_type=POLICY_TYPES.get(patient.get('VPOLIS'), None),
             insurance_policy_series=patient.get('SPOLIS', ''),
             insurance_policy_number=patient.get('NPOLIS', '')
@@ -78,7 +78,7 @@ class RegistryDb:
         registry_object = MedicalRegister(pk=self._get_next_medical_register_pk(),
                                           timestamp=datetime.now(),
                                           type=registry_item.type_id,
-                                          filename=registry,
+                                          filename=registry_item.file_name,
                                           organization_code=self.registry_set.mo_code,
                                           is_active=True,
                                           year=self.registry_set.year,
@@ -183,26 +183,28 @@ class RegistryDb:
         return service_obj
 
     def insert_registry(self):
-        MedicalRegisterImport.objects.create(
-            period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
-            organization=self.registry_set.mo_code,
-            filename=self.registry_set.get_patients_file.file_name,
-            status=u'Принят',
-        )
-        MedicalRegister.objects.filter(
-            is_active=True, year=self.registry_set.year, period=self.registry_set.period,
-            organization_code=self.registry_set.mo_code).update(is_active=False)
-        MedicalRegister.objects.bulk_create(self.registries)
-        Patient.objects.bulk_create(set(self.patients))
-        MedicalRegisterRecord.objects.bulk_create(self.records)
-        ProvidedEvent.objects.bulk_create(self.events)
-        ProvidedEventConcomitantDisease.objects.bulk_create(self.concomitant_list)
-        ProvidedEventComplicatedDisease.objects.bulk_create(self.complicated_list)
-        ProvidedEventSpecial.objects.bulk_create(self.special_list)
-        ProvidedService.objects.bulk_create(self.services)
-        MedicalRegister.objects.filter(
-            pk__in=[rec.pk for rec in self.registries]
-        ).update(status=MedicalRegisterStatus.objects.get(pk=1))
+        with transaction.atomic():
+            print self.registry_set.get_patients_file().file_name
+            MedicalRegisterImport.objects.create(
+                period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
+                organization=self.registry_set.mo_code,
+                filename=self.registry_set.get_patients_file().file_name,
+                status=u'Принят',
+            )
+            MedicalRegister.objects.filter(
+                is_active=True, year=self.registry_set.year, period=self.registry_set.period,
+                organization_code=self.registry_set.mo_code).update(is_active=False)
+            MedicalRegister.objects.bulk_create(self.registries)
+            Patient.objects.bulk_create(set(self.patients))
+            MedicalRegisterRecord.objects.bulk_create(self.records)
+            ProvidedEvent.objects.bulk_create(self.events)
+            ProvidedEventConcomitantDisease.objects.bulk_create(self.concomitant_list)
+            ProvidedEventComplicatedDisease.objects.bulk_create(self.complicated_list)
+            ProvidedEventSpecial.objects.bulk_create(self.special_list)
+            ProvidedService.objects.bulk_create(self.services)
+            MedicalRegister.objects.filter(
+                pk__in=[rec.pk for rec in self.registries]
+            ).update(status=MedicalRegisterStatus.objects.get(pk=1))
 
     def _get_next_patient_pk(self):
         if TEST_MODE:
@@ -217,7 +219,7 @@ class RegistryDb:
             return 1
         if len(self._register_pk_list) == 0:
             self._register_pk_list = self._get_pk("select nextval('medical_register_seq')"
-                                                  "from generate_series(0, 100)")
+                                                  "from generate_series(0, 10)")
         return self._register_pk_list.pop()
 
     def _get_next_medical_register_record_pk(self):

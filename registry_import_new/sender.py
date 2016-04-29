@@ -1,6 +1,6 @@
 #! -*- coding: utf-8 -*-
 from shutil import copy2
-from medical_service_register.path import OUTBOX_SUCCESS
+from medical_service_register.path import OUTBOX_SUCCESS, FLC_DIR
 import os
 
 
@@ -31,15 +31,14 @@ class Sender:
         Отправить сообщение о фатальных ошибках обработки реестра
         """
         if errors:
-            tmp_path = u'C:/REESTR/tmp'
-            file_path = os.path.join(tmp_path, filename + '.txt')
+            file_path = os.path.join(FLC_DIR, filename + '.txt')
             file_errors = open(file_path, 'w')
             for error in errors:
                 file_errors.write(error.encode('cp1251')+'\n')
             file_errors.close()
             self.send_file(file_path)
 
-    def send_sucsses_messasge(self):
+    def send_success_message(self):
         """
         Отправить сообщение об успешной обработке реестра
         """
