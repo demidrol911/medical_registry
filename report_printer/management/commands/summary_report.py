@@ -10,6 +10,9 @@ from summary_report_pages.sogaz_mek_detailed import SogazMekDetailedPage
 from summary_report_pages.sogaz_mek_general import SogazMekGeneralPage
 from report_printer.libs.report import Report
 from report_printer.libs.wizard import AutomaticReportsWizard
+from main.logger import LOGGING_DIR
+from datetime import datetime
+import os
 
 
 class Command(BaseCommand):
@@ -45,10 +48,19 @@ class Command(BaseCommand):
         report_wizard_preliminary = AutomaticReportsWizard([report_accepted])
         report_wizard_preliminary.create_reports(3)
 
-        print u'Предварительные:'
-        report_wizard_preliminary.print_completed_reports()
+        if report_wizard_preliminary.completed_reports or report_wizard_final.completed_reports:
+            printers_reports_log = open(os.path.join(LOGGING_DIR, 'printers_reports.txt'), 'a+')
+            separator = u'\r\n'
+            message = str(datetime.now())
+            if report_wizard_preliminary.completed_reports:
+                message += separator + u'Предварительные:' + separator
+                for report_name in report_wizard_preliminary.completed_reports:
+                    message += report_name + separator
 
-        print
+            if report_wizard_final.completed_reports:
+                message += separator + u'Предварительные:' + separator
+                for report_name in report_wizard_final.completed_reports:
+                    message += report_name + separator
 
-        print u'Итоговые:'
-        report_wizard_final.print_completed_reports()
+            printers_reports_log.write(message.encode('cp1251'))
+            printers_reports_log.close()

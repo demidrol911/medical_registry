@@ -1,8 +1,13 @@
+#! -*- coding: utf-8 -*-
+
 from report_printer.libs.report import ReportParameters
 from tfoms.func import get_mo_code, get_mo_name, \
     change_register_status, calculate_capitation, \
     get_partial_register, calculate_fluorography
 from medical_service_register.path import REESTR_DIR, REESTR_EXP
+from main.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class AutomaticReportsWizard():
@@ -20,8 +25,10 @@ class AutomaticReportsWizard():
             parameters = ReportParameters()
             if registry_status in (6, 8):
                 path_to_dir = REESTR_DIR
+                logger.info(u'%s началась сборка итоговых отчётов' % organization_code)
             else:
                 path_to_dir = REESTR_EXP
+                logger.info(u'%s началась сборка предварительных отчётов' % organization_code)
             parameters.path_to_dir = path_to_dir % (
                 parameters.registry_year,
                 parameters.registry_period
@@ -59,6 +66,8 @@ class AutomaticReportsWizard():
                     if report.is_by_department():
                         report.print_pages(parameters)
                         print '-'*70
+
+            logger.info(u'%s сборка отчётов завершена' % organization_code)
 
             change_register_status(organization_code, new_status)
             organization_code = get_mo_code(registry_status)
