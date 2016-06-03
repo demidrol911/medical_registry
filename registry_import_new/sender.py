@@ -1,17 +1,20 @@
 #! -*- coding: utf-8 -*-
 from shutil import copy2
-from medical_service_register.path import OUTBOX_SUCCESS, FLC_DIR
+from medical_service_register.path import OUTBOX_SUCCESS, FLC_DIR, OUTBOX_DIR
 import os
+
+from main.logger import get_logger
+logger = get_logger(__name__)
 
 
 class Sender:
     def __init__(self):
         self.send_path = ''
-        outbox_dir = 'C:/REESTR/send'
+        outbox_dir = OUTBOX_DIR
         dirs = os.listdir(outbox_dir)
         self.available_addresses = {}
         for d in dirs:
-            t = d.decode('cp1251')
+            t = d  # .decode('cp1251')
             address = os.path.join(outbox_dir, t)
             if os.path.isdir(address):
                 code, name = t[:6], t[7:]
@@ -24,6 +27,7 @@ class Sender:
         if recipient_key in self.available_addresses:
             self.send_path = self.available_addresses[recipient_key]
         else:
+            logger.warning(u'Нет доступных адресов для получателя %s' % recipient_key)
             print u'Нет доступных адресов для получателя %s' % recipient_key
 
     def send_errors_message(self, filename, errors):
@@ -48,5 +52,6 @@ class Sender:
         if self.send_path and file_path:
             copy2(file_path, self.send_path)
         else:
+            logger.warning(u'Получатель не указан')
             print u'Получатель не указан'
 

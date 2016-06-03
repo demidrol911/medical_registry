@@ -58,12 +58,15 @@ class RegistrySet:
         return errors
 
     def already_in_database(self):
+        """
+        Проверка на наличие реестра в базе
+        """
         return MedicalRegister.objects.filter(
             year=self.year,
             period=self.period,
             is_active=True,
             organization_code=self.mo_code,
-            status=6
+            status__in=[6, 11]
         ).count() > 0
 
     def get_patients_file(self):
@@ -82,6 +85,9 @@ class RegistrySet:
         return [reg_item for reg_item in self._registry_items if reg_item.type != 'l']
 
     def move(self):
+        """
+        Перемещает реестры в архив
+        """
         for reg_item in self._registry_items:
             shutil.copy(reg_item.path, IMPORT_ARCHIVE_DIR)
             os.remove(reg_item.path)
@@ -131,7 +137,7 @@ def registry_process(registry_set):
     """
     # Загружает сведения о пациентах
     patient_file = registry_set.get_patients_file()
-    logger.info(u'%s обрабатывается файл с пациентами' % patient_file)
+    logger.info(u'%s обрабатывается файл с пациентами' % patient_file.file_name)
     validator = RegistryValidator(patient_file.type_id)
     registry_db = RegistryDb(registry_set)
     patients_file = XmlLikeFileReader(patient_file.path)
@@ -146,8 +152,8 @@ def registry_process(registry_set):
         patients[patient['ID_PAC']] = patient_obj
 
     # Загружает сведения об услугах
-    patient_errors = []
-    service_errors = defaultdict(list)
+    patient_file_errors = []
+    service_file_errors = defaultdict(list)
     volume_checker = CheckVolume(registry_set)
     for service_item in registry_set.get_services_files():
         logger.info(u'%s обрабатывается файл с услугами' % service_item.file_name)
@@ -164,42 +170,41 @@ def registry_process(registry_set):
                 # Пациент
                 patient_policy = c_item['PACIENT']
 
-                id_pac = patient_policy['ID_PAC']
-                patient_obj = patients.get(id_pac, None)
+                patient_obj = patients.get(patient_policy['ID_PAC'], None)
 
                 if not patient_obj:
-                    service_errors[service_item.file_name] += handle_errors(
-                        {'ID_PAC': [u'902;Нет сведений о пациенте']},  parent='PACIENT', record_uid=n_zap)
-                    break
+                    service_file_errors[service_item.file_name] += handle_errors(
+                        {'ID_PAC': [u'902;Нет сведений о пациенте в файле пациентов']},  parent='PACIENT', record_uid=n_zap)
+                    continue
                 else:
                     registry_db.patient_update_policy(patient_obj, patient_policy)
 
-                patient_errors += handle_errors(patients_errors.get(id_pac, {}),  parent='PERS', record_uid=n_zap)
+                patient_file_errors += handle_errors(patients_errors.get(patient_policy['ID_PAC'], {}),
+                                                     parent='PERS', record_uid=n_zap)
 
                 # Запись
                 record = c_item
                 record_obj = registry_db.create_record_obj(record, registry_obj, patient_obj)
-                service_errors[service_item.file_name] += validator.validate_record(record)
-                service_errors[service_item.file_name] += validator.validate_patient_policy(patient_policy)
+                service_file_errors[service_item.file_name] += validator.validate_record(record)
+                service_file_errors[service_item.file_name] += validator.validate_patient_policy(patient_policy)
 
                 # Случай
                 for event in c_item['SLUCH']:
                     event_obj = registry_db.create_event_obj(event, record_obj)
-                    service_errors[service_item.file_name] += validator.validate_event(event)
+                    service_file_errors[service_item.file_name] += validator.validate_event(event)
                     # Услуга
-                    for service in event['USL']:
+                    for service in event.get('USL', []):
                         registry_db.create_service_obj(service, event_obj)
-                        service_errors[service_item.file_name] += validator.validate_service(service)
+                        service_file_errors[service_item.file_name] += validator.validate_service(service)
                         volume_checker.check(event, service)
-    return registry_db, patient_errors, service_errors, volume_checker.get_error()
+    return registry_db, patient_file_errors, service_file_errors, volume_checker.get_error()
 
 
 def main():
     vipnet_handler.get_vipnet_files()
 
     sender = Sender()
-    registry_sets = load_registry_set()
-    for registry_set in registry_sets:
+    for registry_set in load_registry_set():
         logger.info(u'%s реестр подготавливается к импорту' % registry_set.mo_code)
         if registry_set.already_in_database():
             logger.info(u'%s уже есть заимпорченный итоговый реестр' % registry_set.mo_code)
@@ -210,24 +215,27 @@ def main():
                 sender.send_errors_message(u'ОШИБКИ ОБРАБОТКИ % s' % registry_set.mo_code, fatal_errors)
                 logger.info(u'%s обнаружены фатальные ошибки во время обработки' % registry_set.mo_code)
             else:
-                registry_db, patient_errors, services_errors, volume_errors = registry_process(registry_set)
+                registry_db, patient_file_errors, services_file_errors, volume_errors = registry_process(registry_set)
                 flc_master = FlcReportMaster(registry_set)
                 if volume_errors[0]:
                     sender.send_errors_message(u'ОШИБКИ ОБРАБОТКИ (СВЕРХОБЪЁМЫ) %s' % registry_set.mo_code,
                                                [volume_errors[1], ])
+                    registry_db.insert_overvolume_message()
                 else:
-                    if patient_errors:
+                    if patient_file_errors:
                         logger.info(u'%s обнаружены ошибки ФЛК в файле с пациентами'
                                     % registry_set.get_patients_file().file_name)
-                        flc_master.create_report_patients(registry_set.get_patients_file().file_name, patient_errors)
-                    for file_name in services_errors:
-                        if services_errors[file_name]:
+                        flc_master.create_report_patients(registry_set.get_patients_file().file_name,
+                                                          patient_file_errors)
+                    for file_name in services_file_errors:
+                        if services_file_errors[file_name]:
                             logger.info(u'%s обнаружены ошибки ФЛК в файле с услугами' % file_name)
-                            flc_master.create_report_services(file_name, services_errors[file_name])
+                            flc_master.create_report_services(file_name, services_file_errors[file_name])
 
                     flc_file_path = flc_master.create_flc_archive()
                     if flc_file_path:
                         sender.send_file(flc_file_path)
+                        registry_db.insert_error_message()
                     else:
                         logger.info(u'%s инсертим реестр в базу' % registry_set.mo_code)
                         registry_db.insert_registry()
@@ -237,5 +245,8 @@ def main():
 
 
 class Command(BaseCommand):
+    """
+    Импорт реестров услуг
+    """
     def handle(self, *args, **options):
         main()

@@ -29,7 +29,6 @@ def _in(collection, pass_on_blank=True):
 
     in_lambda.collection = collection
     in_lambda.err_message = u'904;Значение не соответствует справочному.'
-    in_lambda.not_message = u"не должен быть одним из %r" % collection
     return in_lambda
 
 
@@ -157,7 +156,7 @@ def _length(minimum, maximum=0, pass_on_blank=False):
             if maximum:
                 return minimum <= len(value) <= maximum
             else:
-                return minimum <= len(value)
+                return minimum == len(value)
         else:
             return False
 
@@ -191,11 +190,7 @@ def validate(rules, data):
         value = data.get(key, '')
         rules_list = rules[key] if type(rules[key]) == list else [rules[key]]
         for rule in rules_list:
-            if getattr(rule, '__name__', '') == 'if_lambda':
-                conditional, dependent = rule(value, data)
-                if conditional:
-                    print '*', dependent
-            elif getattr(rule, '__name__', '') == '_required':
+            if getattr(rule, '__name__', '') == '_required':
                 required = rule()
                 if not required(key, data):
                     errors[key].append(required.err_message)

@@ -1,6 +1,7 @@
 #! -*- coding: utf-8 -*-
 from valid import _length, _pattern, validate, _required, _in, _isdate
-from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, DEPARTMENTS, DISEASES, METHODS, CODES, \
+from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, DEPARTMENTS, DISEASES, \
+    METHODS, CODES, SPECIALS, \
     TERMS, FORMS, HOSPITALIZATIONS, DIVISIONS, PROFILES, RESULTS, OUTCOMES, SPECIALITIES_NEW, HITECH_KINDS, \
     HITECH_METHODS, EXAMINATION_RESULTS, ADULT_EXAMINATION_COMMENT_PATTERN, KIND_TERM_DICT, \
     OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS
@@ -41,6 +42,7 @@ class RegistryValidator:
         self.registry_type = registry_type
         self.current_patient = None
         self.current_record = None
+        self.previous_record = None
         self.current_event = None
         self.current_service = None
 
@@ -56,7 +58,7 @@ class RegistryValidator:
         # Правила валидации для пациента
         self.patient_valid = {
             'ID_PAC': [_required, _length(1, 36)],
-            'FAM': _length(0, 40),
+            'FAM': _length(0, 40, pass_on_blank=True),
             'IM': _length(0, 40, pass_on_blank=True),
             'OT': _length(0, 40, pass_on_blank=True),
             'DR': [_required, _pattern('\d{4}-\d{2}-\d{2}')],
@@ -69,8 +71,10 @@ class RegistryValidator:
             'DOCTYPE': _in(list(PERSON_ID_TYPES) + ['0'], pass_on_blank=True),
             'DOCSER': _length(1, 10, pass_on_blank=True),
             'DOCNUM': _length(1, 20, pass_on_blank=True),
-            'VNOV_D': _length(1, 4, pass_on_blank=True)
+            'VNOV_D': _length(1, 4, pass_on_blank=True),
         }
+
+        # 'SNILS': _length(14, pass_on_blank=True)
 
         # Правила валидации для полиса
         self.policy_valid = {
@@ -97,6 +101,8 @@ class RegistryValidator:
             'NHISTORY': [_required, _length(1, 50)],
             'DATE_1': [_required, _isdate()],
             'DATE_2': [_required, _isdate()],
+            'OS_SLUCH': _in(SPECIALS, pass_on_blank=True),
+            'DS0': _in(DISEASES),
             'DS1': [_required, _in(DISEASES)],
             'DS2': _in(DISEASES),
             'DS3': _in(DISEASES),
@@ -108,14 +114,15 @@ class RegistryValidator:
             self.event_valid['FOR_POM'] = [_required, _in(list(FORMS))]
             self.event_valid['NPR_MO'] = _in(list(ORGANIZATIONS), pass_on_blank=True)
             self.event_valid['EXTR'] = _in(list(HOSPITALIZATIONS) + ['0'], pass_on_blank=True)
-            self.event_valid['PODR'] = _in(list(DIVISIONS))
+            self.event_valid['PODR'] = _in(list(DIVISIONS), pass_on_blank=True)
             self.event_valid['PROFIL'] = [_required, _in(list(PROFILES))]
             self.event_valid['DET'] = [_required, _in(['0', '1'])]
-            self.event_valid['DS0'] = _in(DISEASES)
+            self.event_valid['DS0'] = _in(DISEASES, pass_on_blank=True)
             self.event_valid['RSLT'] = [_required, _in(RESULTS)]
             self.event_valid['ISHOD'] = [_required, _in(OUTCOMES)]
             self.event_valid['PRVS'] = [_required, _in(SPECIALITIES_NEW)]
             self.event_valid['IDDOKT'] = [_required, _length(1, 25)]
+
         if registry_type == 2:
             self.event_valid['VID_HMP'] = [_required, _in(HITECH_KINDS)]
             self.event_valid['METOD_HMP'] = [_required, _in(HITECH_METHODS)]
@@ -137,6 +144,7 @@ class RegistryValidator:
             'LPU_1': [_required, _in(list(DEPARTMENTS))],
             'DATE_IN': [_required, _isdate()],
             'DATE_OUT': [_required, _isdate()],
+            'DS': _in(DISEASES, pass_on_blank=True),
             'CODE_MD': [_required, _length(1, 25)],
             'CODE_USL': [_required, _in(CODES)]
         }
@@ -173,6 +181,29 @@ class RegistryValidator:
                              parent='PACIENT', record_uid=self.current_record['N_ZAP'])
 
     def validate_event(self, event):
+        h_errors = []
+
+        if self.current_event:
+            if len(set(self.divisions_check_list)) > 1:
+                h_errors += handle_errors({'SLUCH': [u'904;В законченном случае обнаружены услуги с разными '
+                                                     u'отделениями поликлиники.']},
+                                          parent='ZAP', record_uid=self.previous_record['N_ZAP'],
+                                          event_uid=self.current_event['IDCASE'])
+
+            if 19 not in self.groups_check_list and len(set(self.reasons_check_list)) > 1:
+                h_errors += handle_errors({'SLUCH': [u'904;В законченном случае обнаружены поликлинические услуги '
+                                                     u'с разной целью обращения/посещения.']},
+                                          parent='ZAP', record_uid=self.previous_record['N_ZAP'],
+                                          event_uid=self.current_event['IDCASE'])
+
+            if 19 in self.groups_check_list and len(set(self.groups_check_list)) > 1:
+                h_errors += handle_errors({'SLUCH': [u'904;В законченном стоматологическом случае '
+                                                     u'обнаружены услуги не относящиеся к стоматологии.']},
+                                          parent='ZAP', record_uid=self.previous_record['N_ZAP'],
+                                          event_uid=self.current_event['IDCASE'])
+
+        self.previous_record = self.current_record
+
         self.current_event = event
         self.divisions_check_list = []
         self.reasons_check_list = []
@@ -184,43 +215,64 @@ class RegistryValidator:
             errors['IDCASE'] = [u'904;Значение не является уникальным']
         self.event_unique['IDCASE'].append(event['IDCASE'])
 
+        h_errors += handle_errors(errors, parent='SLUCH', record_uid=self.current_record['N_ZAP'],
+                                  event_uid=event['IDCASE'])
+
         # Проверка на соостветствие вида помощи усуловию оказания
         if not CheckFunction.is_event_kind_corresponds_term(event.get('VIDPOM', None), event.get('USL_OK', None)):
-            errors['SLUCH'] = [u'904;Указанный вид помощи не может быть оказанным в текущих условиях']
+            h_errors += handle_errors({'SLUCH': [u'904;Указанный вид помощи не может быть оказанным в текущих условиях']},
+                                      parent='ZAP', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         # Проверка на соостветствие результата диспансеризации комментарию
         if self.registry_type in (3, 4) and not CheckFunction.is_examination_result_matching_comment(
                 event.get('RSLT_D'), event.get('COMENTSL')):
-            errors['RSLT_D'] = [u'904;Указанный код результата диспансеризации не совпадает с указанным комментарием']
+            h_errors += handle_errors(
+                    {'RSLT_D': [u'904;Указанный код результата диспансеризации не совпадает с указанным комментарием']},
+                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         # Проверка КСГ
-        if (event.get('USL_OK', '') == '1' and event['KSG_MO'] not in HOSPITAL_KSGS) \
-                or (event.get('USL_OK', '') == '2' and event['KSG_MO'] not in DAY_HOSPITAL_KSGS):
-            errors['KSG_MO'] = [u'904;Значение не соответствует справочному.']
+        if event.get('USL_OK', '') in ['1', '2'] and not event.get('KSG_MO', None):
+            h_errors += handle_errors(
+                    {'KSG_MO': [u'902;Отсутствует обязательное значение.']},
+                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+
+        if (event.get('USL_OK', '') == '1' and event.get('KSG_MO', None) not in HOSPITAL_KSGS) \
+                or (event.get('USL_OK', '') == '2' and event.get('KSG_MO', None) not in DAY_HOSPITAL_KSGS):
+            h_errors += handle_errors(
+                    {'KSG_MO': [u'904;Значение не соответствует справочному.']},
+                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         # Проверка наличия уточнения в диагнозах
         if event['LPU'] != '280043':
             if not CheckFunction.is_disease_has_precision(event.get('DS0', None)):
-                errors['DS0'] = [u'904;Диагноз указан без уточняющей подрубрики']
+                h_errors += handle_errors(
+                    {'DS0': [u'904;Диагноз указан без уточняющей подрубрики']},
+                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
             if not CheckFunction.is_disease_has_precision(event.get('DS1', None)):
-                errors['DS1'] = [u'904;Диагноз указан без уточняющей подрубрики']
+                h_errors += handle_errors(
+                    {'DS1': [u'904;Диагноз указан без уточняющей подрубрики']},
+                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
             concomitants = event.get('DS2', [])
             if type(concomitants) != list:
                 concomitants = [concomitants]
             for disease in concomitants:
                 if not CheckFunction.is_disease_has_precision(disease):
-                    errors['DS2'] = [u'904;Диагноз указан без уточняющей подрубрики']
+                    h_errors += handle_errors(
+                        {'DS2': [u'904;Диагноз указан без уточняющей подрубрики']},
+                        parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
             complicateds = event.get('DS3', [])
             if type(complicateds) != list:
                 complicateds = [complicateds]
             for disease in complicateds:
                 if not CheckFunction.is_disease_has_precision(disease):
-                    errors['DS3'] = [u'904;Диагноз указан без уточняющей подрубрики']
+                    h_errors += handle_errors(
+                        {'DS3': [u'904;Диагноз указан без уточняющей подрубрики']},
+                        parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
-        return handle_errors(errors, parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+        return h_errors
 
     def validate_service(self, service):
         self.current_service = service
@@ -231,48 +283,76 @@ class RegistryValidator:
             errors['IDSERV'] = [u'904;Значение не является уникальным']
         self.service_unique['IDSERV'].append(service['IDSERV'])
 
+        h_errors = handle_errors(errors, parent='USL', record_uid=self.current_record['N_ZAP'],
+                                 event_uid=self.current_event['IDCASE'],
+                                 service_uid=service['IDSERV'])
+
         # Проверка на соответсвтие кода услуги типу файла
         if not CheckFunction.is_service_corresponds_registry_type(service['CODE_USL'], self.registry_type):
-            errors['CODE_USL'] = [u'904;Услуга не соответсвует типу файла']
+            h_errors += handle_errors({'CODE_USL': [u'904;Услуга не соответсвует типу файла']},
+                                      parent='USL', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid=service['IDSERV'])
 
         # Проверка на соответствие кода услуги периоду
         if not CheckFunction.is_expired_service(service['CODE_USL'], self.current_event['DATE_2']):
-            errors['CODE_USL'] = [u'904;Код услуги не может быть применён в текущем периоде']
+            h_errors += handle_errors({'CODE_USL': [u'904;Код услуги не может быть применён в текущем периоде']},
+                                      parent='USL', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid=service['IDSERV'])
 
         # Проверка на соответствие кода услуги методу ВМП
         if self.registry_type == 2 and not CheckFunction.is_service_code_matching_hitech_method(
                 service['CODE_USL'], self.current_event['METOD_HMP']):
-            errors['CODE_USL'] = [u'904;Код услуги не соответствует методу ВМП']
+            h_errors += handle_errors({'CODE_USL': [u'904;Код услуги не соответствует методу ВМП']},
+                                      parent='USL', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid=service['IDSERV'])
+
+        # Проверка наличия уточнения в диагнозах
+        if self.current_event['LPU'] != '280043' \
+                and not CheckFunction.is_disease_has_precision(service.get('DS', None)):
+            h_errors += handle_errors({'DS': [u'904;Диагноз указан без уточняющей подрубрики']},
+                                      parent='USL', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid=service['IDSERV'])
 
         # Проверка на соответствие признака детского профиля услуги признаку детского профиля случая
         if self.registry_type in (1, 2) and \
                 not CheckFunction.is_service_children_profile_matching_event_children_profile(
                     service.get('DET'),
                     self.current_event.get('DET')):
-            errors['CODE_USL'] = [u'904;Признак детского профиля случая '
-                                  u'не совпадает с признаком детского профиля услуги']
+            h_errors += handle_errors({'CODE_USL': [u'904;Признак детского профиля случая '
+                                                    u'не совпадает с признаком детского профиля услуги']},
+                                      parent='USL', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid=service['IDSERV'])
 
         # Проверка на соответствие даты начала случая по диспансеризации с датой опроса
         if service['CODE_USL'] in ('019002', '19002') and service['DATE_IN'] != self.current_event['DATE_1']:
-            errors['DATE_1'] = [u'904;Дата начала случая диспансеризации не совпадает '
-                                u'с датой начала услуги анкетирования']
+            h_errors += handle_errors({'DATE_1': [u'904;Дата начала случая диспансеризации не совпадает '
+                                                  u'с датой начала услуги анкетирования']},
+                                      parent='SLUCH', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid='')
 
         # Проверка на соответствие даты окончания случая по диспансеризации дате итогового приёма терапевта
         if service['CODE_USL'] in ('019021', '019023', '019022', '019024', '19021', '19023', '19022', '19024',) \
                 and service['DATE_OUT'] != self.current_event['DATE_2']:
-            errors['DATE_2'] = [u'904;Дата окончания случая диспансеризации не совпадает с '
-                                u'датой окончания услуги приёма терапевта']
+            h_errors += handle_errors({'DATE_2': [u'904;Дата окончания случая диспансеризации не совпадает с '
+                                                  u'датой окончания услуги приёма терапевта']},
+                                      parent='SLUCH', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid='')
 
         # Проверка на соответствие кода услуги условиям оказания
         # Посещение в неотложной форме в приемном отделении стационара
         if self.current_event.get('USL_OK', '') in ('1', '2') \
                 and service.get('CODE_USL', '') in ('056066', '56066', '156066', '56066'):
-            errors['DATE_2'] = [u'904;Услуга не может оказываться в текущих условиях']
-
-        # Проверка наличия уточнения в диагнозах
-        if self.current_event['LPU'] != '280043' \
-                and not CheckFunction.is_disease_has_precision(service.get('DS', None)):
-            errors['DS'] = [u'904;Диагноз указан без уточняющей подрубрики']
+            h_errors += handle_errors({'DATE_2': [u'904;Услуга не может оказываться в текущих условиях']},
+                                      parent='SLUCH', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid=service['IDSERV'])
 
         # Проверки на целостность случаев по поликлинике
         code_obj = CODES[service['CODE_USL']]
@@ -283,20 +363,7 @@ class RegistryValidator:
                 self.reasons_check_list.append(code_obj.reason_id)
             self.groups_check_list.append(code_obj.group_id)
 
-        if len(set(self.divisions_check_list)) > 1:
-            errors['PODR'] = [u'904;В законченном случае обнаружены услуги с разными отделениями поликлиники.']
-
-        if 19 not in self.groups_check_list and len(set(self.reasons_check_list)) > 1:
-            errors['CODE_USL'] = [u'904;В законченном случае обнаружены поликлинические услуги '
-                                  u'с разной целью обращения/посещения.']
-
-        if 19 in self.groups_check_list and len(set(self.groups_check_list)) > 1:
-            errors['CODE_USL'] = [u'904;В законченном стоматологическом случае '
-                                  u'обнаружены услуги не относящиеся к стоматологии.']
-
-        return handle_errors(errors, parent='USL', record_uid=self.current_record['N_ZAP'],
-                             event_uid=self.current_event['IDCASE'],
-                             service_uid=service['IDSERV'])
+        return h_errors
 
 
 class CheckFunction:
@@ -396,10 +463,10 @@ class CheckFunction:
 class CheckVolume:
     # Проверка на сверхобъёмы по стационару и дневному стационару
 
-    HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103', '098975')
+    HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103', '098975', '098994', '198994', '98994')
     DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
                                       '098770', '98710', '98711', '98712', '98715',
-                                      '98770', '098770', '098770', '198770')
+                                      '98770', '098770', '098770', '198770', '098994', '198994', '98994')
     HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280076', '280091', '280069')
     DAY_HOSPITAL_MO_EXCLUSIONS = ('280076', '280091', '280069')
 
