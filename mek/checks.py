@@ -315,7 +315,7 @@ def underpay_cross_dates_services(register_element):
             and mr.period = %(period)s
             and mr.organization_code = %(organization)s
             and pe.term_fk in (1, 2)
-            and (ms.group_fk != 27 or ms.group_fk IS NULL)
+            and (ms.group_fk not in (27, 5, 3) or ms.group_fk IS NULL)
             and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 82) = 0
         order by ps.id_pk
     """
@@ -437,7 +437,7 @@ def underpay_wrong_age_service(register_element):
             and mr.year = %s
             and mr.period = %s
             and mr.organization_code = %s
-            and (ms.group_fk NOT in (20, 7, 9, 10, 11, 12, 13, 14, 15, 16) or ms.group_fk is NULL) AND
+            and (ms.group_fk NOT in (7, 9, 11, 13, 12, 15) or ms.group_fk is NULL) AND
                   NOT(ms.code between '001441' and '001460' or
                          ms.code in ('098703', '098770', '098940', '098913', '098914', '098915', '019018',
                                      '098978', '198992'))
@@ -1970,9 +1970,25 @@ def check_rsc_pso_ksg(register_element):
                                    WHEN ms1.tariff_profile_fk in (299, 292) THEN '89'
                                    WHEN ms1.tariff_profile_fk in (300, 293) THEN '90'
                                    WHEN ms1.tariff_profile_fk in (301, 294) THEN '91'
+                                   WHEN ms1.code in ('098995') THEN '180'
+                                        ms1.code in ('098996') THEN '181'
+                                        ms1.code in ('098997') THEN '182'
+                                        ms1.code in ('098606') THEN '300'
+                                        ms1.code in ('098607') THEN '301'
+                                        ms1.code in ('098608', '198611') THEN '302'
+                                        ms1.code in ('198613') THEN '303'
+                                        ms1.code in ('098609', '198612') THEN '304'
+                                        ms1.code in ('198614') THEN '305'
+                                        ms1.code in ('198615') THEN '306'
+                                        ms1.code in ('198616') THEN '307'
+                                        ms1.code in ('198617') THEN '308'
                               ELSE NULL END AS prof_ksg
             from medical_service ms1
             where ms1.group_fk IN (1, 2)
+                  or ms1.code in ('098995', '098996', '098997', '098606',
+                                  '098607', '098608', '098609', '198611',
+                                  '198612', '198613', '198614', '198615',
+                                  '198616', '198617')
             )
             select distinct ps.id_pk
             from provided_service ps
@@ -1986,13 +2002,18 @@ def check_rsc_pso_ksg(register_element):
                             on mr.id_pk = mrr.register_fk
                         JOIN patient p
                             on p.id_pk = mrr.patient_fk
-                        left Join  ksg_control T ON T.id_pk = ps.code_fk
+                        left Join ksg_control T ON T.id_pk = ps.code_fk
 
                     WHERE  mr.is_active
                         and mr.year = %s
                         and mr.period = %s
                         and mr.organization_code = %s
-                        and ms.group_fk in (1, 2)
+                        and ( ms.group_fk in (1, 2)
+                              or ms.code in ('098995', '098996', '098997', '098606',
+                                             '098607', '098608', '098609', '198611',
+                                             '198612', '198613', '198614', '198615',
+                                             '198616', '198617')
+                            )
                         AND (T.prof_ksg != pe.ksg_smo OR T.prof_ksg is null)
                         and (select count(1) from provided_service_sanction where service_fk = ps.id_pk
                              and error_fk = 101) = 0
@@ -2002,7 +2023,7 @@ def check_rsc_pso_ksg(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
 
-    set_sanctions(services, 100)
+    set_sanctions(services, 101)
 
 
 def underpay_adult_examination_with_double_services(register_element):
@@ -2043,3 +2064,73 @@ def underpay_adult_examination_with_double_services(register_element):
         query, [register_element['year'], register_element['period'],
                 register_element['organization_code']])
     set_sanctions(services, 102)
+
+
+def underpay_wrong_age_prelim_examination_children(register_element):
+    """
+        Санкции на несоответствие кода услуги возрастной группе по
+        предварительным медосмотрам детей
+    """
+    query = """
+            select ps.id_pk
+            from provided_service ps
+                JOIN medical_service ms
+                    on ms.id_pk = ps.code_fk
+                join provided_event pe
+                    on ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                    on mrr.id_pk = pe.record_fk
+                JOIN medical_register mr
+                    on mr.id_pk = mrr.register_fk
+                JOIN patient p
+                    on p.id_pk = mrr.patient_fk
+            WHERE mr.is_active
+                and mr.year = %s
+                and mr.period = %s
+                and mr.organization_code = %s
+                and ((ms.code = '119101' and not Extract (year from age(ps.end_date, p.birthdate)) between 0 and 6) or
+                     (ms.code = '119119' and not Extract (year from age(ps.end_date, p.birthdate)) between 6 and 17) or
+                     (ms.code = '119120' and not Extract (year from age(ps.end_date, p.birthdate)) between 15 and 17))
+                and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 105) = 0
+            """
+
+    services = ProvidedService.objects.raw(
+        query, [register_element['year'], register_element['period'],
+                register_element['organization_code']])
+
+    return set_sanctions(services, 105)
+
+
+def underpay_wrong_age_examination_adult(register_element):
+    """
+        Санкции на несоответствие кода услуги возрасту
+        по профосмотрам взрослых
+    """
+    query = """
+            select ps.id_pk
+            from provided_service ps
+                JOIN medical_service ms
+                    on ms.id_pk = ps.code_fk
+                join provided_event pe
+                    on ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                    on mrr.id_pk = pe.record_fk
+                JOIN medical_register mr
+                    on mr.id_pk = mrr.register_fk
+                JOIN patient p
+                    on p.id_pk = mrr.patient_fk
+            WHERE mr.is_active
+                and mr.year = %s
+                and mr.period = %s
+                and mr.organization_code = %s
+                and (ms.code in ('019216', '019217') and not EXTRACT (year from age(ps.end_date, p.birthdate)) >= 18)
+                and (select count(1) from provided_service_sanction where service_fk = ps.id_pk and error_fk = 106) = 0
+            """
+
+    services = ProvidedService.objects.raw(
+        query, [register_element['year'], register_element['period'],
+                register_element['organization_code']])
+
+    return set_sanctions(services, 106)
+
+

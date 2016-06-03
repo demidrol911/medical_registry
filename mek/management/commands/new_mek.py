@@ -10,8 +10,9 @@ from mek.checks import set_sanction
 from mek import checks
 
 from datetime import datetime
+from main.logger import get_logger
 
-import re
+logger = get_logger(__name__)
 
 
 def get_register_element():
@@ -66,7 +67,7 @@ def get_services(register_element):
                     join medical_service ms2
                         on ms2.id_pk = ps2.code_fk
                 where ps2.event_fk = provided_event.id_pk
-                   and (ms2.group_fk != 27 or ms2.group_fk is null)
+                   and (ms2.group_fk NOT IN (27, 3, 5, 42) or ms2.group_fk is null)
             ) = 1
             and medical_service.reason_fk = 1
             and provided_event.term_fk=3
@@ -112,6 +113,12 @@ def get_services(register_element):
                             and "level" = (CASE WHEN medical_register.organization_code = '280112'
                                                      AND provided_event.term_fk = 1
                                                   THEN 1
+                                                WHEN medical_register.organization_code = '280091'
+                                                     AND provided_event.term_fk = 1
+                                                  THEN 2
+                                                WHEN medical_register.organization_code = '280026'
+                                                     AND provided_event.term_fk = 1
+                                              THEN 3
                                                 WHEN medical_register.organization_code = '280036'
                                                      AND provided_service.comment = '100000'
                                                   THEN 2
@@ -121,6 +128,12 @@ def get_services(register_element):
                         and "level" = (CASE WHEN medical_register.organization_code = '280112'
                                                  AND provided_event.term_fk = 1
                                               THEN 1
+                                            WHEN medical_register.organization_code = '280091'
+                                                 AND provided_event.term_fk = 1
+                                              THEN 2
+                                            WHEN medical_register.organization_code = '280026'
+                                                 AND provided_event.term_fk = 1
+                                              THEN 3
                                             WHEN medical_register.organization_code = '280036'
                                                  AND provided_service.comment = '100000'
                                               THEN 2
@@ -145,6 +158,10 @@ def get_services(register_element):
         -- Подобная структура используется ниже для выбора нкд и тарифов
         (CASE WHEN medical_register.organization_code = '280112' AND provided_event.term_fk = 1
                 THEN 1
+              WHEN medical_register.organization_code = '280091' AND provided_event.term_fk = 1
+                THEN 2
+              WHEN medical_register.organization_code = '280026' AND provided_event.term_fk = 1
+                THEN 3
               WHEN medical_register.organization_code = '280036' AND provided_service.comment = '100000'
                 THEN 2
               ELSE medical_organization.level
@@ -160,7 +177,11 @@ def get_services(register_element):
         provided_event.comment as event_comment,
         provided_service.comment as service_comment,
         medical_register_record.is_corrected as record_is_corrected,
-        examination_tariff.value as examination_tariff,
+        CASE WHEN provided_service.end_date < (select ps1.end_date from provided_service ps1
+                                               where ps1.event_fk = provided_event.id_pk and ps1.code_fk = 8347)
+               THEN 0
+             ELSE examination_tariff.value
+        END as examination_tariff,
         medical_register.type as register_type,
         COALESCE(
             (
@@ -213,6 +234,12 @@ def get_services(register_element):
                 and tariff_basic.group_fk = (CASE WHEN medical_register.organization_code = '280112'
                                                        AND provided_event.term_fk = 1
                                                     THEN  21
+                                                  WHEN medical_register.organization_code = '280091'
+                                                       AND provided_event.term_fk = 1
+                                                    THEN 19
+                                                  WHEN medical_register.organization_code = '280026'
+                                                       AND provided_event.term_fk = 1
+                                                    THEN 17
                                                   WHEN medical_register.organization_code = '280036'
                                                        AND provided_service.comment = '100000'
                                                     THEN 19
@@ -226,6 +253,12 @@ def get_services(register_element):
                      and group_fk = (CASE WHEN medical_register.organization_code = '280112'
                                                AND provided_event.term_fk = 1
                                             THEN  21
+                                          WHEN medical_register.organization_code = '280091'
+                                               AND provided_event.term_fk = 1
+                                            THEN 19
+                                          WHEN medical_register.organization_code = '280026'
+                                               AND provided_event.term_fk = 1
+                                            THEN 17
                                           WHEN medical_register.organization_code = '280036'
                                                AND provided_service.comment = '100000'
                                             THEN 19
@@ -613,6 +646,7 @@ def update_payment_kind(register_element):
                       AND not (
                          mr1.organization_code = '280001' AND medical_service.tariff_profile_fk in (108, 93, 241)
                       )
+                      AND ps1.department_fk NOT IN (15, 88, 89)
                 when TRUE THEN
                     CASE p1.attachment_code = mr1.organization_code -- если пациент прикреплён щас к МО
                     when true THEN -- прикреплён
@@ -757,119 +791,238 @@ def update_wrong_date(register_element):
 
 def update_ksg(register_element):
     print u'Проставляем КСГ'
-    query_ksg_general = """
-        WITH  mo_services AS
-        (select
-        ps.id_pk AS service_id,
-        pe.id_pk AS event_id,
-        pe.basic_disease_fk AS disease_id,
-        s_idc.id_pk AS secondary_disease_id,
-        ps.code_fk AS code_id,
-        age(ps.start_date, pt.birthdate) AS patient_age,
-        ms.code AS s_code,
-        (CASE WHEN max(ps.quantity) over (PARTITION by pe.id_pk)  >= 3 THEN 1 ELSE 0 END) AS event_duration,
-        pt.gender_fk AS gender,
-        (select count(distinct op.id_pk) from provided_service op join medical_service ms_op ON ms_op.id_pk = op.code_fk where op.event_fk = pe.id_pk AND ms_op.code ilike 'A%%') > 0 AS has_op_event,
-        ms.code ILIKE 'A%%' is_op_service
-        from provided_service ps
-            join provided_event pe
-            on ps.event_fk = pe.id_pk
-            JOIN medical_register_record mrr
-            on mrr.id_pk = pe.record_fk
-            JOIN medical_register mr
-            on mr.id_pk = mrr.register_fk
-            JOIN patient pt
-            ON pt.id_pk = mrr.patient_fk
-            JOIN medical_service ms ON ms.id_pk = ps.code_fk
-            LEFT JOIN provided_event_concomitant_disease conc_d ON conc_d.event_fk = pe.id_pk
-            LEFT JOIN provided_event_complicated_disease comp_d ON comp_d.event_fk = pe.id_pk
-            LEFT JOIN idc s_idc ON (s_idc.id_pk = conc_d.disease_fk or s_idc.id_pk = comp_d.disease_fk)
-        WHERE  mr.is_active
-            and mr.year = %(year)s
-            and mr.period = %(period)s
-            and mr.organization_code = %(organization)s
-            and pe.term_fk in (1, 2)
+    # Рассчёт КСГ по стационару и дневному стационару
+    ksg_general_query = """
+        WITH mo_services AS (
+            SELECT
+                ps.id_pk AS service_id,
+                pe.id_pk AS event_id,
+                pe.basic_disease_fk AS disease_id,
+                s_idc.id_pk AS secondary_disease_id,
+                ps.code_fk AS code_id,
+                age(pe.start_date, pt.birthdate) AS patient_age,
+                ms.code AS s_code,
+                (CASE WHEN MAX(ps.quantity) OVER (PARTITION by pe.id_pk) <= 3 THEN 1 ELSE 0 END) AS event_duration,
+                pt.gender_fk AS gender,
+
+                (SELECT COUNT(DISTINCT op.id_pk)
+                 FROM provided_service op
+                    JOIN medical_service ms_op
+                       ON ms_op.id_pk = op.code_fk
+                WHERE op.event_fk = pe.id_pk
+                      AND ms_op.code ILIKE 'A%%') > 0 AS has_op_event,
+                ms.code ILIKE 'A%%' is_op_service,
+
+                pe.term_fk AS service_term
+            FROM provided_service ps
+                JOIN provided_event pe
+                   ON ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                   ON mrr.id_pk = pe.record_fk
+                JOIN medical_register mr
+                   ON mr.id_pk = mrr.register_fk
+                JOIN patient pt
+                   ON pt.id_pk = mrr.patient_fk
+                JOIN medical_service ms
+                   ON ms.id_pk = ps.code_fk
+                LEFT JOIN provided_event_concomitant_disease conc_d
+                   ON conc_d.event_fk = pe.id_pk
+                LEFT JOIN provided_event_complicated_disease comp_d
+                   ON comp_d.event_fk = pe.id_pk
+                LEFT JOIN idc s_idc
+                   ON s_idc.id_pk = conc_d.disease_fk OR s_idc.id_pk = comp_d.disease_fk
+            WHERE mr.is_active
+                AND mr.year = %(year)s
+                AND mr.period = %(period)s
+                AND mr.organization_code = %(organization)s
+                AND pe.term_fk in (1, 2)
         )
+        UPDATE provided_event SET ksg_smo = T.ksg_code
+        FROM (
+            SELECT
+                event_id,
+                ksg_calc.coefficient AS ksg_coef,
+                ksg_calc.code AS ksg_code,
+                MAX(ksg_calc.coefficient) over (PARTITION by event_id) AS max_ksg_coeff
+            FROM mo_services
+            -- Рассчёт КСГ по диагнозу
+                LEFT JOIN LATERAL (
+                    SELECT
+                        ksg.*, k.service_fk IS NOT NULL AND k.service_fk = code_id AS defined_by_diagnosis
+                    FROM ksg
+                        JOIN ksg_grouping k ON ksg.id_pk = k.ksg_fk
+                            AND mo_services.disease_id = k.disease_fk
+                            AND (CASE WHEN k.secondary_disease_fk IS NOT NULL
+                                        THEN k.secondary_disease_fk = secondary_disease_id
+                                      ELSE True
+                                 END)
+                            AND (CASE WHEN k.service_fk IS NOT NULL THEN  k.service_fk = code_id ELSE True END)
+                            AND (CASE WHEN k.age = 1 THEN patient_age < '28 days'
+                                      WHEN k.age = 2 THEN patient_age < '90 days'
+                                      WHEN k.age = 3 THEN patient_age < '1 years'
+                                      WHEN k.age = 4 THEN patient_age < '18 years'
+                                      WHEN k.age = 5 THEN patient_age >= '18 years'
+                                      ELSE TRUE
+                                 END)
+                            AND (CASE WHEN k.gender_fk IS NOT NULL THEN k.gender_fk = gender ELSE TRUE END)
+                            AND (CASE WHEN k.duration <> 0 THEN k.duration = event_duration ELSE TRUE END)
+                            AND k.start_date = '2016-01-01'
+                    WHERE
+                        ksg.term_fk = service_term
+                    ORDER BY k.secondary_disease_fk DESC NULLS LAST, k.service_fk DESC NULLS LAST, k.age desc,
+                             k.duration desc, k.gender_fk DESC NULLS LAST
+                    LIMIT 1
+                ) AS ksg_bydisease ON (is_op_service OR (NOT is_op_service AND NOT has_op_event))
 
-        update provided_event set ksg_smo = T.ksg_calc
-        from (
-        select
-        event_id,
-        ksg_calc.code AS ksg_calc,
-        ksg_calc.coefficient AS ksg_calc_coeff,
-        ksg_byservice.code AS ksg_s,
-        ksg_bydisease.code AS ksg_d,
-        has_op_event,
-        is_op_service,
-        max(ksg_calc.coefficient) over (PARTITION by event_id) AS max_ksg_coeff,
-        event_duration
+            -- Рассчёт КСГ по услуге
+                LEFT JOIN LATERAL (
+                    SELECT ksg.*
+                    FROM ksg
+                        JOIN ksg_grouping k ON ksg.id_pk = k.ksg_fk
+                            AND mo_services.code_id = k.service_fk
+                            AND (CASE WHEN k.disease_fk IS NOT NULL THEN k.disease_fk = disease_id ELSE True END)
+                            AND (CASE WHEN k.secondary_disease_fk IS NOT NULL
+                                        THEN k.secondary_disease_fk = secondary_disease_id
+                                      ELSE True
+                                 END)
+                            AND (CASE WHEN k.age = 1 THEN patient_age < '28 days'
+                                      WHEN k.age = 2 THEN patient_age < '90 days'
+                                      WHEN k.age = 3 THEN patient_age < '1 years'
+                                      WHEN k.age = 4 THEN patient_age < '18 years'
+                                      WHEN k.age = 5 THEN patient_age >= '18 years'
+                                      ELSE TRUE
+                                 END)
+                            AND (CASE WHEN k.gender_fk IS NOT NULL THEN k.gender_fk = gender ELSE TRUE END)
+                            AND (CASE WHEN k.duration <> 0 THEN k.duration = event_duration ELSE TRUE END)
+                            AND k.start_date = '2016-01-01'
+                    WHERE
+                        ksg.term_fk = service_term
+                    ORDER BY k.disease_fk DESC NULLS LAST, k.secondary_disease_fk DESC NULLS LAST, k.age desc,
+                             k.duration desc, k.gender_fk DESC NULLS LAST
+                    LIMIT 1
+                ) AS ksg_byservice ON NOT ksg_bydisease.defined_by_diagnosis
 
-        from mo_services
-         -- Рассчёт КСГ по диагнозу
-        left join ksg_grouping ksg_g_bydisease ON
-            (select k.id_pk from ksg_grouping k where
-                mo_services.disease_id = k.disease_fk
-                AND (CASE WHEN k.secondary_disease_fk IS NOT NULL THEN k.secondary_disease_fk = secondary_disease_id ELSE True END)
-                AND (CASE WHEN k.service_fk IS NOT NULL THEN  k.service_fk = code_id ELSE True END)
-                AND (CASE WHEN k.age = 1 THEN patient_age < '28 days'
-                                  when k.age = 2 THEN patient_age < '90 days'
-                                  when k.age = 3 THEN patient_age < '1 years'
-                                  WHEN k.age = 4 THEN patient_age >= '4 years' AND patient_age < '18 years'
-                                  WHEN k.age = 5 THEN patient_age >= '18 years'
-                                  ELSE TRUE END)
-                AND (case WHEN k.gender_fk is not null THEN k.gender_fk = gender ELSE TRUE END)
-                AND (case WHEN k.duration <> 0 THEN k.duration = event_duration ELSE TRUE END)
-                AND k.start_date = '2016-01-01'
-              order by k.secondary_disease_fk DESC NULLS LAST, k.service_fk DESC NULLS LAST, k.age desc, k.duration desc, k.gender_fk DESC NULLS LAST
-              LIMIT 1
-            ) = ksg_g_bydisease.id_pk AND (is_op_service OR (NOT is_op_service AND NOT has_op_event))
-        left join ksg ksg_bydisease ON ksg_bydisease.id_pk = ksg_g_bydisease.ksg_fk
-        -- Рассчёт КСГ по услуге
-        left join ksg_grouping ksg_g_byservice ON
-            (select k.id_pk from ksg_grouping k where
-                mo_services.code_id = k.service_fk
-                AND (CASE WHEN k.disease_fk IS NOT NULL THEN  k.disease_fk = disease_id ELSE True END)
-                AND (CASE WHEN k.secondary_disease_fk IS NOT NULL THEN k.secondary_disease_fk = secondary_disease_id ELSE True END)
-                AND (CASE WHEN k.age = 1 THEN patient_age < '28 days'
-                                  when k.age = 2 THEN patient_age < '90 days'
-                                  when k.age = 3 THEN patient_age < '1 years'
-                                  WHEN k.age = 4 THEN patient_age >= '4 years' AND patient_age < '18 years'
-                                  WHEN k.age = 5 THEN patient_age >= '18 years'
-                                  ELSE TRUE END)
-                AND (case WHEN k.gender_fk is not null THEN k.gender_fk = gender ELSE TRUE END)
-                AND (case WHEN k.duration <> 0 THEN k.duration = event_duration ELSE TRUE END)
-                AND k.start_date = '2016-01-01'
-              order by k.disease_fk DESC NULLS LAST, k.secondary_disease_fk DESC NULLS LAST, k.age desc, k.duration desc, k.gender_fk DESC NULLS LAST
-              LIMIT 1
-            ) = ksg_g_byservice.id_pk
-        left join ksg ksg_byservice ON ksg_byservice.id_pk = ksg_g_byservice.ksg_fk
-        LEFT JOIN ksg ksg_calc ON (
-        CASE WHEN (ksg_byservice.code=12 AND ksg_bydisease.code=9) OR
-                  (ksg_byservice.code=13 AND ksg_bydisease.code=9) OR
-                  (ksg_byservice.code=12 AND ksg_bydisease.code=10) OR
-                  (ksg_byservice.code=73 AND ksg_bydisease.code=19) OR
-                  (ksg_byservice.code=74 AND ksg_bydisease.code=19) OR
-                  (ksg_byservice.code=153 AND ksg_bydisease.code=159) OR
-                  (ksg_byservice.code=280 AND ksg_bydisease.code=279) OR
-                  (ksg_byservice.code=280 AND ksg_bydisease.code=187) OR
-                  (ksg_byservice.code=225 AND ksg_bydisease.code=222) OR
-                  (ksg_byservice.code=35 AND ksg_bydisease.code=224) OR
-                  (ksg_byservice.code=236 AND ksg_bydisease.code=251)
-         THEN ksg_byservice.id_pk
-                 WHEN COALESCE(ksg_bydisease.coefficient, 0) >=  COALESCE(ksg_byservice.coefficient, 0) THEN ksg_bydisease.id_pk
-                 WHEN COALESCE(ksg_bydisease.coefficient, 0)  <  COALESCE(ksg_byservice.coefficient, 0) THEN ksg_byservice.id_pk
-                 ELSE NULL
-                 END
-        ) = ksg_calc.id_pk
-        )AS T
-        where T.event_id = id_pk AND T.ksg_calc is not null AND T.ksg_calc_coeff = T.max_ksg_coeff
+            LEFT JOIN ksg ksg_calc ON (
+                CASE WHEN service_term = 1 AND
+                         ((ksg_byservice.code=11 AND ksg_bydisease.code=9) OR
+                         (ksg_byservice.code=12 AND ksg_bydisease.code=9) OR
+                         (ksg_byservice.code=11 AND ksg_bydisease.code=10) OR
+                         (ksg_byservice.code=73 AND ksg_bydisease.code=18) OR
+                         (ksg_byservice.code=74 AND ksg_bydisease.code=18) OR
+                         (ksg_byservice.code=154 AND ksg_bydisease.code=160) OR
+                         (ksg_byservice.code=281 AND ksg_bydisease.code=280) OR
+                         (ksg_byservice.code=281 AND ksg_bydisease.code=188) OR
+                         (ksg_byservice.code=226 AND ksg_bydisease.code=223) OR
+                         (ksg_byservice.code=34 AND ksg_bydisease.code=223) OR
+                         (ksg_byservice.code=237 AND ksg_bydisease.code=252))
+                       THEN ksg_byservice.id_pk
+                     WHEN COALESCE(ksg_bydisease.coefficient, 0) >= COALESCE(ksg_byservice.coefficient, 0)
+                       THEN ksg_bydisease.id_pk
+                     WHEN COALESCE(ksg_bydisease.coefficient, 0) < COALESCE(ksg_byservice.coefficient, 0)
+                       THEN ksg_byservice.id_pk
+                     ELSE NULL
+                END) = ksg_calc.id_pk
+        ) AS T
+        WHERE T.event_id = id_pk AND T.ksg_code IS NOT NULL AND T.ksg_coef = T.max_ksg_coeff
         """
+
     cursor = connection.cursor()
-    cursor.execute(query_ksg_general, dict(
+    cursor.execute(ksg_general_query, dict(
         year=register_element['year'],
         period=register_element['period'],
         organization=register_element['organization_code']))
+    transaction.commit()
 
+    # Рассчёт КСГ по множественной травме (политравма)
+    multiple_trauma_query = """
+        WITH disease_grouping AS (
+            SELECT
+                idc.id_pk AS disease_id,
+                CASE WHEN idc.idc_code IN ('S02.0', 'S02.1', 'S04.0', 'S05.7', 'S06.1', 'S06.2', 'S06.3', 'S06.4',
+                                           'S06.5', 'S06.6', 'S06.7', 'S07.0', 'S07.1', 'S07.8', 'S09.0', 'S11.0',
+                                           'S11.1', 'S11.2', 'S11.7', 'S15.0', 'S15.1', 'S15.2', 'S15.3', 'S15.7',
+                                           'S15.8', 'S15.9', 'S17.0', 'S17.8', 'S18') THEN '_T1'     -- голова, шея
+
+                     WHEN idc.idc_code IN ('S12.0', 'S12.9', 'S13.0', 'S13.1', 'S13.3', 'S14.0', 'S14.3', 'S22.0',
+                                           'S23.0', 'S23.1', 'S24.0', 'S32.0', 'S32.1', 'S33.0', 'S33.1', 'S33.2',
+                                           'S33.4', 'S34.0', 'S34.3', 'S34.4') THEN '_T2'    -- позвоночник
+
+                     WHEN idc.idc_code IN ('S22.2', 'S22.4', 'S22.5', 'S25.0', 'S25.1', 'S25.2', 'S25.3', 'S25.4',
+                                           'S25.5', 'S25.7', 'S25.8', 'S25.9', 'S26.0', 'S27.0', 'S27.1', 'S27.2',
+                                           'S27.4', 'S27.5', 'S27.6', 'S27.8',
+                                           'S28.0', 'S28.1') THEN '_T3'    -- грудная клетка
+
+                     WHEN idc.idc_code IN ('S35.0', 'S35.1', 'S35.2', 'S35.3', 'S35.4', 'S35.5', 'S35.7', 'S35.8',
+                                           'S35.9', 'S36.0', 'S36.1', 'S36.2', 'S36.3', 'S36.4', 'S36.5', 'S36.8',
+                                           'S36.9', 'S37.0', 'S38.3') THEN '_T4'    -- живот
+
+                     WHEN idc.idc_code IN ('S32.3', 'S32.4', 'S32.5', 'S36.6', 'S37.1', 'S37.2', 'S37.4', 'S37.5',
+                                           'S37.6', 'S37.8', 'S38.0', 'S38.2') THEN '_T5'    -- таз
+
+                     WHEN idc.idc_code IN ('S42.2', 'S42.3', 'S42.4', 'S42.8', 'S45.0', 'S45.1', 'S45.2', 'S45.7',
+                                           'S45.8', 'S47' , 'S48.0', 'S48.1', 'S48.9', 'S52.7', 'S55.0', 'S55.1',
+                                           'S55.7', 'S55.8', 'S57.0', 'S57.8', 'S57.9', 'S58.0', 'S58.1', 'S58.9',
+                                           'S68.4', 'S71.7', 'S72.0', 'S72.1', 'S72.2', 'S72.3', 'S72.4', 'S72.7',
+                                           'S75.0', 'S75.1', 'S75.2', 'S75.7', 'S75.8', 'S77.0', 'S77.1', 'S77.2',
+                                           'S78.0', 'S78.1', 'S78.9', 'S79.7', 'S82.1', 'S82.2', 'S82.3', 'S82.7',
+                                           'S85.0', 'S85.1', 'S85.5', 'S85.7', 'S87.0', 'S87.8', 'S88.0', 'S88.1',
+                                           'S88.9', 'S95.7', 'S95.8', 'S95.9',
+                                           'S97.0', 'S97.8', 'S98.0') THEN '_T6'    -- конечности
+
+                     WHEN idc.idc_code IN ('S02.7',  'S12.7', 'S22.1', 'S27.7', 'S29.7', 'S31.7', 'S32.7', 'S36.7',
+                                           'S38.1', 'S39.6', 'S39.7', 'S37.7', 'S42.7', 'S49.7', 'T01.1', 'T01.8',
+                                           'T01.9', 'T02.0', 'T02.1', 'T02.2', 'T02.3', 'T02.4', 'T02.5', 'T02.6',
+                                           'T02.7', 'T02.8', 'T02.9', 'T04.0', 'T04.1', 'T04.2', 'T04.3', 'T04.4',
+                                           'T04.7', 'T04.8', 'T04.9', 'T05.0', 'T05.1', 'T05.2', 'T05.3', 'T05.4',
+                                           'T05.5', 'T05.6', 'T05.8', 'T05.9', 'T06.0', 'T06.1', 'T06.2', 'T06.3',
+                                           'T06.4', 'T06.5', 'T06.8', 'T07') THEN '_T7'    -- множественная травма
+
+                     WHEN idc.idc_code IN ('J94.2', 'J94.8', 'J94.9', 'J93', 'J93.0', 'J93.1', 'J93.8', 'J93.9',
+                                           'J96.0', 'N17', 'T79.4', 'R57.1', 'R57.8') THEN '_R' -- тяжесть случая
+                     ELSE NULL
+                END AS anatomical_region
+            FROM idc
+        )
+        UPDATE provided_event SET ksg_smo = '216'
+        FROM (
+            SELECT
+                pe.id_pk AS event_id,
+                COUNT(DISTINCT CASE WHEN dg.anatomical_region != '_R' THEN dg.anatomical_region END) AS count_disease,
+                COUNT(DISTINCT CASE WHEN dg.anatomical_region = '_R' THEN dg.anatomical_region END) AS has_R,
+                COUNT(DISTINCT CASE WHEN dg.anatomical_region = '_T7' THEN dg.anatomical_region END) AS has_T7
+            FROM provided_service ps
+                JOIN provided_event pe
+                   on ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                   on mrr.id_pk = pe.record_fk
+                JOIN medical_register mr
+                   on mr.id_pk = mrr.register_fk
+                JOIN patient pt
+                   ON pt.id_pk = mrr.patient_fk
+                JOIN medical_service ms
+                   ON ms.id_pk = ps.code_fk
+                LEFT JOIN provided_event_complicated_disease pecompd
+                   ON pecompd.event_fk = pe.id_pk
+                LEFT JOIN provided_event_concomitant_disease peconcd
+                   ON peconcd.event_fk = pe.id_pk
+                JOIN disease_grouping dg
+                   ON (dg.disease_id = ps.basic_disease_fk
+                       OR dg.disease_id = pecompd.disease_fk
+                       OR dg.disease_id = peconcd.disease_fk)
+            WHERE mr.is_active
+                AND mr.year = %(year)s
+                AND mr.period = %(period)s
+                AND mr.organization_code = %(organization)s
+                AND pe.term_fk = 1
+                AND dg.anatomical_region IS NOT NULL
+            GROUP BY event_id) AS T
+        WHERE id_pk = T.event_id AND T.has_R > 0 and T.count_disease >= (CASE WHEN T.has_T7 > 0 THEN 1 ELSE 2 END)
+        """
+    cursor = connection.cursor()
+    cursor.execute(multiple_trauma_query, dict(
+        year=register_element['year'],
+        period=register_element['period'],
+        organization=register_element['organization_code']))
     transaction.commit()
     cursor.close()
 
@@ -929,6 +1082,7 @@ def get_payments_sum(service):
     is_endovideosurgery = (service.service_comment == '100000')
     is_curation_coefficient = (service.service_comment == '0000001')
     is_mobile_brigade = (service.service_comment == '000010')
+    is_trombolitic_therapy = (service.service_comment == '000000001')
 
     provided_tariff = float(service.tariff)
 
@@ -946,7 +1100,7 @@ def get_payments_sum(service):
     # Исключение для ФГКУ 411 ВГ МО РФ
     if service.organization_code == '280010' and service.service_tariff_profile == 25:
         tariff = 20493
-    if service.organization_code == '280010' and service.service_tariff_profile in (27, 1):
+    if service.organization_code == '280010' and service.service_tariff_profile in (27, 1, 5):
         tariff = 17533
 
     # Исключение для Ивановской
@@ -1026,6 +1180,11 @@ def get_payments_sum(service):
         tariff = pso_tariff.get((service.ksg_smo, service.regional_coefficient), 0)
         nkd = rsc_pso_nkd.get(service.ksg_smo, 1)
 
+    # При проведении больным с ОКС в ПСО тромболитической терапии с последующим переводом в РСЦ
+    if is_trombolitic_therapy:
+        tariff = pso_tariff.get(('68', service.regional_coefficient), 0) * 0.6
+        nkd = 1
+
     if service.service_group in (3, 5):
         term = 3
 
@@ -1070,7 +1229,7 @@ def get_payments_sum(service):
 
         if term == 1:
             # стационар 5) Коэффициент сложности лечения пациента КСЛП
-            if service.quantity >= 30 and service.service_group != 20 \
+            if service.quantity >= 30 and not (service.service_group == 20 or service.ksg_smo in (88, 89, 90, 91))\
                     and is_curation_coefficient:
                 accepted_payment += round(accepted_payment * 0.25, 2)
                 provided_tariff += round(provided_tariff * 0.25, 2)
@@ -1087,7 +1246,7 @@ def get_payments_sum(service):
                     service=service, coefficient_id=8)
 
             # КПГ педиатрия
-            if service.service_tariff_profile == 10:
+            if service.service_tariff_profile == 10 and service.level in (1, 2):
                 accepted_payment += round(accepted_payment * 0.34, 2)
                 provided_tariff += round(provided_tariff * 0.34, 2)
                 ProvidedServiceCoefficient.objects.get_or_create(
@@ -1138,12 +1297,12 @@ def get_payments_sum(service):
             'provided_tariff': round(provided_tariff, 2)}
 
 
-@howlong
 def main():
     register_element = get_register_element()
 
     while register_element:
         print register_element
+        logger.info(u'%s начала проходить МЭК', register_element['organization_code'])
 
         current_period = '%s-%s-01' % (register_element['year'],
                                        register_element['period'])
@@ -1194,6 +1353,10 @@ def main():
             checks.underpay_wrong_examination_age_group(register_element)
             checks.underpay_wrong_age_examination_children_adopted(register_element)
             checks.underpay_wrong_age_examination_children_difficult(register_element)
+
+            checks.underpay_wrong_age_prelim_examination_children(register_element)
+            checks.underpay_wrong_age_examination_adult(register_element)
+
             checks.underpay_service_term_mismatch(register_element)
             checks.underpay_service_term_kind_mismatch(register_element)
             checks.underpay_incorrect_examination_events(register_element)
@@ -1236,6 +1399,8 @@ def main():
             set_status(register_element, 3)
         elif register_element['status'] in (5, 500):
             set_status(register_element, 8)
+
+        logger.info(u'%s закончила проходить МЭК', register_element['organization_code'])
 
         register_element = get_register_element()
 
