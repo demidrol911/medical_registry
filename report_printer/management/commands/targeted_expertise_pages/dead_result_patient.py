@@ -1,9 +1,15 @@
 #! -*- coding: utf-8 -*-
 from report_printer.libs.page import FilterReportPage
 from main.funcs import unicode_to_cp866
+from medical_service_register.path import DEVELOP_DEAD_PATIENT, DEVELOP_DEAD_PATIENT_DBF, \
+    PRODUCTION_DEAD_PATIENT, PRODUCTION_DEAD_PATIENT_DBF
 
 
 class DeadResultPatient(FilterReportPage):
+    """
+    Выборка умерших пациентов по результату обращения
+    в стационаре и дневном стационаре
+    """
 
     def __init__(self):
         super(DeadResultPatient, self).__init__()
@@ -45,7 +51,7 @@ class DeadResultPatient(FilterReportPage):
             ps.start_date AS start_date,
             ps.end_date AS end_date,
             ps.quantity AS quantity,
-            (CASE ps.payment_type_fk WHEN 2 THEN ps.accepted_payment ELSE 0 END) AS accepted,
+            (CASE ps.payment_type_fk WHEN 2 THEN ps.accepted_payment ELSE 0 END) AS accepted_payment,
             ps.tariff AS tariff,
             ps.comment,
             pe.hospitalization_fk AS hospitalization_code,
@@ -78,9 +84,9 @@ class DeadResultPatient(FilterReportPage):
                     and mo.parent_fk is null
             JOIN patient p
                 ON p.id_pk = mrr.patient_fk
-            JOIN idc
+            left JOIN idc
                 ON idc.id_pk = ps.basic_disease_fk
-            JOIN medical_service_term mst
+            left JOIN medical_service_term mst
                 ON mst.id_pk = pe.term_fk
             LEFT JOIN tariff_profile tp
                 ON tp.id_pk = ms.tariff_profile_fk
@@ -111,18 +117,19 @@ class DeadResultPatient(FilterReportPage):
             LEFT join administrative_area aa2
                 ON aa2.id_pk = aa1.parent_fk
         WHERE mr.is_active
-            AND mr.year = %(year)s
-            AND mr.period = %(period)s
-            AND pe.term_fk IN (1, 2)
-            AND pe.treatment_result_fk IN (5, 6, 15, 16)
-            AND ps.payment_type_fk = 2
-            AND ms.code NOT LIKE 'A%%'
+             AND mr.year = %(year)s
+             AND mr.period = %(period)s
+             AND pe.term_fk IN (1, 2)
+             AND pe.treatment_result_fk IN (5, 6, 15, 16)
+             AND ps.payment_type_fk = 2
+             AND ms.code NOT LIKE 'A%%'
         '''
         return query
 
     def get_dbf_struct(self):
         return {
-            'path': u'c:/work/dead_result_dbf/',
+            'dev_path': DEVELOP_DEAD_PATIENT_DBF,
+            'prod_path': PRODUCTION_DEAD_PATIENT_DBF,
             'order_fields': ('last_name', 'first_name', 'middle_name'),
             'stop_fields': ('department', ),
             'titles': (
@@ -154,7 +161,8 @@ class DeadResultPatient(FilterReportPage):
 
     def get_excel_struct(self):
         return {
-            'path': u'c:/work/dead_result/',
+            'dev_path': DEVELOP_DEAD_PATIENT,
+            'prod_path': PRODUCTION_DEAD_PATIENT,
             'order_fields': ('last_name', 'first_name', 'middle_name'),
             'stop_fields': ('mo_name', ),
             'titles': [
@@ -215,7 +223,7 @@ class DeadResultPatient(FilterReportPage):
         sheet.write(item['basic_disease_code'], 'c')
         sheet.write(item['basic_disease_name'], 'c')
         sheet.write(item['quantity'], 'c')
-        sheet.write(item['accepted'], 'c')
+        sheet.write(item['accepted_payment'], 'c')
         sheet.write(item['tariff'], 'c')
         sheet.write(item['errors'], 'c')
         sheet.write(item['uet'], 'c')

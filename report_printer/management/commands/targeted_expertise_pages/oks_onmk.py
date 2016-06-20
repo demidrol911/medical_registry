@@ -1,6 +1,8 @@
 #! -*- coding: utf-8 -*-
 from report_printer.libs.page import FilterReportPage
 from main.funcs import unicode_to_cp866
+from medical_service_register.path import DEVELOP_OKS_ONMK, DEVELOP_OKS_ONMK_DBF, \
+    PRODUCTION_OKS_ONMK, PRODUCTION_OKS_ONMK_DBF
 
 
 class OksOnmkPage(FilterReportPage):
@@ -105,7 +107,8 @@ class OksOnmkPage(FilterReportPage):
 
     def get_dbf_struct(self):
         return {
-            'path': u'C:/work/OKS_ONMK',
+            'dev_path': DEVELOP_OKS_ONMK_DBF,
+            'prod_path': PRODUCTION_OKS_ONMK_DBF,
             'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate'),
             'stop_fields': ('department', ),
             'titles': (
@@ -138,7 +141,8 @@ class OksOnmkPage(FilterReportPage):
 
     def get_excel_struct(self):
         return {
-            'path': u'C:/work/OKS_ONMK',
+            'dev_path': DEVELOP_OKS_ONMK,
+            'prod_path': PRODUCTION_OKS_ONMK,
             'order_fields': ('department', 'last_name', 'first_name', 'middle_name', 'birthdate'),
             'stop_fields': ('mo_name', ),
             'titles': [

@@ -21,41 +21,44 @@ class TargetedExpertisePage(ReportPage):
             sheet.write_cell(row, 0, mo)
 
             # Умершие
-            item = self.dead_patient_data[(self.dead_patient_data['mo_name'] == mo) &
-                                          (self.dead_patient_data['event_term'] == 1)]
-            if not item.empty:
-                sheet.write_cell(row, 7, item['event_id'])
-            item = self.dead_patient_data[(self.dead_patient_data['mo_name'] == mo) &
-                                          (self.dead_patient_data['event_term'] == 2)]
-            if not item.empty:
-                sheet.write_cell(row, 8, item['event_id'])
+            if self.dead_patient_data and not self.dead_patient_data.empty:
+                item = self.dead_patient_data[(self.dead_patient_data['mo_name'] == mo) &
+                                              (self.dead_patient_data['event_term'] == 1)]
+                if not item.empty:
+                    sheet.write_cell(row, 7, item['event_id'])
+                item = self.dead_patient_data[(self.dead_patient_data['mo_name'] == mo) &
+                                              (self.dead_patient_data['event_term'] == 2)]
+                if not item.empty:
+                    sheet.write_cell(row, 8, item['event_id'])
 
             # Укороченные - удлинённые
-            item = self.overdued_nkd_data[(self.overdued_nkd_data['mo_name'] == mo) &
-                                          (self.overdued_nkd_data['event_term'] == 1)]
-            if not item.empty:
-                sheet.write_cell(row, 5, item['service_id'])
-            item = self.overdued_nkd_data[(self.overdued_nkd_data['mo_name'] == mo) &
-                                          (self.overdued_nkd_data['event_term'] == 2)]
-            if not item.empty:
-                sheet.write_cell(row, 6, item['service_id'])
+            if self.overdued_nkd_data and not self.overdued_nkd_data.empty:
+                item = self.overdued_nkd_data[(self.overdued_nkd_data['mo_name'] == mo) &
+                                              (self.overdued_nkd_data['event_term'] == 1)]
+                if not item.empty:
+                    sheet.write_cell(row, 5, item['service_id'])
+                item = self.overdued_nkd_data[(self.overdued_nkd_data['mo_name'] == mo) &
+                                              (self.overdued_nkd_data['event_term'] == 2)]
+                if not item.empty:
+                    sheet.write_cell(row, 6, item['service_id'])
 
             # Повторные
-            item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
-                                             (self.doubled_disease_data['event_term'] == 1)]
-            if not item.empty:
-                sheet.write_cell(row, 1, item['unique_hash'])
-            item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
-                                             (self.doubled_disease_data['event_term'] == 2)]
-            if not item.empty:
-                sheet.write_cell(row, 2, item['unique_hash'])
+            if self.doubled_disease_data and not self.doubled_disease_data.empty:
+                item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
+                                                 (self.doubled_disease_data['event_term'] == 1)]
+                if not item.empty:
+                    sheet.write_cell(row, 1, item['unique_hash'])
+                item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
+                                                 (self.doubled_disease_data['event_term'] == 2)]
+                if not item.empty:
+                    sheet.write_cell(row, 2, item['unique_hash'])
 
-            item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
-                                             (self.doubled_disease_data['event_term'] == 3)]
-            if not item.empty:
-                sheet.write_cell(row, 3, item['unique_hash'])
+                item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
+                                                 (self.doubled_disease_data['event_term'] == 3)]
+                if not item.empty:
+                    sheet.write_cell(row, 3, item['unique_hash'])
 
-            item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
-                                             (self.doubled_disease_data['event_term'] == 4)]
-            if not item.empty:
-                sheet.write_cell(row, 4, item['unique_hash'])
+                item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
+                                                 (self.doubled_disease_data['event_term'] == 4)]
+                if not item.empty:
+                    sheet.write_cell(row, 4, item['unique_hash'])

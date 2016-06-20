@@ -1,6 +1,8 @@
 #! -*- coding: utf-8 -*-
 from report_printer.libs.page import FilterReportPage
 from main.funcs import unicode_to_cp866
+from medical_service_register.path import DEVELOP_COMPLICATED, DEVELOP_COMPLICATED_DBF, \
+    PRODUCTION_COMPLICATED, PRODUCTION_COMPLICATED_DBF
 
 
 class ComplicatedEvent(FilterReportPage):
@@ -119,7 +121,8 @@ class ComplicatedEvent(FilterReportPage):
 
     def get_dbf_struct(self):
         return {
-            'path': u'C:/work/DIFFICULT_DBF',
+            'dev_path': DEVELOP_COMPLICATED_DBF,
+            'prog_path': PRODUCTION_COMPLICATED_DBF,
             'order_fields': ('last_name', 'first_name', 'middle_name'),
             'stop_fields': ('department', ),
             'titles': (
@@ -152,7 +155,8 @@ class ComplicatedEvent(FilterReportPage):
 
     def get_excel_struct(self):
         return {
-            'path': u'C:/work/DIFFICULT',
+            'dev_path': DEVELOP_COMPLICATED,
+            'prog_path': PRODUCTION_COMPLICATED,
             'order_fields': ('last_name', 'first_name', 'middle_name'),
             'stop_fields': ('mo_name', ),
             'titles': [

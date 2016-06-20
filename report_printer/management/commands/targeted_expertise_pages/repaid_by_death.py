@@ -1,16 +1,21 @@
 #! -*- coding: utf-8 -*-
 from report_printer.libs.page import FilterReportPage
 from main.funcs import unicode_to_cp866
+from medical_service_register.path import DEVELOP_REPAID_BY_DEATH, DEVELOP_REPAID_BY_DEATH_DBF, \
+    PRODUCTION_REPAID_BY_DEATH,  PRODUCTION_REPAID_BY_DEATH_DBF
 
 
 class RepaidByDeath(FilterReportPage):
+    """
+    Выборка умерших застрахованных с услугами, которые им были оказаны за год
+    """
 
     def __init__(self):
         super(RepaidByDeath, self).__init__()
 
     def get_query(self):
         query = '''
-                WITH dates AS (
+            WITH dates AS (
                 select format('%%s-%%s-01', %(year)s, %(period)s)::DATE AS start_date
             )
             select
@@ -129,6 +134,7 @@ class RepaidByDeath(FilterReportPage):
                 ) as T
                       ON T.insurance_policy_id = ip.id
                 where mr.is_active
+                      and pe.term_fk = 3 and (ms.group_fk is null or ms.group_fk = 24)
                       and format('%%s-%%s-01', mr.year, mr.period)::DATE < (select start_date from dates)
                       and format('%%s-%%s-01', mr.year, mr.period)::DATE >= (select start_date from dates) - interval '12 months'
                 '''
@@ -136,7 +142,8 @@ class RepaidByDeath(FilterReportPage):
 
     def get_dbf_struct(self):
         return {
-            'path': u'C:/work/REPAID_BY_DEATH_DBF',
+            'dev_path': DEVELOP_REPAID_BY_DEATH_DBF,
+            'prod_path': PRODUCTION_REPAID_BY_DEATH_DBF,
             'order_fields': ('person_lastname', 'person_firstname', 'person_middlename', 'person_birthdate'),
             'stop_fields': ('department', ),
             'titles': (
@@ -168,7 +175,8 @@ class RepaidByDeath(FilterReportPage):
 
     def get_excel_struct(self):
         return {
-            'path': u'C:/work/REPAID_BY_DEATH',
+            'dev_path': DEVELOP_REPAID_BY_DEATH,
+            'prod_path': PRODUCTION_REPAID_BY_DEATH,
             'order_fields': ('person_lastname', 'person_firstname', 'person_middlename', 'person_birthdate'),
             'stop_fields': ('last_attachment_mo', ),
             'titles': [

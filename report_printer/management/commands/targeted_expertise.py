@@ -40,6 +40,7 @@ class Command(BaseCommand):
         doubled_disease.print_to_excel()
         doubled_disease.print_to_dbf()
 
+        # Отчёт по количеству целевых экспертиз
         parameters = ReportParameters()
         parameters.path_to_dir = REESTR_EXP % (
             parameters.registry_year,

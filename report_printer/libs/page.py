@@ -7,6 +7,7 @@ from django.db import connection
 from main.funcs import dictfetchall
 from dbfpy import dbf
 from pandas import DataFrame
+from medical_service_register.settings import DEVELOP_MODE
 
 
 class ReportPage():
@@ -68,7 +69,7 @@ class FilterReportPage:
                     else:
                         report_name = self.excel_struct['file_pattern'] % \
                            tuple(item[field] for field in self.excel_struct['stop_fields'])
-                    book = ExcelBook(self.excel_struct['path'], report_name.replace('"', '').strip())
+                    book = ExcelBook(self.excel_struct['dev_path'] if DEVELOP_MODE else self.excel_struct['prod_path'], report_name.replace('"', '').strip())
                     book.create_book()
                     sheet = book.get_sheet(0)
                     for field in self.excel_struct['titles'][:-1]:
@@ -97,7 +98,7 @@ class FilterReportPage:
                         db.close()
                     report_name = self.dbf_struct['file_pattern'] % \
                         tuple(item[field] for field in self.dbf_struct['stop_fields'])
-                    db = dbf.Dbf('%s/%s.dbf' % (self.dbf_struct['path'], report_name), new=True)
+                    db = dbf.Dbf('%s/%s.dbf' % (self.dbf_struct['dev_path'] if DEVELOP_MODE else self.dbf_struct['prod_path'], report_name), new=True)
                     db.addField(*self.dbf_struct['titles'])
                 self.print_item_dbf(db, item)
             if db:

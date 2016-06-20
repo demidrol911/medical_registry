@@ -1,9 +1,20 @@
 #! -*- coding: utf-8 -*-
 from report_printer.libs.page import FilterReportPage
 from main.funcs import unicode_to_cp866
+from medical_service_register.path import DEVELOP_REPEATED, DEVELOP_REPEATED_DBF, \
+    PRODUCTION_REPEATED, PRODUCTION_REPEATED_DBF
 
 
 class DoubledDisease(FilterReportPage):
+    """
+    Выборка повторных по поликлинике, стационару, дневному стационару и скорой помощи.
+    Повторными считаются случаи, у которых одинаковый диагноз, федеральный код больницы,
+    условие оказания и код услуги (кроме скорой помощи).
+    Также учитывается разница между датой конца первого случая и датой начала второго случая
+    По стационару и дневному стационару повторными считаются случаи до 90 дней
+    По поликлинике повторными считаются случаи до 30 дней
+    По скорой помощи повторными считаются случаи до 1 дня
+    """
 
     def __init__(self):
         super(DoubledDisease, self).__init__()
@@ -74,7 +85,7 @@ class DoubledDisease(FilterReportPage):
                         or (pe.term_fk = 4 and ps.code_fk = T.code_fk and age(pe.end_date, T.event_end_date) = '0 days')
                         or (pe.term_fk = 4 and T.term_fk = 4 and (age(pe.end_date, T.event_end_date) BETWEEN '0 days' AND '1 days' OR age(T.event_end_date, pe.end_date) BETWEEN '0 days' AND '1 days'))
                         or (pe.term_fk = 3 and ps.code_fk = T.code_fk
-                            and (age(pe.end_date, T.event_start_date) between '1 days' and '29 days' or age(pe.start_date, T.event_end_date) between '1 days' and '29 days'))
+                            and (pe.end_date - T.event_start_date between 1 and 29 or pe.start_date - T.event_end_date between 1 and 29))
                     )
                     and ps.tariff > 0
                     and (pe.term_fk in (1, 2, 4)
@@ -276,7 +287,7 @@ class DoubledDisease(FilterReportPage):
                 on aa2.id_pk = aa1.parent_fk
         WHERE ms.code not like 'A%%'
               AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
-        order by unique_hash, start_date ASC
+        order by unique_hash, event_start_date DESC
         '''
         return query
 
@@ -311,7 +322,8 @@ class DoubledDisease(FilterReportPage):
 
     def get_dbf_struct(self):
         return {
-            'path': u'C:/work/REPEATED_DBF',
+            'dev_path': DEVELOP_REPEATED_DBF,
+            'prod_path': PRODUCTION_REPEATED_DBF,
             'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date'),
             'stop_fields': ('department', 'term_name'),
             'titles': (
@@ -347,7 +359,8 @@ class DoubledDisease(FilterReportPage):
 
     def get_excel_struct(self):
         return {
-            'path': u'C:/work/REPEATED',
+            'dev_path': DEVELOP_REPEATED,
+            'prod_path': PRODUCTION_REPEATED,
             'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date'),
             'stop_fields': ('mo_name', 'term_name'),
             'titles': [

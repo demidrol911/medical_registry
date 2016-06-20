@@ -1,9 +1,16 @@
 #! -*- coding: utf-8 -*-
 from report_printer.libs.page import FilterReportPage
 from main.funcs import unicode_to_cp866
+from medical_service_register.path import DEVELOP_OVERDUED_NKD, DEVELOP_OVERDUED_NKD_DBF, \
+    PRODUCTION_OVERDUED_NKD, PRODUCTION_OVERDUED_NKD_DBF
 
 
 class OverduedNkdHospitalization(FilterReportPage):
+    """
+    Выборка случаев по круглосуточному и дневному стационару,
+    длительнссть которых составляет 50 или 150 процентов
+    от норматива койко-дней
+    """
 
     def __init__(self):
         super(OverduedNkdHospitalization, self).__init__()
@@ -146,7 +153,8 @@ class OverduedNkdHospitalization(FilterReportPage):
 
     def get_dbf_struct(self):
         return {
-            'path': u'C:/work/OVERDUED_NKD_DBF',
+            'dev_path': DEVELOP_OVERDUED_NKD_DBF,
+            'prod_path': PRODUCTION_OVERDUED_NKD_DBF,
             'order_fields': ('term_name', 'last_name', 'first_name', 'middle_name'),
             'stop_fields': ('department', ),
             'titles': (
@@ -173,13 +181,15 @@ class OverduedNkdHospitalization(FilterReportPage):
                 ("EMPL_NUM", "C", 16),
                 ("HOSP_TYPE", "N", 2),
                 ("OUTCOME", "C", 3),
+                ("IDSERV", "C", 16),
             ),
             'file_pattern': 't%s'
             }
 
     def get_excel_struct(self):
         return {
-            'path': u'C:/work/OVERDUED_NKD',
+            'dev_path': DEVELOP_OVERDUED_NKD,
+            'prod_path': PRODUCTION_OVERDUED_NKD,
             'order_fields': ('last_name', 'first_name', 'middle_name'),
             'stop_fields': ('mo_name', 'term_name'),
             'titles': [
@@ -224,6 +234,7 @@ class OverduedNkdHospitalization(FilterReportPage):
         new["OUTCOME"] = item['outcome_code'] or ''
         new["HOSP_TYPE"] = item['hospitalization_code'] or 0
         new["EMPL_NUM"] = unicode_to_cp866(item['worker_code'] or '')
+        new["IDSERV"] = item['service_id']
         new.store()
 
     def print_item_excel(self, sheet, item):
