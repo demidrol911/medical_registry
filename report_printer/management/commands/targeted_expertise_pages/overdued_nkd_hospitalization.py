@@ -20,28 +20,47 @@ class OverduedNkdHospitalization(FilterReportPage):
         select *,
             case when nkd <= 1 then 100
             else round(T.c_quantity / T.nkd * 100, 0)
-            END
+            END AS percent
         from (
             select DISTINCT
-                COALESCE(
-                        (
-                            select tariff_nkd.value
-                            from tariff_nkd
-                            where start_date = (
-                                select max(start_date)
-                                from tariff_nkd
-                                where start_date <= greatest('2016-01-01'::DATE, ps.end_date)
-                                    and start_date >= '2016-01-01'::DATE
-                                    and profile_fk = ms.tariff_profile_fk
-                                    and is_children_profile = ps.is_children_profile
-                                    and "level" = dep.level
-                            ) and profile_fk = ms.tariff_profile_fk
-                                and is_children_profile = ps.is_children_profile
-                                and (( pe.term_fk = 1 and "level" = dep.level)
-                                    or (pe.term_fk = 2)
-                                )
-                            order by start_date DESC
-                            limit 1
+                COALESCE((
+                    CASE WHEN ms.group_fk in (1, 2)
+                              or ms.code in ('098995', '098996', '098997',
+                                  '198995', '198996', '198997', '098606',
+                                  '098607', '098608', '098609', '198611',
+                                  '198612', '198613', '198614', '198615',
+                                  '198616', '198617')
+                            THEN (select tariff_nkd_ksg.value
+                                  FROM tariff_nkd_ksg
+                                  WHERE tariff_nkd_ksg.level = dep.level
+                                        AND tariff_nkd_ksg.ksg_fk = ksg.id_pk
+                                        AND tariff_nkd_ksg.start_date= GREATEST(
+                                        (select max(start_date)
+                                         from tariff_nkd_ksg
+                                         where start_date <= ps.end_date
+                                             and "level" = dep.level
+                                             AND ksg_fk = ksg.id_pk
+                                         ),
+                                  '2016-05-01'::DATE))
+                    ELSE (
+                        select tariff_nkd.value
+                        from tariff_nkd
+                        where start_date = (
+                        select max(start_date)
+                        from tariff_nkd
+                        where start_date <= greatest('2016-01-01'::DATE, ps.end_date)
+                            and start_date >= '2016-01-01'::DATE
+                            and profile_fk = ms.tariff_profile_fk
+                            and is_children_profile = ps.is_children_profile
+                            and "level" = dep.level
+                        ) and profile_fk = ms.tariff_profile_fk
+                        and is_children_profile = ps.is_children_profile
+                        and (( pe.term_fk = 1 and "level" = dep.level)
+                            or (pe.term_fk = 2)
+                        )
+                        order by start_date DESC
+                        limit 1)
+                        END
                         ), 1
                 ) as nkd,
                 mo.name AS mo_name,
@@ -130,6 +149,10 @@ class OverduedNkdHospitalization(FilterReportPage):
                     on aa1.id_pk = aa.parent_fk
                 LEFT join administrative_area aa2
                     on aa2.id_pk = aa1.parent_fk
+                LEFT JOIN ksg
+                    ON ksg.code::VARCHAR = pe.ksg_smo
+                       AND ksg.start_date = '2016-01-01'
+                       AND ksg.term_fk = pe.term_fk
             where mr.is_active
                 and mr.year = %(year)s
                 and mr.period = %(period)s
@@ -253,4 +276,4 @@ class OverduedNkdHospitalization(FilterReportPage):
         sheet.write(item['end_date'].strftime('%d.%m.%Y'), 'c')
         sheet.write(item['nkd'], 'c')
         sheet.write(item['quantity'], 'c')
-        sheet.write(item['event_mo_id'], 'r')
+        sheet.write(item['percent'], 'r')

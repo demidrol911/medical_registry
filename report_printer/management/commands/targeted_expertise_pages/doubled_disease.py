@@ -80,12 +80,10 @@ class DoubledDisease(FilterReportPage):
                     and mr.period = %(period)s
                     AND ps.payment_type_fk = 2
                     AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
-                    and (( pe.term_fk in (1, 2) and ps.code_fk = T.code_fk
-                          and (pe.end_date - event_start_date between 0 and 89 or pe.end_date - T.event_end_date between 0 and 89 or pe.start_date - T.event_start_date between 0 and 89 or pe.start_date - T.event_end_date  between 0 and 89))
+                    and (( pe.term_fk in (1, 2) and ps.code_fk = T.code_fk and abs(pe.start_date - T.event_end_date) between 0 and 89)
                         or (pe.term_fk = 4 and ps.code_fk = T.code_fk and age(pe.end_date, T.event_end_date) = '0 days')
                         or (pe.term_fk = 4 and T.term_fk = 4 and (age(pe.end_date, T.event_end_date) BETWEEN '0 days' AND '1 days' OR age(T.event_end_date, pe.end_date) BETWEEN '0 days' AND '1 days'))
-                        or (pe.term_fk = 3 and ps.code_fk = T.code_fk
-                            and (pe.end_date - T.event_start_date between 1 and 29 or pe.start_date - T.event_end_date between 1 and 29))
+                        or (pe.term_fk = 3 and ps.code_fk = T.code_fk and abs(pe.start_date - T.event_end_date) between 1 and 29)
                     )
                     and ps.tariff > 0
                     and (pe.term_fk in (1, 2, 4)

@@ -21,7 +21,7 @@ class TargetedExpertisePage(ReportPage):
             sheet.write_cell(row, 0, mo)
 
             # Умершие
-            if self.dead_patient_data and not self.dead_patient_data.empty:
+            if self.dead_patient_data:
                 item = self.dead_patient_data[(self.dead_patient_data['mo_name'] == mo) &
                                               (self.dead_patient_data['event_term'] == 1)]
                 if not item.empty:
@@ -32,7 +32,7 @@ class TargetedExpertisePage(ReportPage):
                     sheet.write_cell(row, 8, item['event_id'])
 
             # Укороченные - удлинённые
-            if self.overdued_nkd_data and not self.overdued_nkd_data.empty:
+            if self.overdued_nkd_data:
                 item = self.overdued_nkd_data[(self.overdued_nkd_data['mo_name'] == mo) &
                                               (self.overdued_nkd_data['event_term'] == 1)]
                 if not item.empty:
@@ -43,7 +43,7 @@ class TargetedExpertisePage(ReportPage):
                     sheet.write_cell(row, 6, item['service_id'])
 
             # Повторные
-            if self.doubled_disease_data and not self.doubled_disease_data.empty:
+            if self.doubled_disease_data:
                 item = self.doubled_disease_data[(self.doubled_disease_data['mo_name'] == mo) &
                                                  (self.doubled_disease_data['event_term'] == 1)]
                 if not item.empty:

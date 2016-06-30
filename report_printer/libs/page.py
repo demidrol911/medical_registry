@@ -8,6 +8,7 @@ from main.funcs import dictfetchall
 from dbfpy import dbf
 from pandas import DataFrame
 from medical_service_register.settings import DEVELOP_MODE
+import os
 
 
 class ReportPage():
@@ -54,6 +55,9 @@ class FilterReportPage:
             self.current_value_stop_fields_excel = {field: None for field in self.excel_struct['stop_fields']}
             book = None
             excel_data = self.data.sort(list(self.excel_struct['stop_fields'] + self.excel_struct['order_fields']))
+            excel_path = self.excel_struct['dev_path'] if DEVELOP_MODE else self.excel_struct['prod_path']
+            if not os.path.exists(excel_path):
+                os.makedirs(excel_path)
             for idx, i in enumerate(excel_data.index):
                 item = excel_data.loc[i]
                 stop = (printing_into_one_file and idx == 0) or False
@@ -86,6 +90,9 @@ class FilterReportPage:
             self.current_value_stop_fields_dbf = {field: None for field in self.dbf_struct['stop_fields']}
             db = None
             dbf_data = self.data.sort(list(self.dbf_struct['stop_fields'] + self.dbf_struct['order_fields']))
+            dbf_path = self.dbf_struct['dev_path'] if DEVELOP_MODE else self.dbf_struct['prod_path']
+            if not os.path.exists(dbf_path):
+                os.makedirs(dbf_path)
             for i in dbf_data.index:
                 item = dbf_data.loc[i]
                 stop = False
