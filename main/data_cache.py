@@ -9,7 +9,7 @@ from main.models import (
     MedicalServiceProfile, TreatmentResult, TreatmentOutcome, Special,
     MedicalWorkerSpeciality, PaymentMethod, PaymentType, PaymentFailureCause,
     Gender, InsurancePolicyType, MedicalHospitalization, MedicalService,
-    MedicalServiceHiTechKind, MedicalServiceHiTechMethod, ExaminationResult)
+    MedicalServiceHiTechKind, MedicalServiceHiTechMethod, ExaminationResult, KSG)
 
 
 GENDERS = queryset_to_dict(Gender.objects.all())
@@ -37,9 +37,11 @@ DIVISIONS = queryset_to_dict(MedicalDivision.objects.all())
 SPECIALS = queryset_to_dict(Special.objects.all())
 CODES = queryset_to_dict(MedicalService.objects.all())
 PERSON_ID_TYPES = queryset_to_dict(PersonIDType.objects.all())
-HITECH_KINDS = queryset_to_dict(MedicalServiceHiTechKind.objects.all())
-HITECH_METHODS = queryset_to_dict(MedicalServiceHiTechMethod.objects.all())
+HITECH_KINDS = queryset_to_dict(MedicalServiceHiTechKind.objects.filter(is_active=True))
+HITECH_METHODS = queryset_to_dict(MedicalServiceHiTechMethod.objects.filter(is_active=True))
 EXAMINATION_RESULTS = queryset_to_dict(ExaminationResult.objects.all())
+HOSPITAL_KSGS = queryset_to_dict(KSG.objects.filter(start_date='2016-01-01', term=1))
+DAY_HOSPITAL_KSGS = queryset_to_dict(KSG.objects.filter(start_date='2016-01-01', term=2))
 
 KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
                   '2': ['1', '2', '3', '21', '22', '31', '32', '4'],
@@ -51,8 +53,8 @@ EXAMINATION_HEALTH_GROUP_EQUALITY = {
     '1': '1',
     '2': '2',
     '3': '3',
-    '4':'4',
-    '5':'5',
+    '4': '4',
+    '5': '5',
     '11': '1',
     '12': '2',
     '13': '3',

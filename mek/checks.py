@@ -41,7 +41,7 @@ def underpay_repeated_service(register_element):
             ps.event_fk as event_id,
 
             rank() over (PARTITION BY i.id, ps.code_fk, ps.end_date, ps.start_date,
-            ps.basic_disease_fk, ps.worker_code, p.newborn_code order by format('%%s-%%s-01', mr.year, mr.period)::DATE) as rnum_repeated,
+            COALESCE(ps.basic_disease_fk, ''), ps.worker_code, p.newborn_code order by format('%%s-%%s-01', mr.year, mr.period)::DATE) as rnum_repeated,
 
             format('%%s-%%s-01', mr.year, mr.period)::DATE as checking_period
         from provided_service ps
@@ -1970,22 +1970,23 @@ def check_rsc_pso_ksg(register_element):
                                    WHEN ms1.tariff_profile_fk in (299, 292) THEN '89'
                                    WHEN ms1.tariff_profile_fk in (300, 293) THEN '90'
                                    WHEN ms1.tariff_profile_fk in (301, 294) THEN '91'
-                                   WHEN ms1.code in ('098995') THEN '180'
-                                        ms1.code in ('098996') THEN '181'
-                                        ms1.code in ('098997') THEN '182'
-                                        ms1.code in ('098606') THEN '300'
-                                        ms1.code in ('098607') THEN '301'
-                                        ms1.code in ('098608', '198611') THEN '302'
-                                        ms1.code in ('198613') THEN '303'
-                                        ms1.code in ('098609', '198612') THEN '304'
-                                        ms1.code in ('198614') THEN '305'
-                                        ms1.code in ('198615') THEN '306'
-                                        ms1.code in ('198616') THEN '307'
-                                        ms1.code in ('198617') THEN '308'
+                                   WHEN ms1.code in ('098995', '198995') THEN '180'
+                                   WHEN ms1.code in ('098996', '198996') THEN '181'
+                                   WHEN ms1.code in ('098997', '198997') THEN '182'
+                                   WHEN ms1.code in ('098606') THEN '300'
+                                   WHEN ms1.code in ('098607') THEN '301'
+                                   WHEN ms1.code in ('098608', '198611') THEN '302'
+                                   WHEN ms1.code in ('198613') THEN '303'
+                                   WHEN ms1.code in ('098609', '198612') THEN '304'
+                                   WHEN ms1.code in ('198614') THEN '305'
+                                   WHEN ms1.code in ('198615') THEN '306'
+                                   WHEN ms1.code in ('198616') THEN '307'
+                                   WHEN ms1.code in ('198617') THEN '308'
                               ELSE NULL END AS prof_ksg
             from medical_service ms1
             where ms1.group_fk IN (1, 2)
-                  or ms1.code in ('098995', '098996', '098997', '098606',
+                  or ms1.code in ('098995', '098996', '098997',
+                                  '198995', '198996', '198997', '098606',
                                   '098607', '098608', '098609', '198611',
                                   '198612', '198613', '198614', '198615',
                                   '198616', '198617')
@@ -2009,7 +2010,8 @@ def check_rsc_pso_ksg(register_element):
                         and mr.period = %s
                         and mr.organization_code = %s
                         and ( ms.group_fk in (1, 2)
-                              or ms.code in ('098995', '098996', '098997', '098606',
+                              or ms.code in ('098995', '098996', '098997',
+                                             '198995', '198996', '198997', '098606',
                                              '098607', '098608', '098609', '198611',
                                              '198612', '198613', '198614', '198615',
                                              '198616', '198617')

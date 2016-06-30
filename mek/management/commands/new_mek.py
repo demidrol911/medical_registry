@@ -47,247 +47,289 @@ def get_services(register_element):
     """
 
     query = """
-    select DISTINCT provided_service.id_pk,
-        provided_service.tariff,
-        provided_service.quantity,
-        provided_service.payment_type_fk as payment_type_code,
-        provided_service.start_date,
-        provided_service.end_date,
-        department.level AS department_level,
-        medical_service.code as service_code,
-        (
-            select min(ps2.start_date)
-            from provided_service ps2
-            where ps2.event_fk = provided_event.id_pk
-        ) as event_start_date,
-        case
-        WHEN (
-                select count(ps2.id_pk)
-                from provided_service ps2
-                    join medical_service ms2
-                        on ms2.id_pk = ps2.code_fk
-                where ps2.event_fk = provided_event.id_pk
-                   and (ms2.group_fk NOT IN (27, 3, 5, 42) or ms2.group_fk is null)
-            ) = 1
-            and medical_service.reason_fk = 1
-            and provided_event.term_fk=3
-            and (medical_service.group_fk = 24 or medical_service.group_fk is NULL)
-        THEN tariff_basic.capitation
-        WHEN -- тарифы по неотложной скорой во внерабочее время запишем в capitation
-             medical_service.group_fk = 19 AND
-            (
-                select count(inner_ps.id_pk)
-                from provided_service inner_ps
-                    join medical_service inner_ms
-                        on inner_ps.code_fk = inner_ms.id_pk
-                where inner_ps.event_fk = provided_event.id_pk
-                    and inner_ms.group_fk = 19 and inner_ms.subgroup_fk = 17
-                    and inner_ps.end_date = provided_service.end_date
-            ) >= 1 THEN COALESCE(medical_service.uet, 0)*tariff_basic.capitation
-        when medical_service.group_fk = 19
-            THEN COALESCE(medical_service.uet, 0)*tariff_basic.value
-        ELSE
-            tariff_basic.value
-        END as expected_tariff,
-        provided_event.term_fk as service_term,
-        medical_service.examination_special as service_examination_special,
-        medical_service.group_fk as service_group,
-        medical_service.subgroup_fk as service_subgroup,
-        medical_service.examination_group as service_examination_group,
-        medical_service.tariff_profile_fk as service_tariff_profile,
-        medical_service.reason_fk as reason_code,
-        medical_service.vmp_group,
-        department.regional_coefficient :: VARCHAR AS regional_coefficient,
-        provided_event.examination_result_fk as examination_result,
-        provided_event.ksg_smo AS ksg_smo,
-        COALESCE(
-                (
-                    select tariff_nkd.value
-                    from tariff_nkd
-                    where start_date = (
-                        select max(start_date)
-                        from tariff_nkd
-                        where start_date <= greatest('2016-01-01'::DATE, provided_service.end_date) and start_date >= '2016-01-01'::DATE
-                            and profile_fk = medical_service.tariff_profile_fk
-                            and is_children_profile = provided_service.is_children_profile
-                            and "level" = (CASE WHEN medical_register.organization_code = '280112'
-                                                     AND provided_event.term_fk = 1
-                                                  THEN 1
-                                                WHEN medical_register.organization_code = '280091'
-                                                     AND provided_event.term_fk = 1
-                                                  THEN 2
-                                                WHEN medical_register.organization_code = '280026'
-                                                     AND provided_event.term_fk = 1
-                                              THEN 3
-                                                WHEN medical_register.organization_code = '280036'
-                                                     AND provided_service.comment = '100000'
-                                                  THEN 2
-                                                ELSE department.level END)
-                    ) and profile_fk = medical_service.tariff_profile_fk
-                        and is_children_profile = provided_service.is_children_profile
-                        and "level" = (CASE WHEN medical_register.organization_code = '280112'
-                                                 AND provided_event.term_fk = 1
-                                              THEN 1
-                                            WHEN medical_register.organization_code = '280091'
-                                                 AND provided_event.term_fk = 1
-                                              THEN 2
-                                            WHEN medical_register.organization_code = '280026'
-                                                 AND provided_event.term_fk = 1
-                                              THEN 3
-                                            WHEN medical_register.organization_code = '280036'
-                                                 AND provided_service.comment = '100000'
-                                              THEN 2
-                                            ELSE department.level END
-                                        )
-                    order by start_date DESC
-                    limit 1
-                ), 1
-        ) as nkd,
-        -- стационар 7) оплата в травматологических центрах
-        case when medical_service.tariff_profile_fk IN (12, 13) and medical_register.organization_code in ('280068', '280012', '280059')
-        THEN (
-                case when medical_organization.regional_coefficient = 1.6 then 34661
-                when medical_organization.regional_coefficient = 1.7 then 36827
-                WHEN medical_organization.regional_coefficient = 1.8 THEN 38994
-                END
-        ) else 0 end as alternate_tariff,
-        medical_organization.is_agma_cathedra,
+            with services AS (
+                select DISTINCT
 
-        -- Эндоскопия относится по круг стационару к первому уровню, а по дневному стационару ко 2 уровню
-        -- ГП1 без эндоскопии 1 уровень, ГП1 с эндоскопией 2 уровень.
-        -- Подобная структура используется ниже для выбора нкд и тарифов
-        (CASE WHEN medical_register.organization_code = '280112' AND provided_event.term_fk = 1
-                THEN 1
-              WHEN medical_register.organization_code = '280091' AND provided_event.term_fk = 1
-                THEN 2
-              WHEN medical_register.organization_code = '280026' AND provided_event.term_fk = 1
-                THEN 3
-              WHEN medical_register.organization_code = '280036' AND provided_service.comment = '100000'
-                THEN 2
-              ELSE medical_organization.level
-        END) as level,
+                        provided_service.id_pk,
+                        provided_service.code_fk,
+                        provided_service.tariff,
+                        provided_service.quantity,
+                        provided_service.is_children_profile,
+                        provided_service.payment_type_fk as payment_type_code,
+                        provided_service.start_date,
+                        provided_service.end_date,
+                        provided_service.event_fk,
 
-        patient.insurance_policy_fk as patient_policy,
-        patient.birthdate as patient_birthdate,
-        person.deathdate as person_deathdate,
-        insurance_policy.stop_date as policy_stop_date,
-        operation.reason_stop_fk as stop_reason,
-        insurance_policy.type_fk as policy_type,
-        medical_register.organization_code,
-        provided_event.comment as event_comment,
-        provided_service.comment as service_comment,
-        medical_register_record.is_corrected as record_is_corrected,
-        CASE WHEN provided_service.end_date < (select ps1.end_date from provided_service ps1
-                                               where ps1.event_fk = provided_event.id_pk and ps1.code_fk = 8347)
-               THEN 0
-             ELSE examination_tariff.value
-        END as examination_tariff,
-        medical_register.type as register_type,
-        COALESCE(
-            (
-                select "value"
-                from hitech_service_nkd
-                where start_date = (select max(start_date) from hitech_service_nkd where start_date <= provided_service.end_date)
-                    and vmp_group = medical_service.vmp_group
-                order by start_date DESC
-                limit 1
-            ), 1
-        ) as vmp_nkd,
-        provided_event.end_date as event_end_date
+                        provided_event.term_fk as service_term,
 
-    from
-        provided_service
-        join provided_event
-            on provided_event.id_pk = provided_service.event_fk
-        join medical_register_record
-            on medical_register_record.id_pk = provided_event.record_fk
-        join patient
-            on patient.id_pk = medical_register_record.patient_fk
-        left join insurance_policy
-            on patient.insurance_policy_fk = insurance_policy.version_id_pk
-        left join person
-            on person.version_id_pk = insurance_policy.person_fk
-        left join operation
-            on operation.insurance_policy_fk = insurance_policy.version_id_pk
+                        department.regional_coefficient  AS regional_coefficient,
+                        provided_event.examination_result_fk as examination_result,
+                        provided_event.ksg_smo AS ksg_smo,
+
+                        patient.insurance_policy_fk as patient_policy,
+                        patient.birthdate as patient_birthdate,
+                        patient.gender_fk AS patient_gender,
+
+                        medical_register.organization_code,
+                        provided_event.comment as event_comment,
+                        provided_service.comment as service_comment,
+                        medical_register_record.is_corrected as record_is_corrected,
+
+                        medical_register.type as register_type,
+
+                        provided_event.end_date as event_end_date,
+
+                        -- Исключение для эндоскопической хирургии в ГП1
+                    CASE WHEN medical_register.organization_code = '280036'
+                              AND provided_service.comment = '100000' THEN 2
+                         -- Исключение для женских консультаций 1 и 2 и травматологии ГКБ
+                         WHEN department.old_code in ('0121001', '0121002', '0301010')
+                              and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null) THEN 2
+                         WHEN provided_event.term_fk = 1 THEN department.level
+                         WHEN provided_event.term_fk = 2 THEN department.day_hospital_level
+                         ELSE department.level
+                         END AS department_level,
+
+                    CASE WHEN medical_register.organization_code = '280036'
+                              AND provided_service.comment = '100000' THEN 2
+                         -- Исключение для женских консультаций 1 и 2 и травматологии ГКБ
+                         WHEN department.old_code in ('0121001', '0121002', '0301010')
+                              and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null) THEN 2
+                         WHEN provided_event.term_fk = 1 THEN medical_organization.level
+                         WHEN provided_event.term_fk = 2 THEN medical_organization.day_hospital_level
+                         ELSE medical_organization.level
+                         END AS organization_level,
+
+                        -- Исключение для эндоскопической хирургии в ГП1
+                    case WHEN medical_register.organization_code = '280036'
+                              AND provided_service.comment = '100000' THEN 19
+                         -- Исключение для женских консультаций 1 и 2 и травматологии ГКБ
+                         WHEN department.old_code in ('0121001', '0121002', '0301010')
+                              and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null) THEN 19
+                         WHEN provided_event.term_fk = 1 THEN department.tariff_group_fk
+                         WHEN provided_event.term_fk = 2 THEN department.alternate_tariff_group_fk
+                         ELSE department.tariff_group_fk
+                         END AS department_tariff_group,
+
+                    provided_event.ksg_smo in (
+                         '66', '67', '68', '87', '88', '89', '90', '91', '180', '181',
+                         '182', '300', '301', '302', '303', '304', '305', '306',
+                         '307', '308'
+                    ) and
+                    ( ms.group_fk in (1, 2)
+                      or ms.code in ('098995', '098996', '098997', '098606',
+                                     '098607', '098608', '098609', '198611',
+                                     '198612', '198613', '198614', '198615',
+                                     '198995', '198996', '198997',
+                                     '198616', '198617')
+                    ) AS is_payment_by_ksg
+
+                from provided_service
+                join provided_event
+                    on provided_event.id_pk = provided_service.event_fk
+                join medical_register_record
+                    on medical_register_record.id_pk = provided_event.record_fk
+                join patient
+                    on patient.id_pk = medical_register_record.patient_fk
+                join medical_register
+                    on medical_register_record.register_fk = medical_register.id_pk
+                JOIN medical_organization department
+                            on department.id_pk = provided_service.department_fk
+                join medical_organization ON
+                    medical_organization.id_pk = provided_service.organization_fk
+                join medical_service ms ON ms.id_pk = provided_service.code_fk
+                where medical_register.is_active
+                    and medical_register.year = %(year)s
+                    and medical_register.period = %(period)s
+                    and medical_register.organization_code = %(organization_code)s
+            )
+            select
+                services.id_pk,
+                medical_service.code as service_code,
+                medical_service.name AS service_name,
+                medical_service.examination_special as service_examination_special,
+                medical_service.group_fk as service_group,
+                medical_service.subgroup_fk as service_subgroup,
+                medical_service.examination_group as service_examination_group,
+                medical_service.tariff_profile_fk as service_tariff_profile,
+                medical_service.reason_fk as reason_code,
+                medical_service.vmp_group,
+
+                person.deathdate as person_deathdate,
+                insurance_policy.stop_date as policy_stop_date,
+                operation.reason_stop_fk as stop_reason,
+                insurance_policy.type_fk as policy_type,
+                services.*,
+
+                CASE -- тарифы рассчитываются по КСГ
+                    WHEN services.is_payment_by_ksg THEN tariff_ksg.value
+
+                    -- тарифы на разовое посещение по поликлинике
+                    WHEN (
+                            select count(ps2.id_pk)
+                            from provided_service ps2
+                                join medical_service ms2
+                                    on ms2.id_pk = ps2.code_fk
+                            where ps2.event_fk = services.event_fk
+                               and (ms2.group_fk NOT IN (27, 3, 5, 42) or ms2.group_fk is null)
+                        ) = 1
+                        and medical_service.reason_fk = 1
+                        and services.service_term =3
+                        and (medical_service.group_fk = 24 or medical_service.group_fk is NULL)
+                    THEN tariff_basic.capitation
+
+                    -- тарифы по неотложной скорой помощи по стоматологии во внерабочее время
+                    WHEN
+                         medical_service.group_fk = 19 AND
+                        (
+                            select count(inner_ps.id_pk)
+                            from provided_service inner_ps
+                                join medical_service inner_ms
+                                    on inner_ps.code_fk = inner_ms.id_pk
+                            where inner_ps.event_fk = services.event_fk
+                                and inner_ms.group_fk = 19 and inner_ms.subgroup_fk = 17
+                                and inner_ps.end_date = services.end_date
+                        ) >= 1 THEN COALESCE(medical_service.uet, 0)*tariff_basic.capitation
+
+                    -- тарифы по стоматологии
+                    WHEN medical_service.group_fk = 19
+                        THEN COALESCE(medical_service.uet, 0)*tariff_basic.value
+                    -- тарифы по диспансеризации взрослых
+                    WHEN medical_service.group_fk = 7
+                        THEN (CASE WHEN services.end_date < (
+                                      select ps1.end_date from provided_service ps1
+                                      where ps1.event_fk = services.event_fk and ps1.code_fk = 8347) THEN 0
+                               ELSE examination_tariff.value
+                               END)
+
+                    -- стационар 7) оплата в травматологических центрах
+                    WHEN medical_service.tariff_profile_fk IN (12, 13) and services.organization_code in ('280068', '280012', '280059')
+                         THEN (
+                             case when services.regional_coefficient = 1.6 then 34661
+                             when services.regional_coefficient = 1.7 then 36827
+                             WHEN services.regional_coefficient = 1.8 THEN 38994
+                             END
+                         )
+
+                    -- тариф по умолчанию
+                    ELSE tariff_basic.value
+                END as expected_tariff,
+
+                CASE WHEN services.service_comment = '000000001'
+                       THEN (SELECT tariff_ksg.value
+                             FROM tariff_ksg
+                             WHERE tariff_ksg.regional_coefficient = services.regional_coefficient
+                                 AND tariff_ksg.level = services.department_level
+                                 AND tariff_ksg.ksg_fk = 326
+                             AND tariff_ksg.start_date= GREATEST(
+                                 (SELECT max(start_date)
+                                 FROM tariff_ksg
+                                 WHERE start_date <= services.end_date
+                                    AND "level" = services.department_level
+                                    AND ksg_fk = 326
+                                 ), '2016-05-01'::DATE)) * 0.6
+                END AS trombolitic_therapy_tariff,
+
+                COALESCE (CASE WHEN services.is_payment_by_ksg THEN tariff_nkd_ksg.value
+                               WHEN medical_service.group_fk = 20 THEN hitech_service_nkd.value
+                          ELSE tariff_nkd.value
+                          END, 1) AS nkd
+
+            FROM services
+            join medical_service ON medical_service.id_pk = services.code_fk
+            left join insurance_policy
+                on services.patient_policy = insurance_policy.version_id_pk
+            left join person
+                on person.version_id_pk = insurance_policy.person_fk
+            left join operation
+                on operation.insurance_policy_fk = insurance_policy.version_id_pk
                 and operation.id_pk = (
                     select op.id_pk
                     from operation op
-                        join operation_status os
-                            on op.id_pk = os.operation_fk
+                    join operation_status os
+                        on op.id_pk = os.operation_fk
                     where op.insurance_policy_fk = insurance_policy.version_id_pk
-                        and os.timestamp = (
-                            select min(timestamp)
-                            from operation_status
-                            where operation_status.operation_fk = op.id_pk)
+                    and os.timestamp = (
+                        select min(timestamp)
+                        from operation_status
+                        where operation_status.operation_fk = op.id_pk)
                     order by timestamp desc limit 1)
-        join medical_register
-            on medical_register_record.register_fk = medical_register.id_pk
-        JOIN medical_service
-            on medical_service.id_pk = provided_service.code_fk
-        join medical_organization
-            on medical_organization.code = medical_register.organization_code
-                and medical_organization.parent_fk is null
-        JOIN medical_organization department
-            on department.id_pk = provided_service.department_fk
-        LEFT join tariff_basic
-            on tariff_basic.service_fk = provided_service.code_fk
-                and tariff_basic.group_fk = (CASE WHEN medical_register.organization_code = '280112'
-                                                       AND provided_event.term_fk = 1
-                                                    THEN  21
-                                                  WHEN medical_register.organization_code = '280091'
-                                                       AND provided_event.term_fk = 1
-                                                    THEN 19
-                                                  WHEN medical_register.organization_code = '280026'
-                                                       AND provided_event.term_fk = 1
-                                                    THEN 17
-                                                  WHEN medical_register.organization_code = '280036'
-                                                       AND provided_service.comment = '100000'
-                                                    THEN 19
-                                                  ELSE department.tariff_group_fk
-                                              END)
-                and tariff_basic.start_date =
-                GREATEST(
-                    (select max(start_date)
-                     from tariff_basic
-                     where start_date <= provided_service.end_date
-                     and group_fk = (CASE WHEN medical_register.organization_code = '280112'
-                                               AND provided_event.term_fk = 1
-                                            THEN  21
-                                          WHEN medical_register.organization_code = '280091'
-                                               AND provided_event.term_fk = 1
-                                            THEN 19
-                                          WHEN medical_register.organization_code = '280026'
-                                               AND provided_event.term_fk = 1
-                                            THEN 17
-                                          WHEN medical_register.organization_code = '280036'
-                                               AND provided_service.comment = '100000'
-                                            THEN 19
-                                          ELSE department.tariff_group_fk
-                                     END)
-                     and service_fk = provided_service.code_fk), '2016-01-01'::DATE)
 
-        LEFT JOIN examination_tariff
-            on medical_register.type = 3
-                and examination_tariff.service_fk = provided_service.code_fk
-                and examination_tariff.age = EXTRACT(year from provided_event.end_date) - extract(year from patient.birthdate)
-                and examination_tariff.gender_fk = patient.gender_fk
-                and examination_tariff.regional_coefficient = medical_organization.regional_coefficient
-                and examination_tariff.start_date =
+            -- Основной тариф
+            LEFT JOIN tariff_basic
+                on tariff_basic.service_fk = services.code_fk
+                and tariff_basic.group_fk = services.department_tariff_group
+                and tariff_basic.start_date =
                     GREATEST(
                         (select max(start_date)
-                         from examination_tariff
-                         where start_date <= provided_event.end_date
-                         and service_fk = provided_service.code_fk),
-                         '2016-01-01'
-                    )
-    where medical_register.is_active
-        and medical_register.year = %(year)s
-        and medical_register.period = %(period)s
-        and medical_register.organization_code = %(organization_code)s
-    """
+                         from tariff_basic
+                         where start_date <= services.end_date
+                         and group_fk =services.department_tariff_group
+                     and service_fk = services.code_fk), '2016-01-01'::DATE)
 
-    if register_element['status'] in (5, 500):
-        query += ' and provided_service.payment_type_fk is NULL'
+            -- Тариф по диспансеризации взрослых (исключение)
+            LEFT JOIN examination_tariff
+                on services.register_type = 3
+                    and examination_tariff.service_fk = services.code_fk
+                    and examination_tariff.age = EXTRACT(year from services.event_end_date) - extract(year from services.patient_birthdate)
+                    and examination_tariff.gender_fk = services.patient_gender
+                    and examination_tariff.regional_coefficient = services.regional_coefficient
+                    and examination_tariff.start_date =
+                        GREATEST((select max(start_date)
+                                  from examination_tariff
+                                  where start_date <= services.event_end_date
+                                  and service_fk = services.code_fk),
+                        '2016-01-01')
+
+            LEFT JOIN ksg ON ksg.code::VARCHAR = services.ksg_smo AND ksg.start_date = '2016-01-01'
+                AND ksg.term_fk = services.service_term
+
+            -- Тариф для услуг рассчитываемых по КСГ (исключение)
+            lEFT JOIN tariff_ksg
+                ON tariff_ksg.regional_coefficient = services.regional_coefficient
+                    AND tariff_ksg.level = services.department_level
+                    AND tariff_ksg.ksg_fk = ksg.id_pk
+                    AND tariff_ksg.start_date=
+                    GREATEST((select max(start_date)
+                              from tariff_ksg
+                              where start_date <= services.end_date
+                              and "level" = services.department_level
+                              AND ksg_fk = ksg.id_pk),
+                    '2016-05-01'::DATE)
+
+            -- Основной нкд
+            left JOIN tariff_nkd
+                ON tariff_nkd.profile_fk = medical_service.tariff_profile_fk
+                    and tariff_nkd.is_children_profile = services.is_children_profile
+                    and tariff_nkd."level" = services.department_level
+                    and tariff_nkd.start_date = (
+                           select max(start_date)
+                           from tariff_nkd
+                           where start_date <= greatest('2016-01-01'::DATE, services.end_date) and start_date >= '2016-01-01'::DATE
+                               and profile_fk = medical_service.tariff_profile_fk
+                               and is_children_profile = services.is_children_profile
+                               and "level" = services.department_level
+                        )
+            -- нкд для ВМП (исключение)
+            LEFT JOIN hitech_service_nkd
+                ON hitech_service_nkd.start_date = (
+                    select max(start_date)
+                    from hitech_service_nkd where start_date <= services.end_date
+                        and vmp_group = medical_service.vmp_group
+                )
+
+            -- нкд для услуг рассчитываемых по КСГ (исключение)
+            lEFT JOIN tariff_nkd_ksg
+                ON tariff_nkd_ksg.level = services.department_level
+                    AND tariff_nkd_ksg.ksg_fk = ksg.id_pk
+                    AND tariff_nkd_ksg.start_date= GREATEST(
+                        (select max(start_date)
+                         from tariff_nkd_ksg
+                         where start_date <= services.end_date
+                             and "level" = services.department_level
+                             AND ksg_fk = ksg.id_pk
+                         ), '2016-05-01'::DATE)
+    """
 
     services = list(ProvidedService.objects.raw(
         query, dict(year=register_element['year'],
@@ -387,7 +429,9 @@ def identify_patient(register_element):
                                 ) or (
                                     p2.first_name = person.first_name
                                     and p2.middle_name = person.middle_name
-                                ) or (p2.snils = person.snils)
+                                ) or (p2.snils = person.snils
+                                    and p2.first_name = person.first_name
+                                    and p2.birthdate = person.birthdate)
                             )
                 where p1.id_pk = p2.id_pk
                 order by insurance_policy.version_id_pk DESC
@@ -810,8 +854,8 @@ def update_ksg(register_element):
                     JOIN medical_service ms_op
                        ON ms_op.id_pk = op.code_fk
                 WHERE op.event_fk = pe.id_pk
-                      AND ms_op.code ILIKE 'A%%') > 0 AS has_op_event,
-                ms.code ILIKE 'A%%' is_op_service,
+                      AND (ms_op.code ILIKE 'A%%' or ms_op.code ILIKE 'B%%')) > 0 AS has_op_event,
+                (ms.code ILIKE 'A%%' or ms.code ILIKE 'B%%') AS is_op_service,
 
                 pe.term_fk AS service_term
             FROM provided_service ps
@@ -914,7 +958,9 @@ def update_ksg(register_element):
                          (ksg_byservice.code=281 AND ksg_bydisease.code=188) OR
                          (ksg_byservice.code=226 AND ksg_bydisease.code=223) OR
                          (ksg_byservice.code=34 AND ksg_bydisease.code=223) OR
-                         (ksg_byservice.code=237 AND ksg_bydisease.code=252))
+                         (ksg_byservice.code=237 AND ksg_bydisease.code=252) OR
+                         ksg_byservice.code in (300, 301, 302, 303, 304, 305, 306, 307, 308)
+                         )
                        THEN ksg_byservice.id_pk
                      WHEN COALESCE(ksg_bydisease.coefficient, 0) >= COALESCE(ksg_byservice.coefficient, 0)
                        THEN ksg_bydisease.id_pk
@@ -1083,19 +1129,19 @@ def get_payments_sum(service):
     is_curation_coefficient = (service.service_comment == '0000001')
     is_mobile_brigade = (service.service_comment == '000010')
     is_trombolitic_therapy = (service.service_comment == '000000001')
+    is_mobile_stom_cab = (service.service_comment == '0000001')
 
     provided_tariff = float(service.tariff)
 
-    if service.alternate_tariff:
-        tariff = float(service.alternate_tariff)
-    else:
-        tariff = float(service.expected_tariff or 0)
+    tariff = float(service.expected_tariff or 0)
+    nkd = service.nkd or 1
 
-    if service.register_type == 3 and service.event_end_date >= datetime.strptime('2015-06-01', '%Y-%m-%d').date():
-        tariff = float(service.examination_tariff or 0)
+    # При проведении больным с ОКС в ПСО тромболитической терапии с последующим переводом в РСЦ
+    if is_trombolitic_therapy:
+        tariff = service.trombolitic_therapy_tariff
+        nkd = 1
 
     term = service.service_term
-    nkd = service.nkd or 1
 
     # Исключение для ФГКУ 411 ВГ МО РФ
     if service.organization_code == '280010' and service.service_tariff_profile == 25:
@@ -1126,64 +1172,6 @@ def get_payments_sum(service):
             tariff = 21774
         elif service.service_code[0] == '1':
             tariff = 26612
-
-    # Рассчёт РСЦ и ПСО по КСГ
-    rsc_tariff = {
-        ('66', '1.6'): 39519,
-        ('67', '1.6'): 78202,
-        ('68', '1.6'): 96848,
-        ('87', '1.6'): 32005,
-        ('88', '1.6'): 78481,
-        ('89', '1.6'): 70132,
-        ('90', '1.6'): 86830,
-        ('91', '1.6'): 125513,
-    }
-
-    pso_tariff = {
-        ('66', '1.6'): 35926,
-        ('67', '1.6'): 71093,
-        ('68', '1.6'): 88044,
-        ('87', '1.6'): 29095,
-        ('88', '1.6'): 71346,
-        ('89', '1.6'): 63756,
-        ('90', '1.6'): 78936,
-        ('91', '1.6'): 114103,
-
-        ('66', '2.2'): 49398,
-        ('67', '2.2'): 97753,
-        ('68', '2.2'): 121061,
-        ('87', '2.2'): 40006,
-        ('88', '2.2'): 98101,
-        ('89', '2.2'): 87665,
-        ('90', '2.2'): 108537,
-        ('91', '2.2'): 156892
-    }
-
-    rsc_pso_nkd = {
-        '66': 12,
-        '67': 12,
-        '68': 12,
-        '87': 7,
-        '88': 30,
-        '89': 30,
-        '90': 30,
-        '91': 30,
-    }
-
-    if service.service_group == 1:
-        print 1, service.ksg_smo, service.regional_coefficient
-        tariff = rsc_tariff.get((service.ksg_smo, service.regional_coefficient), 0)
-        nkd = rsc_pso_nkd.get(service.ksg_smo, 1)
-
-    if service.service_group == 2:
-        print 2, service.ksg_smo, service.regional_coefficient
-        tariff = pso_tariff.get((service.ksg_smo, service.regional_coefficient), 0)
-        nkd = rsc_pso_nkd.get(service.ksg_smo, 1)
-
-    # При проведении больным с ОКС в ПСО тромболитической терапии с последующим переводом в РСЦ
-    if is_trombolitic_therapy:
-        tariff = pso_tariff.get(('68', service.regional_coefficient), 0) * 0.6
-        nkd = 1
 
     if service.service_group in (3, 5):
         term = 3
@@ -1239,26 +1227,18 @@ def get_payments_sum(service):
             # стационар 6) Управленческий коэффициент (КУ)
             # КПГ терапия
             if service.service_tariff_profile == 36 and \
-                    (service.level == 1 or service.organization_code in ('280027', '280075')):
+                    (service.organization_level == 1 or service.organization_code in ('280027', '280075')):
                 accepted_payment += round(accepted_payment * 0.38, 2)
                 provided_tariff += round(provided_tariff * 0.38, 2)
                 ProvidedServiceCoefficient.objects.get_or_create(
                     service=service, coefficient_id=8)
 
             # КПГ педиатрия
-            if service.service_tariff_profile == 10 and service.level in (1, 2):
+            if service.service_tariff_profile == 10 and service.organization_level in (1, 2):
                 accepted_payment += round(accepted_payment * 0.34, 2)
                 provided_tariff += round(provided_tariff * 0.34, 2)
                 ProvidedServiceCoefficient.objects.get_or_create(
                     service=service, coefficient_id=9)
-
-            # КПГ медицинская реабилитация
-            if service.service_tariff_profile == 280:
-                accepted_payment += round(accepted_payment * 0.4, 2)
-                provided_tariff += round(provided_tariff * 0.4, 2)
-                ProvidedServiceCoefficient.objects.get_or_create(
-                    service=service, coefficient_id=26)
-
         if term == 2:
             # дневной стационар 3) Управленческий коэффициент (КУ)
             # КПГ медицинская реабилитация
@@ -1283,6 +1263,13 @@ def get_payments_sum(service):
             provided_tariff += round(provided_tariff * 0.07, 2)
             ProvidedServiceCoefficient.objects.get_or_create(
                 service=service, coefficient_id=5)
+
+        # мобильные стоматологические кабинеты
+        if is_mobile_stom_cab and service.service_group == 19:
+            accepted_payment += round(accepted_payment * 0.07, 2)
+            provided_tariff += round(provided_tariff * 0.07, 2)
+            ProvidedServiceCoefficient.objects.get_or_create(
+                service=service, coefficient_id=27)
 
     elif service.event.term_id == 4:
         quantity = service.quantity or 1

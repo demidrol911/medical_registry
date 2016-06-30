@@ -674,7 +674,8 @@ class MedicalServiceKind(models.Model):
 class MedicalServiceHiTechKind(models.Model):
     id_pk = models.IntegerField(primary_key=True, db_column='id_pk')
     name = models.CharField(max_length=128)
-    code = models.IntegerField()
+    code = models.CharField(max_length=16)
+    is_active = models.BooleanField()
 
     class Meta:
         db_table = "medical_service_hitech_kind"
@@ -683,7 +684,8 @@ class MedicalServiceHiTechKind(models.Model):
 class MedicalServiceHiTechMethod(models.Model):
     id_pk = models.IntegerField(primary_key=True, db_column='id_pk')
     name = models.CharField(max_length=128)
-    code = models.IntegerField()
+    code = models.CharField(max_length=10)
+    is_active = models.BooleanField()
 
     class Meta:
         db_table = "medical_service_hitech_method"
@@ -1033,6 +1035,9 @@ class ProvidedEvent(models.Model):
                                            db_column='examination_result_fk',
                                            null=True)
 
+    ksg_mo = models.CharField(max_length=3)
+    ksg_smo = models.CharField(max_length=3)
+
     class Meta:
         db_table = "provided_event"
 
@@ -1260,6 +1265,7 @@ class TariffBasic(models.Model):
     service = models.ForeignKey(MedicalService, db_column='service_fk')
     group = models.ForeignKey(TariffGroup, db_column='group_fk')
     value = models.DecimalField(max_digits=16, decimal_places=4)
+    capitation = models.DecimalField(max_digits=16, decimal_places=4)
     start_date = models.DateField()
 
     class Meta:
@@ -1386,6 +1392,7 @@ class TariffNkd(models.Model):
     level = models.IntegerField()
     is_children_profile = models.BooleanField()
     value = models.DecimalField(max_digits=6, decimal_places=2)
+    start_date = models.DateField()
 
     class Meta:
         db_table = 'tariff_nkd'
@@ -1539,3 +1546,89 @@ class ExaminationTariff(models.Model):
 
     class Meta:
         db_table = 'examination_tariff'
+
+
+class KPG(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    code = models.IntegerField()
+    name = models.CharField(max_length=80)
+
+    class Meta:
+        db_table = 'kpg'
+
+
+class KSG(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    code = models.IntegerField()
+    name = models.CharField(max_length=80)
+    coefficient = models.DecimalField(max_digits=4, decimal_places=2)
+    start_date = models.DateField(db_column='start_date')
+    kpg = models.ForeignKey(KPG, db_column='kpg_fk')
+    term = models.ForeignKey(MedicalServiceTerm, db_column='term_fk')
+
+    class Meta:
+        db_table = 'ksg'
+
+
+class TariffKSG(models.Model):
+    id_pk = models.IntegerField(primary_key=True, db_column='id_pk')
+    ksg = models.ForeignKey(KSG, db_column='ksg_fk')
+    level = models.SmallIntegerField()
+    regional_coefficient = models.DecimalField(max_digits=2, decimal_places=1)
+    value = models.DecimalField(max_digits=12, decimal_places=2)
+    start_date = models.DateField(db_column='start_date')
+
+    class Meta:
+        db_table = 'tariff_ksg'
+
+
+class TariffNkdKSG(models.Model):
+    id_pk = models.IntegerField(primary_key=True, db_column='id_pk')
+    ksg = models.ForeignKey(KSG, db_column='ksg_fk')
+    level = models.SmallIntegerField()
+    value = models.DecimalField(max_digits=6, decimal_places=2)
+    start_date = models.DateField(db_column='start_date')
+
+    class Meta:
+        db_table = 'tariff_nkd_ksg'
+
+
+class Fluorography(models.Model):
+    id_pk = models.AutoField(primary_key=True, db_column='id_pk')
+    first_name = models.CharField(max_length=40)
+    last_name = models.CharField(max_length=40)
+    middle_name = models.CharField(max_length=40)
+    birthdate = models.DateField()
+    gender = models.ForeignKey(Gender, db_column='gender_fk')
+    insurance_policy_series = models.CharField(max_length=10)
+    insurance_policy_number = models.CharField(max_length=20)
+    insurance_policy = models.IntegerField(db_column='insurance_policy_fk')
+    attachment_code = models.CharField(max_length=6)
+    start_date = models.DateField()
+
+    class Meta:
+        db_table = 'fluorography'
+
+
+class DMS(models.Model):
+    id = models.AutoField(primary_key=True)
+    last_name = models.CharField(max_length=70)
+    first_name = models.CharField(max_length=70)
+    middle_name = models.CharField(max_length=70)
+    birth_date = models.DateField()
+    organization = models.CharField(max_length=70)
+    series_zhaco = models.CharField(max_length=10)
+    number_zhaco = models.CharField(max_length=20)
+    service_code = models.CharField(max_length=20)
+    service_name = models.CharField(max_length=250)
+    quantity = models.IntegerField()
+    cost = models.DecimalField(max_digits=20, decimal_places=2)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    worker_code = models.IntegerField()
+    disease = models.CharField(max_length=5)
+    accepted_payment = models.DecimalField(max_digits=20, decimal_places=2)
+    filename = models.CharField(max_length=255)
+
+    class Meta:
+        db_table = 'voluntary_medical_insurance'

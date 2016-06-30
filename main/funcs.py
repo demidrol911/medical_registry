@@ -68,3 +68,8 @@ def dictfetchall(cursor):
         dict(zip([col[0] for col in desc], row))
         for row in cursor.fetchall()
     ]
+
+
+def unicode_to_cp866(string):
+    return string.encode('cp866') if string else ''
+
