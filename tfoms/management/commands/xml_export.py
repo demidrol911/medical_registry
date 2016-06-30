@@ -14,6 +14,7 @@ from main.models import SERVICE_XML_TYPES, EXAMINATION_TYPES
 from helpers import xml_writer as writer
 import datetime
 from collections import defaultdict
+from tfoms.func import calculate_capitation, calculate_fluorography
 
 
 def safe_str(var):
@@ -30,8 +31,7 @@ def safe_int(val):
         return 0
 
 
-def get_patients(period):
-    attachment_date = '2015-%s-01' % str(int(period)+1)
+def get_patients(year, period):
     query = """
         select p1.*, medOrg.code as attachment_code_custom
             , person_id_type.code as id_type
@@ -57,7 +57,7 @@ def get_patients(period):
                     where
                         person_fk = person.version_id_pk
                         and status_fk = 1
-                        and date <= %s
+                        and date <= format('%%s-%%s-01', %(year)s, %(period)s)::DATE + interval '1 month'
                         and attachment.is_active)
             LEFT join medical_organization medOrg
                 on (
@@ -82,13 +82,13 @@ def get_patients(period):
                 on provided_service.event_fk = provided_event.id_pk
             where
                 medical_register.is_active
-                and medical_register.year = '2015'
-                and medical_register.period = %s
-                --and medical_register.organization_code in ('280036')
+                and medical_register.year = %(year)s
+                and medical_register.period = %(period)s
+                --and medical_register.organization_code in ()
                 --and medical_register.type = 2
             )
         """
-    return Patient.objects.raw(query, [attachment_date, period])
+    return Patient.objects.raw(query, dict(year=year, period=period))
 
 
 def get_records(register_pk):
@@ -107,7 +107,7 @@ def get_records(register_pk):
             medical_service_kind.code as event_kind_code,
             provided_event.form_fk as event_form_code,
             medical_service_hitech_kind.code as hitech_kind_code,
-            provided_event.hitech_method_fk as hitech_method_code,
+            medical_service_hitech_method.code as hitech_method_code,
             provided_event.hospitalization_fk as event_hospitalization_code,
             /*
             (
@@ -285,6 +285,8 @@ def get_records(register_pk):
                 order by provided_service_sanction.underpayment desc
             ) as event_sanctions,
             provided_event.examination_result_fk as examination_result_code,
+            provided_event.ksg_mo as ksg_mo,
+            provided_event.ksg_smo as ksg_smo,
             provided_event.comment as event_comment,
             provided_service.id_pk as service_pk,
             provided_service.id as service_uid,
@@ -327,6 +329,8 @@ def get_records(register_pk):
                 on event_division.id_pk = provided_event.division_fk
             left join medical_service_hitech_kind
                 on provided_event.hitech_kind_fk = medical_service_hitech_kind.id_pk
+            left join medical_service_hitech_method
+                on provided_event.hitech_method_fk = medical_service_hitech_method.id_pk
 
             JOIN medical_organization
                 ON medical_organization.id_pk = provided_event.department_fk
@@ -384,32 +388,32 @@ def get_records(register_pk):
 
 
 def main():
-    period = '08'
-    year = '2015'
+    period = '06'
+    year = '2016'
     print datetime.datetime.now()
 
     sumv_usl_sum = 0
     sumv_usl_sum2 = 0
     registers = MedicalRegister.objects.filter(
         is_active=True, period=period, year=year
-        #organization_code__in=('280036', )
+        # , organization_code__in=[]
     ).order_by('organization_code')
     print u'Регистры: ', registers
 
-    file_regular = 'HS28004T28_15%s1' % period
-    file_patients = 'LS28004T28_15%s1' % period
+    file_regular = 'HS28004T28_16%s1' % period
+    file_patients = 'LS28004T28_16%s1' % period
 
     lm_xml = writer.Xml('%s.xml' % file_patients)
     lm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
     lm_xml.start('PERS_LIST')
     lm_xml.start('ZGLV')
     lm_xml.put('VERSION', '2.1')
-    lm_xml.put('DATA', '18.%s.2015' % period)
+    lm_xml.put('DATA', '18.%s.2016' % period)
     lm_xml.put('FILENAME', file_patients)
     lm_xml.put('FILENAME1', file_regular)
     lm_xml.end('ZGLV')
 
-    for i, patient in enumerate(get_patients(period)):
+    for i, patient in enumerate(get_patients(year, period)):
         lm_xml.start('PERS')
         lm_xml.put('ID_PAC', safe_str(patient.id))
         last_name = safe_str(patient.last_name) if patient.last_name else u'НЕТ'.encode('cp1251')
@@ -449,6 +453,8 @@ def main():
     lm_xml.end('PERS_LIST')
 
     print 'Patients all down. Starting services...'
+    ksg_mo = ''
+    ksg_smo = ''
 
     XML_TYPES = dict(SERVICE_XML_TYPES)
     EXAMINIATIONS = dict(EXAMINATION_TYPES)
@@ -457,7 +463,7 @@ def main():
         if register_type == 0:
             continue
         print register_type
-        name = '%sS28004T28_15%s1' % (XML_TYPES[register_type].upper(),
+        name = '%sS28004T28_16%s1' % (XML_TYPES[register_type].upper(),
                                       period)
         hm_xml = writer.Xml('%s.XML' % name)
 
@@ -466,13 +472,16 @@ def main():
 
         hm_xml.start('ZGLV')
         hm_xml.put('VERSION', '2.1')
-        hm_xml.put('DATA', '18.%s.2015' % period)
+        hm_xml.put('DATA', '18.%s.2016' % period)
         hm_xml.put('FILENAME', name)
         hm_xml.end('ZGLV')
 
         new_register = False
         for index, register in enumerate(registers.filter(type=register_type)):
             if new_register:
+                if register_type in (1, 2):
+                    hm_xml.put('KSG_MO', safe_str(record.ksg_mo))
+                    hm_xml.put('KSG_SMO', safe_str(record.ksg_smo))
                 hm_xml.put('COMENTSL', safe_str(comment))
                 hm_xml.put('PAYMENT_KIND', payment_kind)
                 hm_xml.end('SLUCH')
@@ -504,6 +513,48 @@ def main():
             hm_xml.put('SANK_MEK', round(float(sanctions_mek or 0), 2))
             hm_xml.put('SANK_MEE', 0)
             hm_xml.put('SANK_EKMP', 0)
+            hm_xml.put('SANK_ORG', 0)
+
+            if register_type == 1:
+                # Подушевой норматив по поликлиники
+                policlinic_capitation_population = 0
+                policlinic_capitation_tariff = 0
+                policlinic_capitation = calculate_capitation(3, register.organization_code)
+                if policlinic_capitation[0]:
+                    policlinic_capitation_population = policlinic_capitation[1]['adult']['population'] + \
+                                                       policlinic_capitation[1]['child']['population']
+                    policlinic_capitation_tariff = round(policlinic_capitation[1]['adult']['accepted'] +
+                                                         policlinic_capitation[1]['child']['accepted'], 2)
+
+                # Подушевой норматив по скорой помощи
+                ambulance_capitation_population = 0
+                ambulance_capitation_tariff = 0
+                ambulance_capitation = calculate_capitation(4, register.organization_code)
+                if ambulance_capitation[0]:
+                    ambulance_capitation_population = ambulance_capitation[1]['adult']['population'] + \
+                                                      ambulance_capitation[1]['child']['population']
+                    ambulance_capitation_tariff = round(ambulance_capitation[1]['adult']['accepted'] +
+                                                        ambulance_capitation[1]['child']['accepted'], 2)
+
+                # Флюорография доплата для ГП2, вычет для всех остальных
+                fluorography_population = 0
+                fluorography_tariff = 0
+                fluorography = calculate_fluorography(register.organization_code)
+                if fluorography[0]:
+                    fluorography_population = fluorography[1]['adult']['population'] + \
+                                                      fluorography[1]['child']['population']
+                    fluorography_tariff = round(
+                        (fluorography[1]['adult']['accepted'] if register.organization_code == '280085'
+                         else -fluorography[1]['adult']['accepted']) +
+                        (fluorography[1]['child']['accepted'] if register.organization_code == '280085'
+                         else -fluorography[1]['child']['accepted']), 2)
+
+                hm_xml.put('POL_COL', policlinic_capitation_population)
+                hm_xml.put('POL_SUMPF', policlinic_capitation_tariff)
+                hm_xml.put('SMP_COL', ambulance_capitation_population)
+                hm_xml.put('SMP_SUMPF', ambulance_capitation_tariff)
+                hm_xml.put('FS_COL', fluorography_population)
+                hm_xml.put('FS_SUMPF', fluorography_tariff)
 
             if register_type > 2:
                 hm_xml.put('DISP', EXAMINIATIONS[register_type-2].encode('cp1251'))
@@ -516,6 +567,9 @@ def main():
 
                 if record.record_uid != current_record:
                     if i != 0:
+                        if register_type in (1, 2):
+                            hm_xml.put('KSG_MO', safe_str(ksg_mo))
+                            hm_xml.put('KSG_SMO', safe_str(ksg_smo))
                         hm_xml.put('COMENTSL', safe_str(comment))
                         hm_xml.put('PAYMENT_KIND', payment_kind)
                         hm_xml.end('SLUCH')
@@ -551,6 +605,9 @@ def main():
                     current_event = record.event_uid
 
                     if event_counter != 0:
+                        if register_type in (1, 2):
+                            hm_xml.put('KSG_MO', safe_str(ksg_mo))
+                            hm_xml.put('KSG_SMO', safe_str(ksg_smo))
                         hm_xml.put('COMENTSL', safe_str(comment))
                         hm_xml.put('PAYMENT_KIND', payment_kind)
                         hm_xml.end('SLUCH')
@@ -637,6 +694,7 @@ def main():
                             hm_xml.start('SANK')
                             hm_xml.put('S_CODE', sanc_rec[0])
                             hm_xml.put('S_SUM', round(float(sanc_rec[1] or 0), 2))
+                            hm_xml.put('S_ORG', 0)
                             hm_xml.put('S_TIP', sanc_rec[2])
                             hm_xml.put('S_OSN', sanc_rec[3])
                             hm_xml.put('S_COM', '')
@@ -692,7 +750,12 @@ def main():
                 comment = record.event_comment
                 payment_kind = safe_int(record.payment_kind_code)
                 previous_record_uid = record.event_uid
+                ksg_mo = record.ksg_mo
+                ksg_smo = record.ksg_smo
 
+        if register_type in (1, 2):
+            hm_xml.put('KSG_MO', safe_str(ksg_mo))
+            hm_xml.put('KSG_SMO', safe_str(ksg_smo))
         hm_xml.put('COMENTSL', safe_str(record.event_comment))
         hm_xml.put('PAYMENT_KIND', safe_int(record.payment_kind_code))
         hm_xml.end('SLUCH')
@@ -701,6 +764,7 @@ def main():
         print datetime.datetime.now()
 
     print sumv_usl_sum, sumv_usl_sum2
+
 
 class Command(BaseCommand):
     help = 'export big XML'
