@@ -65,6 +65,16 @@ class StomatologyPage(MedicalServiceTypePage):
                                THEN service_tariff
                         END) AS total_tariff_child,
 
+                    SUM(CASE WHEN psc.id_pk is NOT NULL
+                               THEN ROUND(service_tariff * 0.07, 2)
+                        END) AS coef_mob_dental_office,
+                    SUM(CASE WHEN is_adult AND psc.id_pk is NOT NULL
+                               THEN ROUND(service_tariff * 0.07, 2)
+                        END) AS coef_mob_dental_office_adult,
+                    SUM(CASE WHEN NOT is_adult AND psc.id_pk is NOT NULL
+                               THEN ROUND(service_tariff * 0.07, 2)
+                        END) AS coef_mob_dental_office_child,
+
                     SUM(service_accepted) AS total_accepted,
                     SUM(CASE WHEN is_adult
                                THEN service_accepted
@@ -74,6 +84,9 @@ class StomatologyPage(MedicalServiceTypePage):
                         END) AS total_accepted_child
 
                 FROM registry_services
+                    LEFT JOIN provided_service_coefficient psc
+                      ON psc.service_fk = service_id
+                      AND psc.coefficient_fk = 27
                 WHERE service_group = 19
                 GROUP BY mo_code, group_field
                 '''
@@ -84,16 +97,22 @@ class StomatologyPage(MedicalServiceTypePage):
                           'count_treatment', 'count_treatment_adult', 'count_treatment_child',
                           'count_services', 'count_services_adult', 'count_services_child',
                           'total_quantity', 'total_quantity_adult', 'total_quantity_child',
-                          'total_tariff', 'total_tariff_adult', 'total_tariff_child')
+                          'total_tariff', 'total_tariff_adult', 'total_tariff_child',
+                          'coef_mob_dental_office', 'coef_mob_dental_office_adult', 'coef_mob_dental_office_child',
+                          'total_accepted', 'total_accepted_adult', 'total_accepted_child')
         fields_preventive = ('count_patients', 'count_patients_adult', 'count_patients_child',
                              'count_services', 'count_services_adult', 'count_services_child',
                              'total_quantity', 'total_quantity_adult', 'total_quantity_child',
-                             'total_tariff', 'total_tariff_adult', 'total_tariff_child')
+                             'total_tariff', 'total_tariff_adult', 'total_tariff_child',
+                             'coef_mob_dental_office', 'coef_mob_dental_office_adult', 'coef_mob_dental_office_child',
+                             'total_accepted', 'total_accepted_adult', 'total_accepted_child')
         fields_ambulance = ('count_patients', 'count_patients_adult', 'count_patients_child',
                             'count_services', 'count_services_adult', 'count_services_child',
                             'total_quantity', 'total_quantity_adult', 'total_quantity_child',
-                            'total_tariff', 'total_tariff_adult', 'total_tariff_child')
+                            'total_tariff', 'total_tariff_adult', 'total_tariff_child',
+                            'coef_mob_dental_office', 'coef_mob_dental_office_adult', 'coef_mob_dental_office_child',
+                            'total_accepted', 'total_accepted_adult', 'total_accepted_child')
         return ((12, 6, fields_disease),
-                (13, 21, fields_preventive),
-                (14, 33, fields_preventive),
-                (17, 45, fields_ambulance))
+                (13, 27, fields_preventive),
+                (14, 45, fields_preventive),
+                (17, 63, fields_ambulance))

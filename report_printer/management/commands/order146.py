@@ -65,7 +65,7 @@ from medical_services_types_pages.examination_children_orphans import \
     ExamChildrenWithoutCarePrimaryPage, \
     ExamChildrenWithoutCareSpecPage
 
-from medical_services_types_pages.hospital import HospitalPage
+from medical_services_types_pages.hospital import HospitalPage, AbortionVolumeExceededPage, HospitalKSGPage
 
 from medical_services_types_pages.stomatology import StomatologyPage
 
@@ -73,11 +73,20 @@ from medical_services_types_pages.pregnant import IntegratedPrenatalDiagnosisPag
 
 from medical_services_types_pages.fluorography import FluorographyPage
 
+from medical_services_types_pages.examination_all import ExaminationAllPage
+
 
 class Command(BaseCommand):
 
     @howlong
     def handle(self, *args, **options):
+        reports_desc = (
+            # Поликлиника профилактика всё
+            {'pattern': 'examination_all.xls',
+             'pages': (ExaminationAllPage, ),
+             'title': u'поликлиника проф.свод'},
+        )
+
         reports_desc = (
             {'pattern': 'stomatology.xls',
              'pages': (StomatologyPage, ),
@@ -134,7 +143,7 @@ class Command(BaseCommand):
 
             # Круглосуточный стационар
             {'pattern': 'hospital.xls',
-             'pages': (HospitalPage, ),
+             'pages': (HospitalPage, AbortionVolumeExceededPage),
              'title': u'круглосуточный стационар'},
 
             {'pattern': 'hospital_hmc.xls',
@@ -228,6 +237,10 @@ class Command(BaseCommand):
             {'pattern': 'fluorography.xls',
              'pages': (FluorographyPage, ),
              'title':  u'флюорография'},
+
+            {'pattern': 'hospital_ksg.xls',
+             'pages': (HospitalKSGPage, ),
+             'title': u'круглосуточный стационар (мед.реабилитация, 1, 2, 3 уровень)'},
         )
 
         parameters = ReportParameters()

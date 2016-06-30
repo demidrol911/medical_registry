@@ -11,8 +11,7 @@ class DayHospitalHomePage(MedicalServiceTypePage):
         query = MedicalServiceTypePage.get_general_query() + '''
                 SELECT
                     mo_code AS mo_code,
-                    CASE WHEN service_tariff_profile IN (42, 40, 41) THEN '0'
-                    END AS group_field,
+                    '0' AS group_field,
 
                     COUNT(DISTINCT (patient_id, service_tariff_profile)) AS count_patients,
                     COUNT(DISTINCT CASE WHEN is_adult
