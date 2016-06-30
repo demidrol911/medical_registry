@@ -326,7 +326,7 @@ class DefectsPage(ReportPage):
                 SELECT
                     CASE WHEN T.term = 1
                            AND (T.service_group is null
-                           OR T.service_group in (1, 2, 20))
+                           OR T.service_group in (1, 2, 20, 45))
                              THEN 'hospital'
 
                          WHEN T.service_group = 31
