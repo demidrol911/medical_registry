@@ -2,10 +2,10 @@
 
 from django.core.management.base import BaseCommand
 
-from report_printer.excel_style import VALUE_STYLE
+from report_printer.libs.excel_style import VALUE_STYLE
 from tfoms.func import get_patients
 from main.models import ProvidedService
-from report_printer.excel_writer import ExcelWriter
+from report_printer.libs.excel_writer import ExcelBook
 from medical_service_register.path import REESTR_EXP
 from helpers.correct import date_correct
 
@@ -17,7 +17,6 @@ class Command(BaseCommand):
         period = args[1]
         mo_code = args[2]
         services_pk_list = [
-
         ]
 
         services = ProvidedService.objects.filter(
@@ -110,58 +109,59 @@ class Command(BaseCommand):
             u'Предъявл', u'Расч.\Сумма', u'Снят.\Сумма'
         ]
         reestr_path = REESTR_EXP % (year, period)
-        with ExcelWriter(u'%s/%s' % (reestr_path, mo_code)) as act_book:
-            # Распечатка наименования ошибки
-            act_book.set_style({'bold': True, 'border': 1, 'align': 'center', 'font_size': 11})
-            # Распечатка загловков таблицы с информацией о снятых услугах
-            for title in title_table:
-                act_book.write_cell(title, 'c')
-            act_book.row_inc()
-            act_book.set_style(VALUE_STYLE)
-            for service in services_list:
-                patient = patients[service['patient_id']]
+        print reestr_path
+        act_book = ExcelBook(reestr_path, mo_code)
+        act_book.create_book()
+        # Распечатка наименования ошибки
+        # Распечатка загловков таблицы с информацией о снятых услугах
+        sheet = act_book.get_sheet(0)
+        for title in title_table:
+            sheet.write(title, 'c')
+        sheet.write('', 'r')
+        for service in services_list:
+            patient = patients[service['patient_id']]
 
-                act_book.write_cell(patient['policy_series'].replace('\n', '') + ' ' +
-                                    patient['policy_number']
-                                    if patient['policy_series']
-                                    else patient['policy_number'], 'c')               # Печать номера полиса
+            sheet.write(patient['policy_series'].replace('\n', '') + ' ' +
+                                patient['policy_number']
+                                if patient['policy_series']
+                                else patient['policy_number'], 'c')               # Печать номера полиса
 
-                act_book.write_cell(('%s %s %s' %
-                                     (patient['last_name'] or '',
-                                      patient['first_name'] or '',
-                                      patient['middle_name'] or '')).upper(), 'c')    # Печать ФИО
+            sheet.write(('%s %s %s' %
+                                 (patient['last_name'] or '',
+                                  patient['first_name'] or '',
+                                  patient['middle_name'] or '')).upper(), 'c')    # Печать ФИО
 
-                act_book.write_cell(date_correct(patient['birthdate']).
-                                    strftime('%d.%m.%Y'), 'c')                        # Печать даты рождения
+            sheet.write(date_correct(patient['birthdate']).
+                                strftime('%d.%m.%Y'), 'c')                        # Печать даты рождения
 
-                act_book.write_cell(service['anamnesis_number'], 'c')                 # Номер карты
+            sheet.write(service['anamnesis_number'], 'c')                 # Номер карты
 
-                act_book.write_cell(date_correct(service['end_date']).
-                                    strftime('%d.%m.%Y'), 'c')                        # Дата окончания услуги
+            sheet.write(date_correct(service['end_date']).
+                                strftime('%d.%m.%Y'), 'c')                        # Дата окончания услуги
 
-                act_book.write_cell(0 if service['group'] == 27 else 1, 'c')          # Посещения (госпитализация)
+            sheet.write(0 if service['group'] == 27 else 1, 'c')          # Посещения (госпитализация)
 
-                act_book.write_cell(service['quantity'], 'c')                         # Количество дней
+            sheet.write(service['quantity'], 'c')                         # Количество дней
 
-                act_book.write_cell(service['uet'], 'c')                              # Количество УЕТ
+            sheet.write(service['uet'], 'c')                              # Количество УЕТ
 
-                act_book.write_cell(service['code'], 'c')                             # Код услуги
+            sheet.write(service['code'], 'c')                             # Код услуги
 
-                act_book.write_cell(service['basic_disease'], 'c')                    # Код основного диагноза
+            sheet.write(service['basic_disease'], 'c')                    # Код основного диагноза
 
-                act_book.write_cell(service['name'], 'c')                             # Название услуги
+            sheet.write(service['name'], 'c')                             # Название услуги
 
-                act_book.write_cell(service['event_id'], 'c')                         # Ид случая
+            sheet.write(service['event_id'], 'c')                         # Ид случая
 
-                act_book.write_cell(service['xml_id'], 'c')                           # Ид услуги в xml
+            sheet.write(service['xml_id'], 'c')                           # Ид услуги в xml
 
-                act_book.write_cell(patient['xml_id'], 'c')                           # Ид патиента в xml
+            sheet.write(patient['xml_id'], 'c')                           # Ид патиента в xml
 
-                act_book.write_cell(service['tariff'], 'c')                           # Основной тариф
+            sheet.write(service['tariff'], 'c')                           # Основной тариф
 
-                act_book.write_cell(service['calculated_payment'], 'c')               # Рассчётная сумма
+            sheet.write(service['calculated_payment'], 'c')               # Рассчётная сумма
 
-                act_book.write_cell(service['provided_tariff'], 'r')             # Снятая сумма
+            sheet.write(service['provided_tariff'], 'r')             # Снятая сумма
 
 
 

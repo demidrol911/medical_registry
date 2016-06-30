@@ -6,7 +6,7 @@ import shutil
 
 #OUTBOX_DIR = u'd:/work/outbox/'
 OUTBOX_DIR = u'//s01-2800-fs01/vipnet/medical_registry/outbox/'
-ACTS_DIR = u'x:/reestr/g2015/period08/'
+ACTS_DIR = u'C:/work/acts/'
 
 AGMA_DIR = u'x:/reestr/g2015/period08/'
 custom_file = ''#u'X:/REESTR/G2014/Period10/Больницам октябрь.jpg'
@@ -57,30 +57,7 @@ for act in acts:
 
     try:
         shutil.copy2(src_path, dst_path)
+        print dst_path
         #shutil.copy2(custom_file, dst_path)
     except:
         print u'не смог', dst_path
-
-"""
-acts = os.listdir(AGMA_DIR)
-
-for act in acts:
-    encoded_act = act
-    name, ext = os.path.splitext(encoded_act)
-    parsed_name = act_name_pattern.sub('', name)
-
-    copy_to_dir = u'280069 ГБОУ ВПО Амурская государственная медицинская академия Министерства здравоохранения и социального развития Российской Федерации'
-
-    if encoded_act.startswith('~') or not copy_to_dir:
-        print 'не смог', encoded_act
-        continue
-
-    src_path = os.path.join(AGMA_DIR, encoded_act)
-    dst_path = os.path.join(OUTBOX_DIR, copy_to_dir)
-
-    try:
-        shutil.copy2(src_path, dst_path)
-        #shutil.copy2(custom_file, dst_path)
-    except:
-        print u'не смог', dst_path
-"""
