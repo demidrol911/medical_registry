@@ -34,7 +34,6 @@ def get_department_services(year, period, department_code):
                 when mr.type between 3 and 11 then pe_idc_b.idc_code
                 else idc.idc_code
             END as disease,
-            pecd_idc.idc_code as concomitant_disease,
             ps.start_date,
             ps.end_date,
             pe.anamnesis_number,
@@ -81,10 +80,6 @@ def get_department_services(year, period, department_code):
                 on pe_idc_i.id_pk = pe.initial_disease_fk
             LEFT JOIN idc pe_idc_b
                 on pe_idc_b.id_pk = pe.basic_disease_fk
-            LEFT JOIN provided_event_concomitant_disease pecd
-                on pecd.event_fk = pe.id_pk
-            LEFT JOIN idc pecd_idc
-                on pecd.disease_fk = pecd_idc.id_pk
             LEFT JOIN treatment_outcome tro
                 on tro.id_pk = pe.treatment_outcome_fk
             LEFT JOIN address adr
@@ -109,17 +104,17 @@ def get_department_services(year, period, department_code):
     return list(ProvidedService.objects.raw(query, [year, period,
                                                     department_code]))
 
+
 def main():
-    year = '2015'
-    period = '12'
+    year = '2016'
+    period = '06'
     path = 'c:/work/expertiza_export/%s/%s' % (year, period)
 
     departments = ProvidedService.objects.filter(
         event__record__register__year=year,
         event__record__register__period=period,
         event__record__register__is_active=True,
-        event__record__register__organization_code='280043',
-        payment_type_id__in=(2, 4),
+        payment_type_id__in=(2, 4)
     ).exclude(code__code__startswith='A').values_list(
         'department__old_code', flat=True).distinct('department__old_code')
 
@@ -128,7 +123,7 @@ def main():
     print departments
     for department in departments:
         print department
-        p = 'c:/work/expertiza_export/2015/%s/t%s.dbf' % (period, department)
+        p = 'c:/work/expertiza_export/2016/%s/t%s.dbf' % (period, department)
         print p
         if os.path.exists(p):
             print 'ok'
@@ -183,7 +178,7 @@ def main():
             new["OT"] = unicode_to_cp866(service.middle_name or '')
             new["DR"] = service.birthdate or '1900-01-01'
             new["DS"] = unicode_to_cp866(service.disease)
-            new["DS2"] = unicode_to_cp866(service.concomitant_disease)
+            #new["DS2"] = unicode_to_cp866(service.concomitant_disease)
             new["C_I"] = unicode_to_cp866(service.anamnesis_number or '')
             new["D_BEG"] = service.start_date or '1900-01-01'
             new["D_U"] = service.end_date or '1900-01-01'

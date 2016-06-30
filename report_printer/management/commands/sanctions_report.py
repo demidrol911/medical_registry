@@ -38,7 +38,7 @@ class SanctionsPage(ReportPage):
                     on (org.code = mr.organization_code and org.parent_fk is null) or
                     (org.id_pk = (select parent_fk from medical_organization where code = mr.organization_code order by id_pk DESC limit 1))
             where mr.is_active
-                and pss.date between '2016-01-01' and '2016-01-31'
+                and pss.date between '2016-05-01' and '2016-05-31'
             GROUP BY org.id_pk, org.name, mr.organization_code, org.id_pk, org.id_pk
             ORDER BY org.name--, pss.act
         """
@@ -65,7 +65,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         parameters = ReportParameters()
         parameters.path_to_dir = u'T:\Паршин А.А\сверка санкций'
-        parameters.report_name = u'Сверка санкций за февраль 2016'
+        parameters.report_name = u'Сверка санкций за июнь 2016'
 
         report = Report()
         report.add_page(SanctionsPage())

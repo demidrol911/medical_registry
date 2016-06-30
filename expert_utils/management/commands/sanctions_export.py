@@ -17,6 +17,24 @@ from math import ceil
 from collections import defaultdict
 
 
+def get_unaccounted_sanctions():
+    file_csv = open('unaccounted_sanctions_15.csv')
+    mo_sanc = {}
+    for i, row in enumerate(file_csv):
+        data = row.replace('\n', '').split('+')
+        underpayment = float(data[0])
+        code_mo = data[1]
+        penalty = float(data[2])
+        period = data[4]
+
+        if code_mo not in mo_sanc:
+            mo_sanc[code_mo] = {}
+        if period not in mo_sanc[code_mo]:
+            mo_sanc[code_mo][period] = 0
+        mo_sanc[code_mo][period] += underpayment + penalty
+    return mo_sanc
+
+
 def safe_str(var):
     if var:
         return str(var.encode('cp1251'))
@@ -37,7 +55,7 @@ def set_precision(number, precision):
 
 
 def get_patients(period, start_date, end_date):
-    attachment_date = '2015-%s-01' % str(int(period)+1)
+    attachment_date = '2016-%s-01' % str(int(period)+1)
     query = """
         select p1.*, medOrg.code as attachment_code
             , person_id_type.code as id_type
@@ -278,7 +296,7 @@ def get_records(register_element, start_date, end_date):
                     , provided_service_sanction.penalty
                     , provided_service_sanction.type_fk
                     , provided_service_sanction.failure_cause_fk
-                    , ''
+                    , ''::VARCHAR
                     , 1
                     , ps2.accepted_payment
                     , provided_service_sanction.id_pk
@@ -432,10 +450,11 @@ def get_records(register_element, start_date, end_date):
 
 
 def main():
-    sanction_start_date = '2015-11-01'
-    sanction_end_date = '2015-11-30'
-    period = '12'
-
+    sanction_start_date = '2016-05-01'
+    sanction_end_date = '2016-05-31'
+    period = '06'
+    mo_sanc = get_unaccounted_sanctions()
+    print u'НЕ УЧТЁННЫЕ САНКЦИИ', mo_sanc
     print datetime.datetime.now()
     registers = Sanction.objects.filter(
         service__event__record__register__is_active=True,
@@ -450,15 +469,15 @@ def main():
             'service__event__record__register__year',
             'service__event__record__register__period')
 
-    file_regular = 'HX28004T28_15%s2' % period
-    file_patients = 'LX28004T28_15%s2' % period
+    file_regular = 'HX28004T28_16%s1' % period
+    file_patients = 'LX28004T28_16%s1' % period
 
     lm_xml = writer.Xml('%s.xml' % file_patients)
     lm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
     lm_xml.start('PERS_LIST')
     lm_xml.start('ZGLV')
     lm_xml.put('VERSION', '2.1')
-    lm_xml.put('DATA', '18.%s.2015' % period)
+    lm_xml.put('DATA', '18.%s.2016' % period)
     lm_xml.put('FILENAME', file_patients)
     lm_xml.put('FILENAME1', file_regular)
     lm_xml.end('ZGLV')
@@ -474,11 +493,12 @@ def main():
 
     hm_xml.start('ZGLV')
     hm_xml.put('VERSION', '2.1')
-    hm_xml.put('DATA', '18.%s.2015' % period)
+    hm_xml.put('DATA', '18.%s.2016' % period)
     hm_xml.put('FILENAME', file_regular)
     hm_xml.end('ZGLV')
     print registers
     for index, register_element in enumerate(registers):
+        print '!', register_element
         records = list(get_records(register_element, sanction_start_date, sanction_end_date))
         payments_types = [rec.service_payment_type_code for rec in records]
 
@@ -572,7 +592,25 @@ def main():
                             and mr.organization_code = mr1.organization_code
                             and ps.payment_type_fk in (2, 4)
                             and pss.type_fk = 3
-                    ) as sanction_ekmp_sum
+                    ) as sanction_ekmp_sum,
+                    (
+                        select sum(pss.penalty)
+                        from provided_service ps
+                            join provided_event pe
+                                on pe.id_pk = ps.event_fk
+                            JOIN medical_register_record mrr
+                                on mrr.id_pk = pe.record_fk
+                            JOIN medical_register mr
+                                on mr.id_pk = mrr.register_fk
+                            JOIN provided_service_sanction pss
+                                on pss.service_fk = ps.id_pk
+                        WHERE mr.is_active
+                            and mr.year = mr1.year
+                            and mr.period = mr1.period
+                            and mr.organization_code = mr1.organization_code
+                            and ps.payment_type_fk in (2, 4)
+                            and pss.type_fk in (2, 3)
+                    ) as penalty_sum
                 from medical_register mr1
                 where is_active
                     and "year" = %(year)s
@@ -594,6 +632,10 @@ def main():
         sanctions_mek = round(float(register.sanction_mek_sum or 0))
         sanctions_mee = round(float(register.sanction_mee_sum or 0))
         sanctions_ekmp = round(float(register.sanction_ekmp_sum or 0))
+        penalty_sum = round(float(register.penalty_sum or 0))
+
+        unaccounted_sanctions = round(float(mo_sanc.get(register.organization_code, {}).get(register_element[1], 0)))
+        print '*', register.organization_code, register.penalty_sum, unaccounted_sanctions, register_element[0], register_element[1]
 
         if sanctions_mek < 0:
             sanctions_mek = 0
@@ -617,6 +659,7 @@ def main():
         hm_xml.put('SANK_MEK', sanctions_mek)
         hm_xml.put('SANK_MEE', sanctions_mee)
         hm_xml.put('SANK_EKMP', sanctions_ekmp)
+        hm_xml.put('SANK_ORG', penalty_sum + unaccounted_sanctions)
         hm_xml.end('SCHET')
 
         print register.organization_code, len(records)

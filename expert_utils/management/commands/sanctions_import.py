@@ -10,6 +10,7 @@ import datetime
 import csv
 import kinterbasdb
 import sanction_query
+import sqlite3
 
 
 FIO, DR, KMU, S_OPL, S_SN, STARTDATE, ENDDATE, NUMBER, PERIOD_USL, CODE_MO,\
@@ -17,8 +18,8 @@ S_POL, K_U, DS, TN1, SUM_USL, FFOMS, TFOMS, S_PPP, S_SNK, SNILS, SANK_TYPE,\
 DOC_NUMBER, STATUS, S_SNT, S_SNF, SANCTION_DATE,\
 ANAMNESIS_NUMBER, LPU_NUMBER = range(0, 28)
 
-sanction_start_date = '2015-11-01'
-sanction_end_date = '2015-11-30'
+sanction_start_date = '2016-05-01'
+sanction_end_date = '2016-05-31'
 z = csv.writer(open('c:/work/duplicates_%s.csv' % sanction_start_date, 'wb'), delimiter=';')
 
 
@@ -295,8 +296,6 @@ def main():
 
 
 class Command(BaseCommand):
-    help = 'export big XML'
     
     def handle(self, *args, **options):
-        print 'I here'
         main()
