@@ -37,11 +37,17 @@ class AutomaticReportsWizard():
                 new_status = 9
             elif registry_status == 8:
                 new_status = 6
+            elif registry_status == 104:
+                new_status = 103
             else:
                 new_status = 600
             parameters.organization_code = organization_code
+
             parameters.report_name = get_mo_name(organization_code).\
                 replace('"', '').strip()
+            if registry_status == 104:
+                parameters.report_name = organization_code + ' ' + parameters.report_name
+
             parameters.partial_register = get_partial_register(organization_code)
             parameters.policlinic_capitation = calculate_capitation(3, organization_code)
             parameters.ambulance_capitation = calculate_capitation(4, organization_code)
