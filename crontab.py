@@ -80,8 +80,8 @@ class SimpleScheduler:
             time.sleep(30)
 
 scheduler = SimpleScheduler()
-scheduler.add_job(Job(name='registry_import', cmd=u'C:/Python27/python.exe manage.py reg_import', duration=600))
-scheduler.add_job(Job(name='mek', cmd=u'C:/Python27/python.exe manage.py new_mek', duration=1800))
+scheduler.add_job(Job(name='reg_import', cmd=u'C:/Python27/python.exe manage.py reg_import', duration=600))
+scheduler.add_job(Job(name='mek', cmd=u'C:/Python27/python.exe manage.py new_mek', duration=600))
+scheduler.add_job(Job(name='send_mek', cmd=u'C:/Python27/python.exe manage.py send_mek_to_mo', duration=300))
 scheduler.add_job(Job(name='summary_report', cmd=u'C:/Python27/python.exe manage.py summary_report', duration=300))
-scheduler.add_job(Job(name='notification', cmd=u'C:/Python27/python.exe notification.py', duration=120))
 scheduler.run()
