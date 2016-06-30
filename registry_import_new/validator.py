@@ -483,11 +483,11 @@ class CheckVolume:
 
     def check(self, event, service):
         if event.get('USL_OK', '') == '1' and service['CODE_USL'] not in CheckVolume.HOSPITAL_VOLUME_EXCLUSIONS \
-                and not service['CODE_USL'].startswith('A'):
+                and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
             self.hospital_volume_reg.add(event['IDCASE'])
 
         if event.get('USL_OK', '') == '2' and service['CODE_USL'] not in CheckVolume.DAY_HOSPITAL_VOLUME_EXCLUSIONS \
-                and not service['CODE_USL'].startswith('A'):
+                and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
             self.day_hospital_volume_reg.add(event['IDCASE'])
 
     def get_error(self):
