@@ -58,7 +58,7 @@ class Command(BaseCommand):
                     message += report_name + separator
 
             if report_wizard_final.completed_reports:
-                message += separator + u'Предварительные:' + separator
+                message += separator + u'Итоговые:' + separator
                 for report_name in report_wizard_final.completed_reports:
                     message += report_name + separator
 

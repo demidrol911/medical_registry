@@ -165,7 +165,12 @@ class SogazMekGeneralPage(ReportPage):
         sheet.write_cell(24, 2, self.data['sum_sanction_total'])
         sheet.write_cell(26, 2, self.data['sum_sanction_other_mo'])
         sheet.write_cell(29, 2, self.data['sum_sanction_repeat_mek'])
+        if parameters.organization_code == u'280085':
+            sheet.write_cell(31, 0, u'Итоговая сумма, принятая к оплате с учетом индексации по флюорографии (руб) :')
         sheet.write_cell(31, 5, self.data['sum_accepted'])
         last_name, first_name, middle_name = mo_info['act_head_fullname'].split(' ')
         sheet.set_style({'align': 'center'})
         sheet.write_cell(42, 0, u'%s.%s. %s' % (first_name[0], middle_name[0], last_name))
+
+    def get_accepted_sum(self):
+        return self.data['sum_accepted']

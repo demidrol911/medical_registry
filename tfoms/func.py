@@ -23,7 +23,7 @@ from main.funcs import dictfetchall
 
 ### Отчётный год и период
 YEAR = '2016'  # str(cur_date.year)
-PERIOD = '03'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
+PERIOD = '06'  # ('0%d' if PERIOD_INT < 10 else '%d') % PERIOD_INT
 DATE_ATTACHMENT = datetime.strptime(
     '{year}-{period}-1'.format(year=YEAR, period=PERIOD),
     '%Y-%m-%d'
@@ -460,6 +460,7 @@ def calculate_fluorography(mo_code):
                 from fluorography f
                 join medical_organization mo ON mo.code = f.attachment_code and mo.parent_fk is null
                 where mo.code <> '280085'
+                      and date = format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
             """
     else:
         query = """
@@ -468,17 +469,18 @@ def calculate_fluorography(mo_code):
                 from fluorography f
                 join medical_organization mo ON mo.code = f.attachment_code and mo.parent_fk is null
                 where mo.code = %(organization_code)s
+                      and date = format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
             """
     cursor = connection.cursor()
-    cursor.execute(query, dict(organization_code=mo_code))
+    cursor.execute(query, dict(organization_code=mo_code, year=YEAR, period=PERIOD))
     data = dictfetchall(cursor)
     result = {'adult': {}, 'child': {}}
     if data[0]['adult_population'] or data[0]['child_population']:
         result['adult']['population'] = data[0]['adult_population']
         result['child']['population'] = data[0]['child_population']
 
-        result['adult']['basic_tariff'] = 222 if mo_code == '280085' else -222
-        result['child']['basic_tariff'] = 222 if mo_code == '280085' else -222
+        result['adult']['basic_tariff'] = 140 if mo_code == '280085' else -140
+        result['child']['basic_tariff'] = 140 if mo_code == '280085' else -140
 
         for key in result:
             result[key]['tariff'] = Decimal(round(result[key]['population']*result[key]['basic_tariff'], 2))
@@ -494,7 +496,7 @@ def calculate_fluorography(mo_code):
         return False, {}
 
 
-### Устанавливает статус реестру
+# Устанавливает статус реестру
 def change_register_status(mo_code, status):
     MedicalRegister.objects.filter(
         year=YEAR,
@@ -529,3 +531,28 @@ def get_mo_name(mo_code, department=None):
     if department:
         return MedicalOrganization.objects.get(old_code=department).name
     return MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).name
+
+
+def get_mo_map():
+    query = """
+        SELECT DISTINCT dep.old_code AS dep_code, mo.code AS mo_code
+        FROM provided_service ps
+            JOIN provided_event pe
+                ON ps.event_fk = pe.id_pk
+            JOIN medical_register_record mrr
+                ON mrr.id_pk = pe.record_fk
+            JOIN medical_register mr
+                ON mr.id_pk = mrr.register_fk
+            JOIN medical_organization mo
+                ON mo.id_pk = ps.organization_fk
+            JOIN medical_organization dep
+                ON dep.id_pk = ps.department_fk
+        WHERE mr.is_active
+            AND mr.year = %(year)s
+            AND mr.period = %(period)s
+        """
+    cursor = connection.cursor()
+    cursor.execute(query, dict(year=YEAR, period=PERIOD))
+    mo_map = {item['dep_code']: item['mo_code'] for item in dictfetchall(cursor)}
+    cursor.close()
+    return mo_map
