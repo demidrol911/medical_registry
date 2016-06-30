@@ -1,6 +1,6 @@
 #! -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand
-from report_printer_clear.utils.report import Report, ReportParameters
+from report_printer.libs.report import Report, ReportParameters
 from hosp_accounting.free_places import FreePlacesCountPage
 from hosp_accounting.sender_statistic import SenderStatisticPage
 from hosp_accounting.reciever_statistic import ReceiverStatisticPage, AllInfoStatisticPage
@@ -8,6 +8,7 @@ from hosp_accounting.patients_amount import SenderHospPatientsAmountPage, Receiv
     HospPatientsAmountPage
 from hosp_accounting.info_by_mo import InfoByMoPage
 from hosp_accounting.submitted_figures import SubmittedFiguresPage
+from hosp_accounting.anul import AnulPage
 
 
 class Command(BaseCommand):
@@ -15,9 +16,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
 
         parameters = ReportParameters()
-        parameters.path_to_dir = u'C:\REESTR\hosp_accounting'
-        parameters.start_date = '2016-01-12'
-        parameters.end_date = '2016-01-25'
+        parameters.path_to_dir = u'T:\Куракса\НОВЫЕ ДАННЫЕ по И.С\июнь'
+        parameters.start_date = '2016-06-24'
+        parameters.end_date = '2016-06-24'
         parameters.hosp_start = '2016-01-01'
         parameters.hosp_end = '2016-01-20'
 
@@ -55,6 +56,18 @@ class Command(BaseCommand):
             {'pages': (SubmittedFiguresPage, ),
              'title': u'УГ поданные цифры с %s по %s'
                       % (parameters.start_date, parameters.end_date)},
+
+            {'pages': (AnulPage, ),
+             'title': u'аннулированные за %s' % (parameters.start_date, )},
+        )
+
+        reports_desc = (
+            {'pages': (AnulPage, ),
+             'title': u'аннулированные за %s' % (parameters.start_date, )},
+
+            {'pages': (SubmittedFiguresPage, ),
+             'title': u'поданные цифры за %s'
+                      % (parameters.start_date, )},
         )
 
         for desc in reports_desc:
