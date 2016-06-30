@@ -1,8 +1,8 @@
 #! -*- coding: utf-8 -*-
 
-from report_printer_clear.utils.page import ReportPage
+from report_printer.libs.page import ReportPage
 from main.models import MedicalOrganization
-from report_printer_clear.utils.excel_style import VALUE_STYLE
+from report_printer.libs.excel_style import VALUE_STYLE
 
 
 class ReceiverHospPatientsAmountPage(ReportPage):

@@ -1,8 +1,8 @@
 #! -*- coding: utf-8 -*-
 
-from report_printer_clear.utils.page import ReportPage
+from report_printer.libs.page import ReportPage
 from main.models import MedicalOrganization
-from report_printer_clear.utils.excel_style import VALUE_STYLE
+from report_printer.libs.excel_style import VALUE_STYLE
 
 
 class SubmittedFiguresPage(ReportPage):
@@ -96,6 +96,10 @@ class SubmittedFiguresPage(ReportPage):
 
     def print_page(self, sheet, parameters):
         sheet.set_position(0, 0)
+        sheet.write(u'Сведения о количестве записей по информационному обмену по сопровождению застрахованных за ' +
+                    parameters.start_date)
+
+        sheet.set_position(2, 0)
         sheet.set_style(VALUE_STYLE)
 
         sheet.write(u'МО', 'c')

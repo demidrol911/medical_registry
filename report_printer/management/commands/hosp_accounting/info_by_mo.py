@@ -1,8 +1,8 @@
 #! -*- coding: utf-8 -*-
 
-from report_printer_clear.utils.page import ReportPage
+from report_printer.libs.page import ReportPage
 from main.funcs import dictfetchall
-from report_printer_clear.utils.excel_style import VALUE_STYLE
+from report_printer.libs.excel_style import VALUE_STYLE
 from django.db import connection
 from main.funcs import howlong
 
@@ -161,9 +161,7 @@ class InfoByMoPage(ReportPage):
                             on idc.id_pk = h.disease_fk
 
                     where
-                        h.received_date between %(start)s and %(end)s
-                        and sender.code in ('280066', '280036', '280085', '280038', '280003', '280026', '280043', '280064',
-                        '280013', '280069', '280018', '280005') -- , '280017', '280026'
+                        h.received_date = %(start)s --between %(start)s and %(end)s
                     GROUP BY sender.name, h.number, receiver.name, T.last_name, T.first_name, T.middle_name, T.birthdate, h.received_date
                     --ORDER BY number
                 ) as Z
