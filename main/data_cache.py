@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from funcs import safe_int, queryset_to_dict
+from funcs import queryset_to_dict
 
 from main.models import (
     IDC, MedicalOrganization,
@@ -9,7 +9,10 @@ from main.models import (
     MedicalServiceProfile, TreatmentResult, TreatmentOutcome, Special,
     MedicalWorkerSpeciality, PaymentMethod, PaymentType, PaymentFailureCause,
     Gender, InsurancePolicyType, MedicalHospitalization, MedicalService,
-    MedicalServiceHiTechKind, MedicalServiceHiTechMethod, ExaminationResult, KSG)
+    MedicalServiceHiTechKind, MedicalServiceHiTechMethod, ExaminationResult, KSG,
+    MedicalError, TariffProfile, MedicalServiceGroup, MedicalServiceSubgroup,
+    MedicalServiceReason, TariffCoefficient
+)
 
 
 GENDERS = queryset_to_dict(Gender.objects.all())
@@ -31,7 +34,7 @@ SPECIALITIES_NEW = queryset_to_dict(MedicalWorkerSpeciality.objects.filter(
 ))
 METHODS = queryset_to_dict(PaymentMethod.objects.all())
 TYPES = queryset_to_dict(PaymentType.objects.all())
-FAILURE_CUASES = queryset_to_dict(PaymentFailureCause.objects.all())
+FAILURE_CAUSES = queryset_to_dict(PaymentFailureCause.objects.all())
 DISEASES = {rec.idc_code: rec for rec in IDC.objects.all() if rec.idc_code or rec.idc_code != u'НЕТ'}
 DIVISIONS = queryset_to_dict(MedicalDivision.objects.all())
 SPECIALS = queryset_to_dict(Special.objects.all())
@@ -43,11 +46,24 @@ EXAMINATION_RESULTS = queryset_to_dict(ExaminationResult.objects.all())
 HOSPITAL_KSGS = queryset_to_dict(KSG.objects.filter(start_date='2016-01-01', term=1))
 DAY_HOSPITAL_KSGS = queryset_to_dict(KSG.objects.filter(start_date='2016-01-01', term=2))
 
+ERRORS = {error.pk: {'code': error.old_code, 'failure_cause': error.failure_cause_id, 'name': error.name}
+          for error in MedicalError.objects.all()}
+TARIFF_PROFILES = {profile.pk: {'name': profile.name} for profile in TariffProfile.objects.all()}
+MEDICAL_GROUPS = {group.pk: {'name': group.name} for group in MedicalServiceGroup.objects.all()}
+MEDICAL_SUBGROUPS = {subgroup.pk: {'name': subgroup.name} for subgroup in MedicalServiceSubgroup.objects.all()}
+MEDICAL_REASONS = {reason.pk: {'name': reason.name} for reason in MedicalServiceReason.objects.all()}
+COEFFICIENT_TYPES = {coefficient.pk: {'name': coefficient.name, 'value': coefficient.value}
+                     for coefficient in TariffCoefficient.objects.all()}
+FAILURES = {
+    failure_cause.pk: {'number': failure_cause.number, 'name': failure_cause.name}
+    for failure_cause in PaymentFailureCause.objects.all()
+}
+
+
 KIND_TERM_DICT = {'1': ['2', '3', '21', '22', '31', '32', '4'],
                   '2': ['1', '2', '3', '21', '22', '31', '32', '4'],
                   '3': ['1', '11', '12', '13', '4'],
-                  '4': ['1', '2', '3', '4', '11', '12', '21', '22', '31', '32']
-}
+                  '4': ['1', '2', '3', '4', '11', '12', '21', '22', '31', '32']}
 
 EXAMINATION_HEALTH_GROUP_EQUALITY = {
     '1': '1',
@@ -68,3 +84,11 @@ ADULT_PREVENTIVE_COMMENT_PATTERN = r'^F(0|1)[0-3]{1}(0|1)$'
 
 OLD_ADULT_EXAMINATION = ('019015', '019020', '019001', '019017', '19015', '19020', '19001', '19017')
 NEW_ADULT_EXAMINATION = ('019025', '019026', '019027', '019028', '19025', '19026', '19027', '19028')
+
+MONTH_NAME = {
+    '01': u'Январь', '02': u'февраль',
+    '03': u'Март', '04': u'Апрель', '05': u'Май',
+    '06': u'Июнь', '07': u'Июль', '08': u'Август',
+    '09': u'Сентябрь', '10': u'Октябрь', '11': u'Ноябрь',
+    '12': u'Декабрь'
+}

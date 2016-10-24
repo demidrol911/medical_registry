@@ -5,6 +5,10 @@ from django.db import connection, transaction
 from django.db.models.query import QuerySet
 from django.db.models import Sum
 import datetime
+from medical_service_register.settings import DATE_ATTACHMENT
+from decimal import Decimal
+from medical_service_register.settings import YEAR, PERIOD
+from main.funcs import dictfetchall
 
 SERVICE_XML_TYPE_PERSON = 0
 SERVICE_XML_TYPE_REGULAR = 1
@@ -358,64 +362,33 @@ class MedicalOrganization(models.Model):
         return result
 
     def get_ambulance_attachment_count(self, date):
-        '''
-        capitation_cache = {}
-        for line in file('capitation_exception_cache.csv'):
-            line_data = line.split(';')
-            if date.year == int(line_data[1]) \
-                    and date.month == int(line_data[2]):
-                capitation_cache[line_data[0]] = [int(popul) for popul in line_data[3:]]
-
-        result = {
-            1: {'men': 0, 'fem': 0},
-            2: {'men': 0, 'fem': 0},
-            3: {'men': 0, 'fem': 0},
-            4: {'men': 0, 'fem': 0},
-            5: {'men': 0, 'fem': 0}
-        }
-
-        ### Этот костыль будет до тех пор пока я не внесу старые данные по подушевому по скорой помощи
-        ### За 2015 год
-        ### До августа 2015 рассчет подушевого по скорой помощи осуществлялся по следующей схеме
-        if date < datetime.datetime(year=2015, month=7, day=1):
-            # Из-за того, что больница 280065 не принадлежит територриально 280017 a принадлежит 280001
-            # при рассчёт численности для 280017 и 280001 используется следующий запрос
-            # 280088 обслуживает 280028
-
-            if self.code in capitation_cache:
-                result[1]['men'] = capitation_cache[self.code][0]
-                result[1]['fem'] = capitation_cache[self.code][1]
-
-                result[2]['men'] = capitation_cache[self.code][2]
-                result[2]['fem'] = capitation_cache[self.code][3]
-
-                result[3]['men'] = capitation_cache[self.code][4]
-                result[3]['fem'] = capitation_cache[self.code][5]
-
-                result[4]['men'] = capitation_cache[self.code][6]
-                result[4]['fem'] = capitation_cache[self.code][7]
-
-                result[5]['men'] = capitation_cache[self.code][8]
-                result[5]['fem'] = capitation_cache[self.code][9]
-
-            # Для всех остальных больниц используются уже рассчитанные значения численности из
-            # таблицы attachment_statistics
-            else:
-                result = self.get_attachment_count(date)
-                for mo in MedicalOrganization.objects.filter(
-                        ambulance=self.pk,
-                        parent__isnull=True):
-                    mo_result = mo.get_attachment_count(date)
-                    for group in mo_result:
-                        result[group]['men'] += mo_result[group]['men']
-                        result[group]['fem'] += mo_result[group]['fem']
-        else:
-            # Новый рассчет подушевого по скорой помощи
-            # данные берутся из attachment_statistics
-            result = self.get_attachment_ambulance_count_since_2015_08_01(date)
-        '''
         result = self.get_attachment_ambulance_count_since_2015_08_01(date)
         return result
+
+    @staticmethod
+    def get_partial_register(mo_code):
+        return list(ProvidedService.objects.filter(
+            event__record__register__year=YEAR,
+            event__record__register__period=PERIOD,
+            event__record__register__is_active=True,
+            event__record__register__organization_code=mo_code).\
+            values_list('department__old_code', flat=True).distinct())
+
+    @staticmethod
+    def get_mo_info(mo_code, department_code=None):
+        if department_code:
+            mo = MedicalOrganization.objects.get(code=mo_code, old_code=department_code)
+        else:
+            mo = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True)
+        return {'code': mo.code, 'name': mo.name, 'is_agma_cathedra': mo.is_agma_cathedra,
+                'act_number': mo.act_number, 'act_head_fullname': mo.act_head_fullname,
+                'act_head_position': mo.act_head_position}
+
+    @staticmethod
+    def get_mo_name(mo_code, department=None):
+        if department:
+            return MedicalOrganization.objects.get(old_code=department).name
+        return MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).name
 
 
 class MedicalRegisterStatus(models.Model):
@@ -568,6 +541,164 @@ class MedicalRegister(models.Model):
 
         return result
 
+    # Возвращает список кодов медицинских организаций, реестры которых имеют указанный статус
+    @staticmethod
+    def get_mo_register(status=None):
+        organizations = MedicalRegister.objects.filter(year=YEAR, period=PERIOD, is_active=True, type=1)
+        if status:
+            organizations = organizations.filter(status__pk=status)
+        return organizations.values_list('organization_code', flat=True)
+
+    '''
+    @staticmethod
+    def get_mo_code(status):
+        organizations = MedicalRegister.objects.filter(
+            year=YEAR,
+            period=PERIOD,
+            is_active=True,
+            type=1,
+            status__pk=status
+        )
+        if organizations:
+            organization_code = organizations[0].organization_code
+        else:
+            organization_code = ''
+        return organization_code
+    '''
+
+    # Рассчет подушевого тарифа
+    @staticmethod
+    def calculate_capitation(term, mo_code):
+        """
+        Новая функция для рассчета тарифа по подушевому
+        """
+        tariff = TariffCapitation.objects.filter(
+            term=term, organization__code=mo_code,
+            start_date__lte=DATE_ATTACHMENT,
+            start_date__gte='2016-01-01',
+            is_children_profile=True
+        )
+        result = {'adult': {}, 'child': {}}
+
+        if tariff:
+            if term == 3:
+                population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
+                    get_attachment_count(DATE_ATTACHMENT)
+            elif term == 4:
+                population = MedicalOrganization.objects.get(code=mo_code, parent__isnull=True).\
+                    get_ambulance_attachment_count(DATE_ATTACHMENT)
+        else:
+            return False, result
+
+        # Чмсленность
+        result['adult']['population'] = population[4]['men'] + population[4]['fem'] + \
+            population[5]['men'] + population[5]['fem']
+
+        result['child']['population'] = population[1]['men'] + population[1]['fem'] + \
+            population[2]['men'] + population[2]['fem'] + \
+            population[3]['men'] + population[3]['fem']
+
+        result['adult']['basic_tariff'] = tariff.order_by('-start_date')[0].value
+        result['child']['basic_tariff'] = tariff.order_by('-start_date')[0].value
+
+        for key in result:
+            result[key]['tariff'] = Decimal(round(result[key]['population']*result[key]['basic_tariff'], 2))
+
+        for key in result:
+            result[key]['coeff'] = 0
+
+        for key in result:
+            result[key]['accepted'] = Decimal(round(result[key]['tariff'] + result[key].get('coeff', 0), 2))
+
+        return True, result
+
+    # Рассчёт вычета и индексации по флюорографии
+    @staticmethod
+    def calculate_fluorography(mo_code):
+        if mo_code == '280085':
+            query = """
+                select count(distinct case when age(f.start_date, f.birthdate) >= '18 years' THEN f.insurance_policy_fk END) AS adult_population,
+                      count(distinct case when age(f.start_date, f.birthdate) < '18 years' THEN f.insurance_policy_fk END) AS child_population
+                    from fluorography f
+                    join medical_organization mo ON mo.code = f.attachment_code and mo.parent_fk is null
+                    where mo.code <> '280085'
+                          and date = format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
+                """
+        else:
+            query = """
+                select count(distinct case when age(f.start_date, f.birthdate) >= '18 years' THEN f.insurance_policy_fk END) AS adult_population,
+                     count(distinct case when age(f.start_date, f.birthdate) < '18 years' THEN f.insurance_policy_fk END) AS child_population
+                    from fluorography f
+                    join medical_organization mo ON mo.code = f.attachment_code and mo.parent_fk is null
+                    where mo.code = %(organization_code)s
+                          and date = format('%%s-%%s-%%s', %(year)s, %(period)s, '01')::DATE
+                """
+        cursor = connection.cursor()
+        cursor.execute(query, dict(organization_code=mo_code, year=YEAR, period=PERIOD))
+        data = dictfetchall(cursor)
+        result = {'adult': {}, 'child': {}}
+        if data[0]['adult_population'] or data[0]['child_population']:
+            result['adult']['population'] = data[0]['adult_population']
+            result['child']['population'] = data[0]['child_population']
+
+            result['adult']['basic_tariff'] = 140 if mo_code == '280085' else -140
+            result['child']['basic_tariff'] = 140 if mo_code == '280085' else -140
+
+            for key in result:
+                result[key]['tariff'] = Decimal(round(result[key]['population']*result[key]['basic_tariff'], 2))
+
+            for key in result:
+                result[key]['coeff'] = 0
+
+            for key in result:
+                result[key]['accepted'] = result[key]['tariff']
+
+            return True, result
+        else:
+            return False, {}
+
+    # Поменять статус у реестра
+    @staticmethod
+    def change_register_status(mo_code, status):
+        MedicalRegister.objects.filter(
+            year=YEAR,
+            period=PERIOD,
+            organization_code=mo_code,
+            is_active=True
+        ).update(status=status)
+        if status == 8:
+            MedicalRegister.objects.filter(
+                year=YEAR,
+                period=PERIOD,
+                organization_code=mo_code,
+                is_active=True).update(pse_export_date=datetime.now())
+
+    # Возвращает отображение кода подразделения на федеральный код мо
+    @staticmethod
+    def get_mo_map():
+        query = """
+            SELECT DISTINCT dep.old_code AS dep_code, mo.code AS mo_code
+            FROM provided_service ps
+                JOIN provided_event pe
+                    ON ps.event_fk = pe.id_pk
+                JOIN medical_register_record mrr
+                    ON mrr.id_pk = pe.record_fk
+                JOIN medical_register mr
+                    ON mr.id_pk = mrr.register_fk
+                JOIN medical_organization mo
+                    ON mo.id_pk = ps.organization_fk
+                JOIN medical_organization dep
+                    ON dep.id_pk = ps.department_fk
+            WHERE mr.is_active
+                AND mr.year = %(year)s
+                AND mr.period = %(period)s
+            """
+        cursor = connection.cursor()
+        cursor.execute(query, dict(year=YEAR, period=PERIOD))
+        mo_map = {item['dep_code']: item['mo_code'] for item in dictfetchall(cursor)}
+        cursor.close()
+        return mo_map
+
 
 class MedicalRegisterRecord(models.Model):
     id_pk = models.AutoField(primary_key=True, db_column='id_pk')
@@ -627,17 +758,8 @@ class MedicalService(models.Model):
 
     objects = ExtendedObjectManager()
 
-
     class Meta:
         db_table = "medical_service"
-
-
-#class MedicalServiceClass(models.Model):
-#    ID = models.IntegerField(primary_key=True, db_column='id_pk')
-#    name = models.CharField(max_length=40)
-#
-#    class Meta:
-#        db_table = "medical_service_class"
 
 
 class MedicalServiceDivision(models.Model):
@@ -1518,6 +1640,15 @@ class MedicalServiceVolume(models.Model):
     date = models.DateField()
     hospital = models.IntegerField()
     day_hospital = models.IntegerField()
+    clinic_prevention = models.IntegerField()
+    clinic_emergency = models.IntegerField()
+    clinic_disease = models.IntegerField()
+    stomatology_prevention = models.DecimalField(default=0, max_digits=15,
+                                                 decimal_places=2)
+    stomatology_emergency = models.DecimalField(default=0, max_digits=15,
+                                                decimal_places=2)
+    stomatology_disease = models.DecimalField(default=0, max_digits=15,
+                                              decimal_places=2)
 
     class Meta:
         db_table = 'medical_service_volume'
@@ -1605,6 +1736,7 @@ class Fluorography(models.Model):
     insurance_policy = models.IntegerField(db_column='insurance_policy_fk')
     attachment_code = models.CharField(max_length=6)
     start_date = models.DateField()
+    date = models.DateField()
 
     class Meta:
         db_table = 'fluorography'
