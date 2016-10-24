@@ -1,10 +1,12 @@
 #! -*- coding: utf-8 -*-
 from valid import _length, _pattern, validate, _required, _in, _isdate
-from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, DEPARTMENTS, DISEASES, \
-    METHODS, CODES, SPECIALS, \
-    TERMS, FORMS, HOSPITALIZATIONS, DIVISIONS, PROFILES, RESULTS, OUTCOMES, SPECIALITIES_NEW, HITECH_KINDS, \
-    HITECH_METHODS, EXAMINATION_RESULTS, ADULT_EXAMINATION_COMMENT_PATTERN, KIND_TERM_DICT, \
-    OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS
+from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, \
+    DEPARTMENTS, DISEASES, METHODS, CODES, SPECIALS, TERMS, FORMS, \
+    HOSPITALIZATIONS, DIVISIONS, PROFILES, RESULTS, OUTCOMES, SPECIALITIES_NEW, \
+    HITECH_KINDS, HITECH_METHODS, EXAMINATION_RESULTS, \
+    ADULT_EXAMINATION_COMMENT_PATTERN, KIND_TERM_DICT, \
+    OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, \
+    EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS
 
 import re
 from datetime import datetime
@@ -73,8 +75,6 @@ class RegistryValidator:
             'DOCNUM': _length(1, 20, pass_on_blank=True),
             'VNOV_D': _length(1, 4, pass_on_blank=True),
         }
-
-        # 'SNILS': _length(14, pass_on_blank=True)
 
         # Правила валидации для полиса
         self.policy_valid = {
@@ -220,27 +220,31 @@ class RegistryValidator:
 
         # Проверка на соостветствие вида помощи усуловию оказания
         if not CheckFunction.is_event_kind_corresponds_term(event.get('VIDPOM', None), event.get('USL_OK', None)):
-            h_errors += handle_errors({'SLUCH': [u'904;Указанный вид помощи не может быть оказанным в текущих условиях']},
-                                      parent='ZAP', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+            h_errors += handle_errors(
+                {'SLUCH': [u'904;Указанный вид помощи не может быть оказанным в текущих условиях']},
+                parent='ZAP', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         # Проверка на соостветствие результата диспансеризации комментарию
         if self.registry_type in (3, 4) and not CheckFunction.is_examination_result_matching_comment(
                 event.get('RSLT_D'), event.get('COMENTSL')):
             h_errors += handle_errors(
-                    {'RSLT_D': [u'904;Указанный код результата диспансеризации не совпадает с указанным комментарием']},
-                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+                {'RSLT_D': [u'904;Указанный код результата диспансеризации не совпадает с указанным комментарием']},
+                parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         # Проверка КСГ
-        if event.get('USL_OK', '') in ['1', '2'] and not event.get('KSG_MO', None):
+        if (event.get('USL_OK', '') == '1' and not event.get('KSG_MO', None)) \
+                or (event.get('USL_OK', '') == '2' and not event.get('KSG_MO', None)
+                    and event['LPU'] != '280064'):
             h_errors += handle_errors(
-                    {'KSG_MO': [u'902;Отсутствует обязательное значение.']},
-                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+                {'KSG_MO': [u'902;Отсутствует обязательное значение.']},
+                parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         if (event.get('USL_OK', '') == '1' and event.get('KSG_MO', None) not in HOSPITAL_KSGS) \
-                or (event.get('USL_OK', '') == '2' and event.get('KSG_MO', None) not in DAY_HOSPITAL_KSGS):
+                or (event.get('USL_OK', '') == '2' and event.get('KSG_MO', None) not in DAY_HOSPITAL_KSGS
+                    and event['LPU'] != '280064'):
             h_errors += handle_errors(
-                    {'KSG_MO': [u'904;Значение не соответствует справочному.']},
-                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+                {'KSG_MO': [u'904;Значение не соответствует справочному.']},
+                parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         # Проверка наличия уточнения в диагнозах
         if event['LPU'] != '280043':
@@ -461,25 +465,70 @@ class CheckFunction:
 
 
 class CheckVolume:
-    # Проверка на сверхобъёмы по стационару и дневному стационару
+    # Проверка на сверхобъёмы по стационару, дневному стационару
+    # поликлинике профилактика, поликлинике неотложка,
+    # стоматологии профилактика, стоматологии неотложка
 
-    HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103', '098975', '098994', '198994', '98994')
+    HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103',
+                                  '098975', '098994', '198994', '98994',
+                                  '98975')
     DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
-                                      '098770', '98710', '98711', '98712', '98715',
-                                      '98770', '098770', '098770', '198770', '098994', '198994', '98994')
+                                      '098770', '98710', '98711', '98712',
+                                      '98715', '98770', '098770', '098770',
+                                      '198770', '098994', '198994', '98994')
     HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280076', '280091', '280069')
     DAY_HOSPITAL_MO_EXCLUSIONS = ('280076', '280091', '280069')
+    CLINIC_VOLUME_MO_EXCLUSIONS = (
+        '280029', '280001', '280078', '280075', '280084', '280064', '280003',
+        '280027', '280017', '280067', '280022', '280088', '280024', '280019',
+        '280085', '280038', '280066', '280052', '280076', '280083', '280069',
+        '280068', '280065', '280037', '280009', '280007', '280039', '280020',
+        '280053', '280071', '280025', '280059', '280080', '280041', '280015',
+        '280040', '280061', '280074', '280012', '280036', '280002',
+    )
 
     def __init__(self, registry_set):
         self.registry_set = registry_set
         self.hospital_volume_reg = set()
         self.day_hospital_volume_reg = set()
+        self.clinic_disease_reg = set()
+        self.clinic_prevention_reg = set()
+        self.clinic_emergency_reg = set()
+        self.stomatology_prevention_uet_reg = 0
+        self.stomatology_emergency_uet_reg = 0
+
         volume = MedicalServiceVolume.objects.filter(
             organization__code=self.registry_set.mo_code,
-            date='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period)
+            date='{0}-{1}-01'.format(self.registry_set.year,
+                                     self.registry_set.period)
         )
+
+        # По стационару, дневному стационару, поликлиника профилактика,
+        # поликлиника неотложка рассчёт по количеству случаев
+        # По стоматологии профилактика, стоматологии неотложка
+        # рассчёт по сумме ует
         self.hospital_volume = volume[0].hospital if volume else None
         self.day_hospital_volume = volume[0].day_hospital if volume else None
+        self.clinic_disease = volume[0].clinic_disease if volume else None
+        self.clinic_prevention = volume[0].clinic_prevention if volume else None
+        self.clinic_emergency = volume[0].clinic_emergency if volume else None
+        self.stomatology_prevention = volume[0].stomatology_prevention if volume else None
+        self.stomatology_emergency = volume[0].stomatology_emergency if volume else None
+
+        if self.hospital_volume < 0:
+            self.hospital_volume = 0
+        if self.day_hospital_volume < 0:
+            self.day_hospital_volume = 0
+        if self.clinic_disease < 0:
+            self.clinic_disease = 0
+        if self.clinic_prevention < 0:
+            self.clinic_prevention = 0
+        if self.clinic_emergency < 0:
+            self.clinic_emergency = 0
+        if self.stomatology_prevention < 0:
+            self.stomatology_prevention = 0
+        if self.stomatology_emergency < 0:
+            self.stomatology_emergency = 0
 
     def check(self, event, service):
         if event.get('USL_OK', '') == '1' and service['CODE_USL'] not in CheckVolume.HOSPITAL_VOLUME_EXCLUSIONS \
@@ -490,32 +539,112 @@ class CheckVolume:
                 and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
             self.day_hospital_volume_reg.add(event['IDCASE'])
 
+        # Новые проверки
+        if event.get('USL_OK', '') == '3' \
+                and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
+            code_obj = CODES[service['CODE_USL']]
+            count_services = 0
+            stomatology_subgroup = 0
+            for s in event.get('USL', []):
+                cur_code_obj = CODES[s['CODE_USL']]
+                if cur_code_obj.group_id not in (27, 3, 5, 42):
+                    count_services += 1
+                if cur_code_obj.group_id == 19 and cur_code_obj.subgroup_id in (13, 14, 17):
+                    stomatology_subgroup = cur_code_obj.subgroup_id
+
+            # Поликлиника заболевание
+            if code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and count_services > 1:
+                self.clinic_disease_reg.add(event['IDCASE'])
+
+            # Поликлиника профилактика
+            if (code_obj.reason_id in [2, 3, 8] and (not code_obj.group_id or code_obj.group_id in [24, ])) \
+                or (code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and
+                    count_services == 1):
+                self.clinic_prevention_reg.add(event['IDCASE'])
+
+            # Поликлиника неотложка
+            if code_obj.reason_id == 5 and (not code_obj.group_id or code_obj.group_id in [24, 44, 31]):
+                if event['LPU'] != '280043':
+                    self.clinic_emergency_reg.add(event['IDCASE'])
+
+            if code_obj.group_id == 19:
+                uet = float(service['KOL_USL'] or 0) * (code_obj.uet or 0)
+                # Стоматология профилактика
+                if stomatology_subgroup == 13:
+                    self.stomatology_prevention_uet_reg += uet
+
+                # Стоматология неотложка
+                if stomatology_subgroup in (14, 17):
+                    self.stomatology_emergency_uet_reg += uet
+
     def get_error(self):
-        overvolume_hospital = self.hospital_volume \
+        overvolume_hospital = self.hospital_volume is not None\
             and (len(self.hospital_volume_reg) > self.hospital_volume) \
             and self.registry_set.mo_code not in CheckVolume.HOSPITAL_VOLUME_MO_EXCLUSIONS
-        overvolume_day_hospital = self.day_hospital_volume \
+        overvolume_day_hospital = self.day_hospital_volume is not None\
             and (len(self.day_hospital_volume_reg) > self.day_hospital_volume) \
             and self.registry_set.mo_code not in CheckVolume.DAY_HOSPITAL_MO_EXCLUSIONS
+        overvolume_clinic_disease = self.clinic_disease is not None \
+            and (len(self.clinic_disease_reg) > self.clinic_disease) \
+            and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
+        overvolume_clinic_prevention = self.clinic_prevention is not None \
+            and (len(self.clinic_prevention_reg) > self.clinic_prevention) \
+            and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS \
+            and self.registry_set.mo_code != '280026'
+        overvolume_stomatology_prevention = self.stomatology_prevention is not None \
+            and (self.stomatology_prevention_uet_reg > self.stomatology_prevention) \
+            and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
+        overvolume_clinic_emergency = self.clinic_emergency is not None \
+            and (len(self.clinic_emergency_reg) > self.clinic_emergency) \
+            and self.registry_set.mo_code != '280013'
+        overvolume_stomatology_emergency = self.stomatology_emergency is not None \
+            and (self.stomatology_emergency_uet_reg > self.stomatology_emergency)
 
-        if overvolume_hospital or overvolume_day_hospital:
-            error_message = (
-                u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает, что в соответствии с п.6 статьи 39 \n'
-                u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
-                u'к тарифному соглашению в сфере обязательного медицинского страхования Амурской области \n'
-                u'на 2016 год, страховая компания принимает реестры счетов и счета на оплату \n'
-                u'медицинской помощи в пределах объемов, утвержденных решением комиссии по \n'
-                u'разработке территориальной программы обязательного медицинского страхования Амурской области.\n'
-                u'\n'
-                u'В текущем реестре выполнено:\n'
-            )
-            if overvolume_hospital:
-                error_message += u'Круглосуточный стационар - {0}, запланировано решением тарифной комисси - {1}\n'.\
-                    format(len(self.hospital_volume_reg), self.hospital_volume)
-            if overvolume_day_hospital:
-                error_message += u'Дневной стационар - {0}, запланировано решением тарифной комисси - {1}\n'.\
-                    format(len(self.day_hospital_volume_reg), self.day_hospital_volume)
-            error_message += u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n'
-            return True, error_message
+        error_message = ''
+        if overvolume_hospital:
+            error_message += u'Круглосуточный стационар - {0}, запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.hospital_volume_reg), self.hospital_volume)
+        if overvolume_day_hospital:
+            error_message += u'Дневной стационар - {0}, запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.day_hospital_volume_reg), self.day_hospital_volume)
+
+        if overvolume_clinic_disease:
+            error_message += u'Амбулаторно-поликлиническая помощь обращения - {0}, ' \
+                u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.clinic_disease_reg), self.clinic_disease)
+
+        if overvolume_clinic_prevention:
+            error_message += u'Амбулаторно-поликлиническая помощь профилактическая - {0}, ' \
+                u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.clinic_prevention_reg), self.clinic_prevention)
+
+        if overvolume_clinic_emergency:
+            error_message += u'Амбулаторно-поликлиническая помощь неотложная - {0}, ' \
+                u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.clinic_emergency_reg), self.clinic_emergency)
+
+        if overvolume_stomatology_prevention:
+            error_message += u'Стоматология профилактика - {0} ует, ' \
+                u'запланировано решением тарифной комиссии - {1} ует\n'.\
+                format(self.stomatology_prevention_uet_reg, self.stomatology_prevention)
+
+        if overvolume_stomatology_emergency:
+            error_message += u'Стоматология неотложка - {0} ует, запланировано решением тарифной комиссии - {1} ует\n'.\
+                format(self.stomatology_emergency_uet_reg, self.stomatology_emergency)
+
+        if overvolume_hospital or overvolume_day_hospital or overvolume_clinic_prevention \
+                or overvolume_clinic_emergency or overvolume_stomatology_prevention or overvolume_stomatology_emergency:
+
+            return True, (u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает,'
+                          u'что в соответствии с п.6 статьи 39 \n'
+                          u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
+                          u'к тарифному соглашению в сфере обязательного медицинского страхования \n'
+                          u'Амурской области на 2016 год, страховая компания принимает реестры счетов и счета \n'
+                          u'на оплату  медицинской помощи в пределах объемов, утвержденных решением комиссии по \n'
+                          u'разработке территориальной программы обязательного '
+                          u'медицинского страхования Амурской области.\n\n'
+                          u'В текущем реестре выполнено:\n'
+                          u'%s'
+                          u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n') % error_message
         else:
             return False, ''

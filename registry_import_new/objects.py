@@ -214,20 +214,22 @@ class RegistryDb:
                 ).update(status=MedicalRegisterStatus.objects.get(pk=1))
 
     def insert_error_message(self):
-        MedicalRegisterImport.objects.create(
-            period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
-            organization=self.registry_set.mo_code,
-            filename=self.registry_set.get_patients_file().file_name,
-            status=u'Не пройден ФЛК'
-        )
+        if not TEST_MODE:
+            MedicalRegisterImport.objects.create(
+                period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
+                organization=self.registry_set.mo_code,
+                filename=self.registry_set.get_patients_file().file_name,
+                status=u'Не пройден ФЛК'
+            )
 
     def insert_overvolume_message(self):
-        MedicalRegisterImport.objects.create(
-            period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
-            organization=self.registry_set.mo_code,
-            filename=self.registry_set.get_patients_file().file_name,
-            status=u'Сверхобъёмы'
-        )
+        if not TEST_MODE:
+            MedicalRegisterImport.objects.create(
+                period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
+                organization=self.registry_set.mo_code,
+                filename=self.registry_set.get_patients_file().file_name,
+                status=u'Сверхобъёмы'
+            )
 
     def _get_next_patient_pk(self):
         if TEST_MODE:

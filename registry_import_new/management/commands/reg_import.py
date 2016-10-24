@@ -14,7 +14,7 @@ from registry_import_new.objects import RegistryDb
 from main.models import MedicalRegister
 from medical_service_register.path import REGISTRY_IMPORT_DIR, IMPORT_ARCHIVE_DIR
 import shutil
-from tfoms.func import YEAR, PERIOD
+from medical_service_register.settings import YEAR, PERIOD
 
 
 from main.logger import get_logger
@@ -174,7 +174,8 @@ def registry_process(registry_set):
 
                 if not patient_obj:
                     service_file_errors[service_item.file_name] += handle_errors(
-                        {'ID_PAC': [u'902;Нет сведений о пациенте в файле пациентов']},  parent='PACIENT', record_uid=n_zap)
+                        {'ID_PAC': [u'902;Нет сведений о пациенте в файле пациентов']},
+                        parent='PACIENT', record_uid=n_zap)
                     continue
                 else:
                     registry_db.patient_update_policy(patient_obj, patient_policy)
@@ -202,44 +203,45 @@ def registry_process(registry_set):
 
 def main():
     vipnet_handler.get_vipnet_files()
-
     sender = Sender()
     for registry_set in load_registry_set():
         logger.info(u'%s реестр подготавливается к импорту' % registry_set.mo_code)
-        if registry_set.already_in_database():
+        sender.set_recipient(registry_set.mo_code)
+        fatal_errors = registry_set.check()
+        already_in_database = registry_set.already_in_database()
+        if fatal_errors:
+            sender.send_errors_message(
+                u'ОШИБКИ ОБРАБОТКИ %s ВЕРСИЯ %s' % (registry_set.mo_code, registry_set.version), fatal_errors)
+            logger.info(u'%s обнаружены фатальные ошибки во время обработки' % registry_set.mo_code)
+        if already_in_database:
             logger.info(u'%s уже есть заимпорченный итоговый реестр' % registry_set.mo_code)
-        else:
-            sender.set_recipient(registry_set.mo_code)
-            fatal_errors = registry_set.check()
-            if fatal_errors:
-                sender.send_errors_message(u'ОШИБКИ ОБРАБОТКИ % s' % registry_set.mo_code, fatal_errors)
-                logger.info(u'%s обнаружены фатальные ошибки во время обработки' % registry_set.mo_code)
-            else:
-                registry_db, patient_file_errors, services_file_errors, volume_errors = registry_process(registry_set)
-                flc_master = FlcReportMaster(registry_set)
-                if volume_errors[0]:
-                    sender.send_errors_message(u'ОШИБКИ ОБРАБОТКИ (СВЕРХОБЪЁМЫ) %s' % registry_set.mo_code,
-                                               [volume_errors[1], ])
-                    registry_db.insert_overvolume_message()
-                else:
-                    if patient_file_errors:
-                        logger.info(u'%s обнаружены ошибки ФЛК в файле с пациентами'
-                                    % registry_set.get_patients_file().file_name)
-                        flc_master.create_report_patients(registry_set.get_patients_file().file_name,
-                                                          patient_file_errors)
-                    for file_name in services_file_errors:
-                        if services_file_errors[file_name]:
-                            logger.info(u'%s обнаружены ошибки ФЛК в файле с услугами' % file_name)
-                            flc_master.create_report_services(file_name, services_file_errors[file_name])
 
-                    flc_file_path = flc_master.create_flc_archive()
-                    if flc_file_path:
-                        sender.send_file(flc_file_path)
-                        registry_db.insert_error_message()
-                    else:
-                        logger.info(u'%s инсертим реестр в базу' % registry_set.mo_code)
-                        registry_db.insert_registry()
-                        sender.send_success_message()
+        if not fatal_errors and not already_in_database:
+            registry_db, patient_file_errors, services_file_errors, volume_errors = registry_process(registry_set)
+            flc_master = FlcReportMaster(registry_set)
+            if volume_errors[0]:
+                sender.send_errors_message(u'ОШИБКИ ОБРАБОТКИ (СВЕРХОБЪЁМЫ) %s ВЕРСИЯ %s' %
+                                           (registry_set.mo_code, registry_set.version),
+                                           [volume_errors[1], ])
+                registry_db.insert_overvolume_message()
+            else:
+                if patient_file_errors:
+                    logger.info(u'%s обнаружены ошибки ФЛК в файле с пациентами'
+                                % registry_set.get_patients_file().file_name)
+                    flc_master.create_report_patients(registry_set.get_patients_file().file_name, patient_file_errors)
+                for file_name in services_file_errors:
+                    if services_file_errors[file_name]:
+                        logger.info(u'%s обнаружены ошибки ФЛК в файле с услугами' % file_name)
+                        flc_master.create_report_services(file_name, services_file_errors[file_name])
+
+                flc_file_path = flc_master.create_flc_archive()
+                if flc_file_path:
+                    sender.send_file(flc_file_path)
+                    registry_db.insert_error_message()
+                else:
+                    logger.info(u'%s инсертим реестр в базу' % registry_set.mo_code)
+                    registry_db.insert_registry()
+                    sender.send_success_message()
         logger.info(u'%s импорт реестра завершён' % registry_set.mo_code)
         registry_set.move()
 

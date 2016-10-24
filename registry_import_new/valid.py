@@ -85,7 +85,7 @@ def _truthy():
 
 def _required():
     def required_lambda(field, dictionary):
-        return field in dictionary  # and dictionary[field]
+        return field in dictionary
 
     required_lambda.err_message = u'902;Отсутствует обязательное значение.'
     return required_lambda
