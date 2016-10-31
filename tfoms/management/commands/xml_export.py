@@ -13,8 +13,7 @@ from django.db import connection, transaction
 from main.models import SERVICE_XML_TYPES, EXAMINATION_TYPES
 from helpers import xml_writer as writer
 import datetime
-from collections import defaultdict
-from tfoms.func import calculate_capitation, calculate_fluorography
+from main.models import MedicalRegister
 
 
 def safe_str(var):
@@ -84,7 +83,7 @@ def get_patients(year, period):
                 medical_register.is_active
                 and medical_register.year = %(year)s
                 and medical_register.period = %(period)s
-                --and medical_register.organization_code in ()
+                --and medical_register.organization_code in ('280005', '280003', '280069', '280001', '280064', '280093', '280007', '280075', '280043', '280026')
                 --and medical_register.type = 2
             )
         """
@@ -388,7 +387,7 @@ def get_records(register_pk):
 
 
 def main():
-    period = '06'
+    period = '09'
     year = '2016'
     print datetime.datetime.now()
 
@@ -396,7 +395,6 @@ def main():
     sumv_usl_sum2 = 0
     registers = MedicalRegister.objects.filter(
         is_active=True, period=period, year=year
-        # , organization_code__in=[]
     ).order_by('organization_code')
     print u'Регистры: ', registers
 
@@ -519,7 +517,7 @@ def main():
                 # Подушевой норматив по поликлиники
                 policlinic_capitation_population = 0
                 policlinic_capitation_tariff = 0
-                policlinic_capitation = calculate_capitation(3, register.organization_code)
+                policlinic_capitation = MedicalRegister.calculate_capitation(3, register.organization_code)
                 if policlinic_capitation[0]:
                     policlinic_capitation_population = policlinic_capitation[1]['adult']['population'] + \
                                                        policlinic_capitation[1]['child']['population']
@@ -529,7 +527,7 @@ def main():
                 # Подушевой норматив по скорой помощи
                 ambulance_capitation_population = 0
                 ambulance_capitation_tariff = 0
-                ambulance_capitation = calculate_capitation(4, register.organization_code)
+                ambulance_capitation = MedicalRegister.calculate_capitation(4, register.organization_code)
                 if ambulance_capitation[0]:
                     ambulance_capitation_population = ambulance_capitation[1]['adult']['population'] + \
                                                       ambulance_capitation[1]['child']['population']
@@ -539,7 +537,7 @@ def main():
                 # Флюорография доплата для ГП2, вычет для всех остальных
                 fluorography_population = 0
                 fluorography_tariff = 0
-                fluorography = calculate_fluorography(register.organization_code)
+                fluorography = MedicalRegister.calculate_fluorography(register.organization_code)
                 if fluorography[0]:
                     fluorography_population = fluorography[1]['adult']['population'] + \
                                                       fluorography[1]['child']['population']
