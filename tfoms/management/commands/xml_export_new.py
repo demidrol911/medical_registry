@@ -1,62 +1,30 @@
 #! -*- coding: utf-8 -*-
 
 from django.core.management.base import BaseCommand
-from main.models import (
-    ProvidedEvent, ProvidedService, MedicalRegister, IDC, MedicalRegisterRecord,
-    MedicalOrganization, Gender, InsurancePolicyType, MedicalServiceTerm,
-    MedicalServiceKind, MedicalServiceForm, MedicalHospitalization,
-    MedicalServiceProfile, TreatmentOutcome, TreatmentResult,
-    MedicalWorkerSpeciality, PaymentType, PaymentMethod, PaymentFailureCause,
-    MedicalDivision, Special, MedicalService, Patient)
-from django.db.models import Sum, Max, Min
-from django.db import connection, transaction
+from main.models import (ProvidedService, Patient)
 from main.models import SERVICE_XML_TYPES, EXAMINATION_TYPES
 from helpers import xml_writer as writer
-import datetime
 from main.models import MedicalRegister
 from main.funcs import safe_str, safe_int
+from medical_service_register.settings import YEAR, PERIOD
+from main.funcs import howlong
+
+
+def get_value_or_no(value):
+    return safe_str(value) if value else u'НЕТ'.encode('cp1251')
 
 
 def get_patients(year, period):
+    """
+    Получить всех пациентов в текущем периоде
+    """
     query = """
-        select p1.*, medOrg.code as attachment_code_custom
-            , person_id_type.code as id_type
+        select p1.*, person_id_type.code as id_type
             , p1.attachment_code
         from
             patient p1
-            left join insurance_policy
-                on p1.insurance_policy_fk = insurance_policy.version_id_pk
-            left join person
-                on person.version_id_pk = (
-                    select version_id_pk
-                    from person
-                    where id = (
-                        select id
-                        from person
-                        where version_id_pk = insurance_policy.person_fk
-                    ) and is_active
-                )
-            left join attachment
-                on attachment.id_pk = (
-                    select max(id_pk)
-                    from attachment
-                    where
-                        person_fk = person.version_id_pk
-                        and status_fk = 1
-                        and date <= format('%%s-%%s-01', %(year)s, %(period)s)::DATE + interval '1 month'
-                        and attachment.is_active)
-            LEFT join medical_organization medOrg
-                on (
-                    medOrg.id_pk = attachment.medical_organization_fk
-                    and medOrg.parent_fk is null
-                ) or medOrg.id_pk = (
-                    select parent_fk
-                    from medical_organization
-                    where id_pk = attachment.medical_organization_fk
-                )
             LEFT join person_id_type
                 on p1.person_id_type_fk = person_id_type.id_pk
-
         where p1.id_pk in (
             select DISTINCT medical_register_record.patient_fk
             from medical_register
@@ -76,6 +44,9 @@ def get_patients(year, period):
 
 
 def get_records(register_pk):
+    """
+    Получить все записи об услугах в текущем периоде
+    """
     query = """
         select
             provided_service.id_pk,
@@ -93,17 +64,6 @@ def get_records(register_pk):
             medical_service_hitech_kind.code as hitech_kind_code,
             medical_service_hitech_method.code as hitech_method_code,
             provided_event.hospitalization_fk as event_hospitalization_code,
-            /*
-            (
-                select code
-                from provided_service
-                    join medical_division
-                        on medical_division.id_pk = provided_service.division_fk
-                where provided_service.event_fk = provided_event.id_pk
-                order by end_date DESC
-                limit 1
-            ) as event_division_code,
-            */
             event_division.code as event_division_code,
             referred.code as event_referred_organization_code,
             medical_register.organization_code as event_organization_code,
@@ -288,8 +248,6 @@ def get_records(register_pk):
             provided_service.invoiced_payment as service_invoiced_payment,
             payment_type.code as service_payment_type_code,
             provided_service.accepted_payment as service_accepted_payment,
-            --medical_error.failure_cause_fk as service_failure_cause_code,
-            --provided_service_sanction.underpayment as service_sanction_mek,
             service_worker_speciality.code as service_worker_speciality_code,
             provided_service.worker_code as service_worker_code,
             provided_service.comment as service_comment,
@@ -347,18 +305,6 @@ def get_records(register_pk):
                 on provided_service.code_fk = medical_service.id_pk
             LEFT JOIN payment_type
                 on provided_service.payment_type_fk = payment_type.id_pk
-            /*
-            left join provided_service_sanction
-                on provided_service_sanction.service_fk = provided_service.id_pk
-                    and provided_service_sanction.id_pk = (
-                        select max(id_pk)
-                        from provided_service_sanction
-                        where service_fk = provided_service.id_pk
-                    )
-                    and provided_service.payment_type_fk in (3, 4)
-            LEFT JOIN medical_error
-                on provided_service_sanction.error_fk = medical_error.id_pk
-            */
             LEFT JOIN medical_service_kind
                 on medical_service_kind.id_pk = provided_event.kind_fk
         where
@@ -371,22 +317,31 @@ def get_records(register_pk):
     return ProvidedService.objects.raw(query, [register_pk])
 
 
-def get_value_or_no(value):
-    return safe_str(value) if value else u'НЕТ'.encode('cp1251')
-
-
 class RegistryToXmlExporter():
+    EXAMINATIONS = dict(EXAMINATION_TYPES)
+    XML_TYPES = {t[0]: t[1] for t in SERVICE_XML_TYPES if t[0] != 0}
+
     def __init__(self, year, period, version):
         self.year = year
         self.short_year = self.year[2:4]
         self.period = period
         self.version = version
         self.service_filename_pattern = '{type}S28004T28_{year}{period}{version}'
+        self.latest_record = None
+        self.current_record = None
+        self.current_register_type = None
 
+    @howlong
     def export_patients(self):
+        """
+        Выгружает пациентов в xml
+        """
         filename = 'LS28004T28_{year}{period}{version}'.format(
-            year=self.short_year, period=self.period, version=self.version
+            year=self.short_year,
+            period=self.period,
+            version=self.version
         )
+        print u'Выгрузка файла с пациентами %s...' % filename
         lm_xml = writer.Xml(filename+'.xml')
         lm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
         lm_xml.start('PERS_LIST')
@@ -422,59 +377,69 @@ class RegistryToXmlExporter():
             lm_xml.end('PERS')
         lm_xml.end('PERS_LIST')
 
+    @howlong
     def export_services(self):
-        XML_TYPES = {t[0]: t[1] for t in SERVICE_XML_TYPES if t[0] != 0}
+        """
+        Выгружает услуги в xml
+        """
         registers = MedicalRegister.objects.filter(is_active=True, period=self.period, year=self.year).\
             order_by('organization_code')
-        print registers
-        for register_type in XML_TYPES:
+        for register_type in RegistryToXmlExporter.XML_TYPES:
+            self.current_register_type = register_type
             filename = self.service_filename_pattern.format(
-                type=XML_TYPES[register_type].upper(),
+                type=RegistryToXmlExporter.XML_TYPES[register_type].upper(),
                 year=self.short_year, period=self.period,
                 version=self.version
             )
+            print u'Выгрузка файла с услугами %s...' % filename
             hm_xml = writer.Xml('%s.XML' % filename)
-            self.put_header(hm_xml, filename)
-            for index, register in enumerate(registers.filter(type=register_type)):
-                self.put_bill(hm_xml, register, register_type, index)
+            self._put_header(hm_xml, filename)
+
+            for index, register in enumerate(registers.filter(type=self.current_register_type)):
+                self._put_bill(hm_xml, register, index)
+
                 current_record_id = None
                 current_event_id = None
-                latest_record = None
-                print register
+                self.latest_record = None
                 for i, record in enumerate(list(get_records(register.pk))):
+                    self.current_record = record
+
                     if current_record_id != record.record_uid:
-                        self.put_tag_end_event(hm_xml, current_event_id, latest_record, register_type)
+                        self._put_tag_end_event(hm_xml, current_event_id)
                         if current_record_id:
                             hm_xml.end('ZAP')
-                        self.put_record(hm_xml, record, register_type)
+                        self._put_record(hm_xml)
                         current_record_id = record.record_uid
                         current_event_id = None
+
                     if current_event_id != record.event_uid:
-                        self.put_tag_end_event(hm_xml, current_event_id, latest_record, register_type)
-                        self.put_event(hm_xml, record, register_type)
+                        self._put_tag_end_event(hm_xml, current_event_id)
+                        self._put_event(hm_xml)
                         current_event_id = record.event_uid
-                        s = record.event_sanctions[1:-1].replace('"', '').replace("(", '').replace('),', ';').replace(')', '')
-                        if s:
-                            sanctions = s.split(';')
-                            for rec in sanctions:
-                                self.put_sanction(hm_xml, rec)
-                    self.put_service(hm_xml, record, register_type)
-                    latest_record = record
-                self.put_tag_end_event(hm_xml, current_event_id, latest_record, register_type)
+                        self._put_sanction(hm_xml)
+                    self._put_service(hm_xml)
+                    self.latest_record = self.current_record
+                self._put_tag_end_event(hm_xml, current_event_id)
                 if current_record_id:
                     hm_xml.end('ZAP')
             hm_xml.end('ZL_LIST')
 
-    def put_tag_end_event(self, hm_xml, current_event_id, record, register_type):
+    def _put_tag_end_event(self, hm_xml, current_event_id):
+        """
+        Поместить тег закрытия случая в XML
+        """
         if current_event_id:
-            if register_type in (1, 2):
-                hm_xml.put('KSG_MO', safe_str(record.ksg_mo))
-                hm_xml.put('KSG_SMO', safe_str(record.ksg_smo))
-            hm_xml.put('COMENTSL', safe_str(record.event_comment))
-            hm_xml.put('PAYMENT_KIND', record.payment_kind_code)
+            if self.current_register_type in (1, 2):
+                hm_xml.put('KSG_MO', safe_str(self.latest_record.ksg_mo))
+                hm_xml.put('KSG_SMO', safe_str(self.latest_record.ksg_smo))
+            hm_xml.put('COMENTSL', safe_str(self.latest_record.event_comment))
+            hm_xml.put('PAYMENT_KIND', self.latest_record.payment_kind_code)
             hm_xml.end('SLUCH')
 
-    def put_header(self, hm_xml, filename):
+    def _put_header(self, hm_xml, filename):
+        """
+        Поместить заголовок в XML
+        """
         hm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
         hm_xml.start('ZL_LIST')
         hm_xml.start('ZGLV')
@@ -483,8 +448,10 @@ class RegistryToXmlExporter():
         hm_xml.put('FILENAME', filename)
         hm_xml.end('ZGLV')
 
-    def put_bill(self, hm_xml, register, register_type, index):
-        EXAMINATIONS = dict(EXAMINATION_TYPES)
+    def _put_bill(self, hm_xml, register, index):
+        """
+        Поместить информацию о счёте в XML
+        """
         hm_xml.start('SCHET')
         hm_xml.put('CODE', index+1)
         hm_xml.put('CODE_MO', register.organization_code)
@@ -507,7 +474,7 @@ class RegistryToXmlExporter():
         hm_xml.put('SANK_EKMP', 0)
         hm_xml.put('SANK_ORG', 0)
 
-        if register_type == 1:
+        if self.current_register_type == 1:
             # Подушевой норматив по поликлиники
             policlinic_capitation_population = 0
             policlinic_capitation_tariff = 0
@@ -548,62 +515,67 @@ class RegistryToXmlExporter():
             hm_xml.put('FS_COL', fluorography_population)
             hm_xml.put('FS_SUMPF', fluorography_tariff)
 
-        if register_type > 2:
-            hm_xml.put('DISP', EXAMINATIONS[register_type-2].encode('cp1251'))
+        if self.current_register_type > 2:
+            hm_xml.put('DISP', RegistryToXmlExporter.EXAMINATIONS[self.current_register_type-2].encode('cp1251'))
         hm_xml.end('SCHET')
 
-    def put_record(self, hm_xml, record, register_type):
+    def _put_record(self, hm_xml):
+        """
+        Поместить информацию о записи в XML
+        """
         hm_xml.start('ZAP')
-        hm_xml.put('N_ZAP', record.record_uid)
+        hm_xml.put('N_ZAP', self.current_record.record_uid)
         hm_xml.put('PR_NOV', '0')
         hm_xml.start('PACIENT')
-        hm_xml.put('ID_PAC', safe_str(record.patient_uid))
-        hm_xml.put('VPOLIS', safe_int(record.insurance_policy_type))
-        hm_xml.put('SPOLIS', safe_str(record.insurance_policy_series))
-        hm_xml.put('NPOLIS', safe_str(record.insurance_policy_number))
+        hm_xml.put('ID_PAC', safe_str(self.current_record.patient_uid))
+        hm_xml.put('VPOLIS', safe_int(self.current_record.insurance_policy_type))
+        hm_xml.put('SPOLIS', safe_str(self.current_record.insurance_policy_series))
+        hm_xml.put('NPOLIS', safe_str(self.current_record.insurance_policy_number))
         hm_xml.put('ST_OKATO', '')
         hm_xml.put('SMO', '28004')
         hm_xml.put('SMO_OGRN', '1027739008440')
         hm_xml.put('SMO_OK', '10000')
         hm_xml.put('SMO_NAM', u'АО "Страховая компания "СОГАЗ-Мед" Амурский филиал'.encode('cp1251'))
-        if register_type in (1, 2):
-            hm_xml.put('NOVOR', record.newborn_code if record.newborn_code else '0')
-        hm_xml.put('VNOV_D', record.weight or '')
+        if self.current_register_type in (1, 2):
+            hm_xml.put('NOVOR', self.current_record.newborn_code if self.current_record.newborn_code else '0')
+        hm_xml.put('VNOV_D', self.current_record.weight or '')
         hm_xml.end('PACIENT')
 
-
-    def put_event(self, hm_xml, record, register_type):
+    def _put_event(self, hm_xml):
+        """
+        Поместить информацию о случае в XML
+        """
         hm_xml.start('SLUCH')
-        hm_xml.put('IDCASE', record.event_uid)
+        hm_xml.put('IDCASE', self.current_record.event_uid)
 
-        if register_type in (1, 2):
-            hm_xml.put('USL_OK', record.event_term_code or '')
-        hm_xml.put('VIDPOM', record.event_kind_code or '')
+        if self.current_register_type in (1, 2):
+            hm_xml.put('USL_OK', self.current_record.event_term_code or '')
+        hm_xml.put('VIDPOM', self.current_record.event_kind_code or '')
 
-        if register_type in (1, 2):
-            hm_xml.put('FOR_POM', record.event_form_code or '')
+        if self.current_register_type in (1, 2):
+            hm_xml.put('FOR_POM', self.current_record.event_form_code or '')
 
-        if register_type == 2:
-            hm_xml.put('VID_HMP', record.hitech_kind_code or '')
-            hm_xml.put('METOD_HMP', record.hitech_method_code or '')
+        if self.current_register_type == 2:
+            hm_xml.put('VID_HMP', self.current_record.hitech_kind_code or '')
+            hm_xml.put('METOD_HMP', self.current_record.hitech_method_code or '')
 
-        if register_type in (1, 2):
-            hm_xml.put('NPR_MO', record.event_referred_organization_code or '')
-            hm_xml.put('EXTR', record.event_hospitalization_code or '')
-        hm_xml.put('LPU', record.event_organization_code or '')
-        hm_xml.put('LPU_1', record.event_department_code or '')
+        if self.current_register_type in (1, 2):
+            hm_xml.put('NPR_MO', self.current_record.event_referred_organization_code or '')
+            hm_xml.put('EXTR', self.current_record.event_hospitalization_code or '')
+        hm_xml.put('LPU', self.current_record.event_organization_code or '')
+        hm_xml.put('LPU_1', self.current_record.event_department_code or '')
 
-        if register_type in (1, 2):
-            hm_xml.put('PODR', record.event_division_code or '')
-            hm_xml.put('PROFIL', record.event_profile_code or '')
-            hm_xml.put('DET', '1' if record.event_is_children else '0')
-        hm_xml.put('NHISTORY', record.anamnesis_number.encode('cp1251'))
+        if self.current_register_type in (1, 2):
+            hm_xml.put('PODR', self.current_record.event_division_code or '')
+            hm_xml.put('PROFIL', self.current_record.event_profile_code or '')
+            hm_xml.put('DET', '1' if self.current_record.event_is_children else '0')
+        hm_xml.put('NHISTORY', self.current_record.anamnesis_number.encode('cp1251'))
 
-        if register_type in (3, 4, 5, 6, 7, 8, 9, 10, 11):
-            hm_xml.put('P_OTK', record.examination_rejection or '0')
+        if self.current_register_type in (3, 4, 5, 6, 7, 8, 9, 10, 11):
+            hm_xml.put('P_OTK', self.current_record.examination_rejection or '0')
 
-        start_date = record.event_start_date
-        end_date = record.event_end_date
+        start_date = self.current_record.event_start_date
+        end_date = self.current_record.event_end_date
 
         if start_date > end_date:
             hm_xml.put('DATE_1', end_date)
@@ -611,66 +583,77 @@ class RegistryToXmlExporter():
         else:
             hm_xml.put('DATE_1', start_date)
             hm_xml.put('DATE_2', end_date)
-        if register_type in (1, 2):
-            hm_xml.put('DS0', record.event_initial_disease_code or '')
-        hm_xml.put('DS1', record.event_basic_disease_code or '')
-        if register_type in (1, 2):
-            for rec in record.event_concomitant_disease_code:
+        if self.current_register_type in (1, 2):
+            hm_xml.put('DS0', self.current_record.event_initial_disease_code or '')
+        hm_xml.put('DS1', self.current_record.event_basic_disease_code or '')
+        if self.current_register_type in (1, 2):
+            for rec in self.current_record.event_concomitant_disease_code:
                 hm_xml.put('DS2', rec or '')
-            for rec in record.event_complicated_disease_code:
+            for rec in self.current_record.event_complicated_disease_code:
                 hm_xml.put('DS3', rec or '')
-            hm_xml.put('VNOV_M', record.weight or '')
+            hm_xml.put('VNOV_M', self.current_record.weight or '')
             hm_xml.put('CODE_MES1', '')
             hm_xml.put('CODE_MES2', '')
-            hm_xml.put('RSLT', record.treatment_result_code or '')
-            hm_xml.put('ISHOD', record.treatment_outcome_code or '')
-            hm_xml.put('PRVS', record.event_worker_speciality_code or '')
+            hm_xml.put('RSLT', self.current_record.treatment_result_code or '')
+            hm_xml.put('ISHOD', self.current_record.treatment_outcome_code or '')
+            hm_xml.put('PRVS', self.current_record.event_worker_speciality_code or '')
             hm_xml.put('VERS_SPEC', 'V015' or '')
-            hm_xml.put('IDDOKT', (record.event_worker_code or '').encode('cp1251'))
-            hm_xml.put('OS_SLUCH', record.event_special_code or '')
-        if register_type > 2:
-            hm_xml.put('RSLT_D', record.examination_result_code or '')
-        hm_xml.put('IDSP', record.event_payment_method_code or '')
-        hm_xml.put('ED_COL', record.event_payment_units_number or 0)
-        hm_xml.put('TARIF', round(float(record.event_tariff or 0), 2))
-        hm_xml.put('SUMV', round(float(record.event_invoiced_payment or 0), 2))
-        if record.event_sanctions_mek > 0:
-            hm_xml.put('OPLATA', record.event_payment_type_code or '')
+            hm_xml.put('IDDOKT', (self.current_record.event_worker_code or '').encode('cp1251'))
+            hm_xml.put('OS_SLUCH', self.current_record.event_special_code or '')
+        if self.current_register_type > 2:
+            hm_xml.put('RSLT_D', self.current_record.examination_result_code or '')
+        hm_xml.put('IDSP', self.current_record.event_payment_method_code or '')
+        hm_xml.put('ED_COL', self.current_record.event_payment_units_number or 0)
+        hm_xml.put('TARIF', round(float(self.current_record.event_tariff or 0), 2))
+        hm_xml.put('SUMV', round(float(self.current_record.event_invoiced_payment or 0), 2))
+        if self.current_record.event_sanctions_mek > 0:
+            hm_xml.put('OPLATA', self.current_record.event_payment_type_code or '')
         else:
-            if record.event_payment_type_code == 3:
+            if self.current_record.event_payment_type_code == 3:
                 hm_xml.put('OPLATA', 1)
             else:
-                hm_xml.put('OPLATA', record.event_payment_type_code or '')
-        sump = round(float(record.event_accepted_payment or 0), 2)
+                hm_xml.put('OPLATA', self.current_record.event_payment_type_code or '')
+        sump = round(float(self.current_record.event_accepted_payment or 0), 2)
 
         hm_xml.put('SUMP', sump or 0)
-        hm_xml.put('SANK_IT', round(float(record.event_sanctions_mek or 0), 2))
+        hm_xml.put('SANK_IT', round(float(self.current_record.event_sanctions_mek or 0), 2))
 
-    def put_sanction(self, hm_xml, rec):
-        sanc_rec = rec.split(',')
-        hm_xml.start('SANK')
-        hm_xml.put('S_CODE', sanc_rec[0])
-        hm_xml.put('S_SUM', round(float(sanc_rec[1] or 0), 2))
-        hm_xml.put('S_ORG', 0)
-        hm_xml.put('S_TIP', sanc_rec[2])
-        hm_xml.put('S_OSN', sanc_rec[3])
-        hm_xml.put('S_COM', '')
-        hm_xml.put('S_IST', sanc_rec[5])
-        hm_xml.end('SANK')
+    def _put_sanction(self, hm_xml):
+        """
+        Поместить информацию о санкциях в XML
+        """
+        s = self.current_record.event_sanctions[1:-1].replace('"', '').\
+            replace("(", '').replace('),', ';').replace(')', '')
+        if s:
+            sanctions = s.split(';')
+            for rec in sanctions:
+                sanc_rec = rec.split(',')
+                hm_xml.start('SANK')
+                hm_xml.put('S_CODE', sanc_rec[0])
+                hm_xml.put('S_SUM', round(float(sanc_rec[1] or 0), 2))
+                hm_xml.put('S_ORG', 0)
+                hm_xml.put('S_TIP', sanc_rec[2])
+                hm_xml.put('S_OSN', sanc_rec[3])
+                hm_xml.put('S_COM', '')
+                hm_xml.put('S_IST', sanc_rec[5])
+                hm_xml.end('SANK')
 
-    def put_service(self, hm_xml, record, register_type):
-        service_is_children_profile = '1' if record.service_is_children else '0'
+    def _put_service(self, hm_xml):
+        """
+        Поместить информацию об услугах в XML
+        """
+        service_is_children_profile = '1' if self.current_record.service_is_children else '0'
         hm_xml.start('USL')
-        hm_xml.put('IDSERV', record.service_uid)
-        hm_xml.put('LPU', record.service_organization_code)
-        hm_xml.put('LPU_1', record.service_department_code or '')
-        if register_type in (1, 2):
-            hm_xml.put('PODR', record.service_division_code or '')
-            hm_xml.put('PROFIL', record.service_profile_code or '')
+        hm_xml.put('IDSERV', self.current_record.service_uid)
+        hm_xml.put('LPU', self.current_record.service_organization_code)
+        hm_xml.put('LPU_1', self.current_record.service_department_code or '')
+        if self.current_register_type in (1, 2):
+            hm_xml.put('PODR', self.current_record.service_division_code or '')
+            hm_xml.put('PROFIL', self.current_record.service_profile_code or '')
             hm_xml.put('VID_VME', '')
             hm_xml.put('DET', service_is_children_profile)
-        start_date = record.service_start_date
-        end_date = record.service_end_date
+        start_date = self.current_record.service_start_date
+        end_date = self.current_record.service_end_date
 
         if start_date > end_date:
             hm_xml.put('DATE_IN', end_date)
@@ -678,30 +661,34 @@ class RegistryToXmlExporter():
         else:
             hm_xml.put('DATE_IN', start_date)
             hm_xml.put('DATE_OUT', end_date)
-        if register_type in (1, 2):
-            hm_xml.put('DS', record.service_basic_disease_code or '')
-        hm_xml.put('CODE_USL', record.service_code or '')
-        if register_type in (1, 2):
-            hm_xml.put('KOL_USL', record.quantity or '')
-        hm_xml.put('TARIF', round(float(record.service_tariff or 0), 2) or 0)
-        accepted_payment = record.service_accepted_payment or 0
+        if self.current_register_type in (1, 2):
+            hm_xml.put('DS', self.current_record.service_basic_disease_code or '')
+        hm_xml.put('CODE_USL', self.current_record.service_code or '')
+        if self.current_register_type in (1, 2):
+            hm_xml.put('KOL_USL', self.current_record.quantity or '')
+        hm_xml.put('TARIF', round(float(self.current_record.service_tariff or 0), 2) or 0)
+        accepted_payment = self.current_record.service_accepted_payment or 0
 
-        if record.service_payment_type_code == 2:
+        if self.current_record.service_payment_type_code == 2:
             accepted_payment = 0
 
         sumv_usl = round(float(accepted_payment), 2)
         hm_xml.put('SUMV_USL', sumv_usl or 0)
-        hm_xml.put('PRVS', record.service_worker_speciality_code or '')
-        hm_xml.put('CODE_MD', (record.service_worker_code or '').encode('cp1251'))
-        hm_xml.put('COMENTU', record.service_comment or '')
+        hm_xml.put('PRVS', self.current_record.service_worker_speciality_code or '')
+        hm_xml.put('CODE_MD', (self.current_record.service_worker_code or '').encode('cp1251'))
+        hm_xml.put('COMENTU', self.current_record.service_comment or '')
         hm_xml.end('USL')
 
 
 class Command(BaseCommand):
+    """
+    Выгрузка реестров за текущий месяц для ТФОМС
+    """
     
     def handle(self, *args, **options):
-        period = '09'
-        year = '2016'
-        xml_exporter = RegistryToXmlExporter(year=year, period=period, version='1')
+        version = '1'
+        if args and len(args) > 0:
+            version = args[0]
+        xml_exporter = RegistryToXmlExporter(year=YEAR, period=PERIOD, version=version)
         xml_exporter.export_patients()
         xml_exporter.export_services()
