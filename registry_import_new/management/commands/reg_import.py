@@ -6,7 +6,7 @@ from collections import defaultdict
 from registry_import_new.xml_parser import XmlLikeFileReader
 from main.models import SERVICE_XML_TYPES
 from registry_import_new.validator import RegistryValidator, CheckVolume, handle_errors
-from registry_import_new.sender import Sender
+from registry_import_new.sender import Sender, save_to_economist_folder
 from registry_import_new import vipnet_handler
 from registry_import_new.flc import FlcReportMaster
 from registry_import_new.corrector import correct
@@ -159,7 +159,11 @@ def registry_process(registry_set):
         logger.info(u'%s обрабатывается файл с услугами' % service_item.file_name)
         services_file = XmlLikeFileReader(service_item.path)
         validator = RegistryValidator(service_item.type_id)
-        for item in services_file.find(tags=('SCHET', 'ZAP', )):
+        for item in services_file.find(tags=('ZGLV', 'SCHET', 'ZAP', )):
+            if 'SD_Z' in item:
+                c_item = correct(item)
+                service_file_errors[service_item.file_name] += validator.validate_header(c_item)
+                volume_checker.set_count_invoiced_events(c_item['SD_Z'])
             if 'NSCHET' in item:
                 c_item = correct(item)
                 registry_obj = registry_db.create_registry_object(c_item, service_item)
@@ -198,6 +202,9 @@ def registry_process(registry_set):
                         registry_db.create_service_obj(service, event_obj)
                         service_file_errors[service_item.file_name] += validator.validate_service(service)
                         volume_checker.check(event, service)
+        if volume_checker.check_count_events():
+            service_file_errors[service_item.file_name] += handle_errors(
+                {'SD_Z': [u'304;Количество случаев не соответствует указанному значению']}, parent='ZGLV')
     return registry_db, patient_file_errors, service_file_errors, volume_checker.get_error()
 
 
@@ -220,6 +227,7 @@ def main():
             registry_db, patient_file_errors, services_file_errors, volume_errors = registry_process(registry_set)
             flc_master = FlcReportMaster(registry_set)
             if volume_errors[0]:
+                save_to_economist_folder(registry_set, volume_errors[1])
                 sender.send_errors_message(u'ОШИБКИ ОБРАБОТКИ (СВЕРХОБЪЁМЫ) %s ВЕРСИЯ %s' %
                                            (registry_set.mo_code, registry_set.version),
                                            [volume_errors[1], ])

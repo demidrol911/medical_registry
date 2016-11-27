@@ -7,7 +7,7 @@ from main.data_cache import GENDERS, PERSON_ID_TYPES, \
 from main.funcs import safe_int, safe_date, safe_float
 from main.models import Patient, MedicalRegisterRecord, ProvidedEvent, ProvidedService, MedicalRegister, \
     MedicalRegisterImport, MedicalRegisterStatus, ProvidedEventConcomitantDisease, ProvidedEventComplicatedDisease, \
-    ProvidedEventSpecial
+    ProvidedEventSpecial, ProvidedEventAppointment
 from django.db import connection, transaction
 from datetime import datetime
 
@@ -28,6 +28,7 @@ class RegistryDb:
         self.concomitant_list = []
         self.complicated_list = []
         self.special_list = []
+        self.appointment_list = []
 
         self._patient_pk_list = []
         self._register_pk_list = []
@@ -75,6 +76,7 @@ class RegistryDb:
             self.patients[idx].insurance_policy_number = patient_policy.get('NPOLIS', '') or ''
             self.patients[idx].newborn_code = patient_policy.get('NOVOR', '0') or '0'
             self.patients[idx].weight = safe_float(patient_policy.get('VNOV_D', 0))
+            self.patients[idx].disability_group = safe_int(patient_policy.get('INV', 0))
         else:
             logger.warning(u'Пациент не найден. Полис не может быть присоединён')
             print u'Пациент не найден. Полис не может быть присоединён'
@@ -135,6 +137,12 @@ class RegistryDb:
             hitech_method=HITECH_METHODS.get(event.get('METOD_HMP'), None),
             examination_result=EXAMINATION_RESULTS.get(event.get('RSLT_D'), None),
             ksg_mo=event.get('KSG_MO', ''),
+            incoming_sign=safe_int(event.get('P_PER', 0)),
+            issue_talon_date=safe_date(event.get('TAL_D', '')),
+            planned_hospitalization_date=safe_date(event.get('TAL_P', '')),
+            mobile_brigade_sign=safe_int(event.get('VBR', 0)),
+            newly_disease_sign=safe_int(event.get('DS1_PR', 0)),
+            exam_observation_sign=safe_int(event.get('PR_D_N', 0)),
             record_id=record_obj.id_pk
         )
         self.events.append(event_obj)
@@ -145,7 +153,8 @@ class RegistryDb:
         for code in concomitants:
             if code:
                 self.concomitant_list.append(ProvidedEventConcomitantDisease(
-                    event_id=event_obj.id_pk, disease=DISEASES.get(code, None)))
+                    event_id=event_obj.id_pk, disease=DISEASES.get(code, None),
+                    newly_disease_sign=0))
 
         complicateds = event.get('DS3', [])
         if type(complicateds) != list:
@@ -163,6 +172,60 @@ class RegistryDb:
                 self.special_list.append(ProvidedEventSpecial(
                     event_id=event_obj.id_pk, special=SPECIALS.get(code, None)))
 
+        exam_concomitant_diseases = event.get('DS2_N', [])
+        if type(exam_concomitant_diseases) != list:
+            exam_concomitant_diseases = [exam_concomitant_diseases]
+        for disease in exam_concomitant_diseases:
+            self.concomitant_list.append(ProvidedEventConcomitantDisease(
+                event_id=event_obj.id_pk,
+                disease=DISEASES.get(disease.get('DS2'), None),
+                newly_disease_sign=safe_int(disease.get('DS2_PR', 0))
+            ))
+
+        appointments = event.get('NAZR', [])
+        if type(appointments) != list:
+            appointments = [appointments]
+        appointment_types = {'NAZ_SP': None, 'NAZ_V': None, 'NAZ_PMP': None, 'NAZ_PK': None}
+        for direction_type in appointment_types:
+            values = event.get(direction_type, [])
+            if type(values) != list:
+                values = [values]
+            appointment_types[direction_type] = values
+        for appointment in appointments:
+            if appointment in ['1', '2']:
+                direction_type = 'NAZ_SP'
+            elif appointment == '3':
+                direction_type = 'NAZ_V'
+            elif appointment in ['4', '5']:
+                direction_type = 'NAZ_PMP'
+            elif appointment == '6':
+                direction_type = 'NAZ_PK'
+            values = appointment_types[direction_type]
+            for val in values:
+                if direction_type == 'NAZ_SP':
+                    self.appointment_list.append(ProvidedEventAppointment(
+                        event_id=event_obj.id_pk,
+                        direction_type=safe_int(appointment),
+                        worker_speciality=SPECIALITIES_NEW.get(val, None)
+                    ))
+                elif direction_type == 'NAZ_V':
+                    self.appointment_list.append(ProvidedEventAppointment(
+                        event_id=event_obj.id_pk,
+                        direction_type=safe_int(appointment),
+                        examination_kind=safe_int(val)
+                    ))
+                elif direction_type == 'NAZ_PMP':
+                    self.appointment_list.append(ProvidedEventAppointment(
+                        event_id=event_obj.id_pk,
+                        direction_type=safe_int(appointment),
+                        profile=PROFILES.get(val, None)
+                    ))
+                elif direction_type == 'NAZ_PK':
+                    self.appointment_list.append(ProvidedEventAppointment(
+                        event_id=event_obj.id_pk,
+                        direction_type=safe_int(appointment),
+                        hospital_bed_profile=safe_int(val)
+                    ))
         return event_obj
 
     def create_service_obj(self, service, event_obj):
@@ -184,6 +247,8 @@ class RegistryDb:
             worker_speciality=SPECIALITIES_NEW.get(service.get('PRVS', None)),
             worker_code=service.get('CODE_MD', ''),
             comment=service.get('COMENTU', '') or '',
+            incomplete_volume_reason=safe_int(service.get('NPL', '0')),
+            examination_rejection=safe_int(service.get('P_OTK', 0)),
             event_id=event_obj.id_pk
         )
         self.services.append(service_obj)
@@ -208,6 +273,7 @@ class RegistryDb:
                 ProvidedEventConcomitantDisease.objects.bulk_create(self.concomitant_list)
                 ProvidedEventComplicatedDisease.objects.bulk_create(self.complicated_list)
                 ProvidedEventSpecial.objects.bulk_create(self.special_list)
+                ProvidedEventAppointment.objects.bulk_create(self.appointment_list)
                 ProvidedService.objects.bulk_create(self.services)
                 MedicalRegister.objects.filter(
                     pk__in=[rec.pk for rec in self.registries]

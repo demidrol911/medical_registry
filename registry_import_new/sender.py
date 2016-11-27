@@ -1,6 +1,7 @@
 #! -*- coding: utf-8 -*-
 from shutil import copy2
-from medical_service_register.path import OUTBOX_SUCCESS, FLC_DIR, OUTBOX_DIR
+from medical_service_register.path import OUTBOX_SUCCESS, FLC_DIR, OUTBOX_DIR, ECONOMIST_DIR
+from main.data_cache import ORGANIZATIONS
 import os
 
 from main.logger import get_logger
@@ -55,3 +56,15 @@ class Sender:
             logger.warning(u'Получатель не указан')
             print u'Получатель не указан'
 
+
+def save_to_economist_folder(registry_set, message):
+    """
+    Сохранить письмо о сверхобъёмов в папку экономиста
+    """
+    filename = u'%s ВЕРСИЯ %s' % (ORGANIZATIONS[registry_set.mo_code].name.replace('"', '').strip(),
+                                  registry_set.version)
+    file_path = os.path.join(FLC_DIR, filename + '.txt')
+    file_errors = open(file_path, 'w')
+    file_errors.write(message.encode('cp1251')+'\n')
+    file_errors.close()
+    copy2(file_path, ECONOMIST_DIR % (registry_set.year, registry_set.period))

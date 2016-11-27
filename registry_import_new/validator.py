@@ -6,7 +6,8 @@ from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, \
     HITECH_KINDS, HITECH_METHODS, EXAMINATION_RESULTS, \
     ADULT_EXAMINATION_COMMENT_PATTERN, KIND_TERM_DICT, \
     OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, \
-    EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS
+    EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS, DISABILITY_GROUPS, INCOMING_SIGNS, \
+    INCOMPLETE_VOLUME_REASONS, EXAMINATION_KINDS
 
 import re
 from datetime import datetime
@@ -40,6 +41,7 @@ class RegistryValidator:
     Валидатор, осуществляющий начальную проверку полей
     xml реестра
     """
+
     def __init__(self, registry_type):
         self.registry_type = registry_type
         self.current_patient = None
@@ -56,6 +58,10 @@ class RegistryValidator:
         self.divisions_check_list = []
         self.reasons_check_list = []
         self.groups_check_list = []
+
+        self.header_valid = {
+            'SD_Z': _required,
+        }
 
         # Правила валидации для пациента
         self.patient_valid = {
@@ -81,6 +87,7 @@ class RegistryValidator:
             'VPOLIS': [_required, _in(['1', '2', '3'])],
             'SPOLIS': _length(1, 10, pass_on_blank=True),
             'NPOLIS': [_required, _length(1, 20)],
+            'INV': _in(DISABILITY_GROUPS),
         }
         if registry_type == 1:
             self.policy_valid['NOVOR'] = _pattern('(0)|([12]\d{2}\d{2}\d{2}[0-9][0-9]?)', pass_on_blank=True)
@@ -126,8 +133,14 @@ class RegistryValidator:
         if registry_type == 2:
             self.event_valid['VID_HMP'] = [_required, _in(HITECH_KINDS)]
             self.event_valid['METOD_HMP'] = [_required, _in(HITECH_METHODS)]
-        if registry_type in [3, 4, 6, 7]:
-            self.event_valid['P_OTK'] = _in(['0', '1'])
+            self.event_valid['TAL_D'] = [_required, _isdate()]
+            self.event_valid['TAL_P'] = [_required, _isdate()]
+
+        if registry_type in [10, 9, 8, 7, 6, 5, 4, 3]:
+            self.event_valid['VBR'] = [_required, _in(['0', '1'])]
+            self.event_valid['P_OTK'] = [_required, _in(['0', '1'])]
+            self.event_valid['DS1_PR'] = _in(['0', '1'])
+            self.event_valid['PR_D_N'] = _in(['0', '1'])
         if registry_type in list(range(3, 11)):
             self.event_valid['RSLT_D'] = [_required, _in(EXAMINATION_RESULTS)]
         if registry_type in (3, 4):
@@ -146,7 +159,8 @@ class RegistryValidator:
             'DATE_OUT': [_required, _isdate()],
             'DS': _in(DISEASES, pass_on_blank=True),
             'CODE_MD': [_required, _length(1, 25)],
-            'CODE_USL': [_required, _in(CODES)]
+            'CODE_USL': [_required, _in(CODES)],
+            'NPL': _in(INCOMPLETE_VOLUME_REASONS, pass_on_blank=True)
         }
         if registry_type in (1, 2):
             self.service_valid['DS'] = [_required, _in(DISEASES)]
@@ -154,6 +168,11 @@ class RegistryValidator:
             self.service_valid['PROFIL'] = [_required, _in(list(PROFILES))]
             self.service_valid['DET'] = [_required, _in(['0', '1'])]
             self.service_valid['PRVS'] = [_required, _in(SPECIALITIES_NEW)]
+        if registry_type in [10, 9, 8, 7, 6, 5, 4, 3]:
+            self.service_valid['P_OTK'] = [_required, _in(['0', '1'])]
+
+    def validate_header(self, header):
+        return validate(self.header_valid, header)
 
     def validate_patient(self, patient):
         self.current_patient = patient
@@ -214,6 +233,12 @@ class RegistryValidator:
         if event['IDCASE'] in self.event_unique['IDCASE']:
             errors['IDCASE'] = [u'904;Значение не является уникальным']
         self.event_unique['IDCASE'].append(event['IDCASE'])
+
+        if event.get('USL_OK', '') in ['1', '2'] and self.registry_type == 1 \
+                and event.get('P_PER', '0') not in INCOMING_SIGNS:
+            errors['P_PER'] = [u'904;Значение не соответствует справочному.']
+        if event.get('USL_OK', '') in ['1', '2'] and event.get('P_PER', '0') == '0' and self.registry_type == 1:
+            errors['P_PER'] = [u'902;Отсутствует обязательное значение.']
 
         h_errors += handle_errors(errors, parent='SLUCH', record_uid=self.current_record['N_ZAP'],
                                   event_uid=event['IDCASE'])
@@ -276,6 +301,63 @@ class RegistryValidator:
                         {'DS3': [u'904;Диагноз указан без уточняющей подрубрики']},
                         parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
+        if self.registry_type in (10, 9, 8, 7, 6, 5, 4, 3):
+            # Проверка сопутствующих заболеваний
+            exam_concomitants_valid = {
+                'DS2': [_required, _in(DISEASES)],
+                'DS2_PR': _in(['0', '1'])
+            }
+            exam_concomitant_diseases = event.get('DS2_N', [])
+            if type(exam_concomitant_diseases) != list:
+                exam_concomitant_diseases = [exam_concomitant_diseases]
+            for disease in exam_concomitant_diseases:
+                h_errors += handle_errors(validate(exam_concomitants_valid, disease), parent='DS2_N',
+                                          record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+                if not CheckFunction.is_disease_has_precision(disease.get('DS2', None)):
+                    h_errors += handle_errors(
+                        {'DS2_N': [u'904;Диагноз указан без уточняющей подрубрики']},
+                        parent='DS2_N', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+
+            # Проверка назначения после присвоения группы здоровья, кроме I и II
+            health_group = HealthGroup.get_health_group(self.registry_type, event.get('COMENTSL', '') or '')
+            if health_group not in ('0', '1', '2'):
+                appointments = event.get('NAZR', [])
+                if type(appointments) != list:
+                    appointments = [appointments]
+                appointment_valid = {
+                    'NAZ_SP': {'check': None, 'valid': SPECIALITIES_NEW},
+                    'NAZ_V': {'check': None, 'valid': EXAMINATION_KINDS},
+                    'NAZ_PMP': {'check': None, 'valid': PROFILES},
+                    'NAZ_PK': {'check': None, 'valid': []},
+                }
+                for direction_type in appointment_valid:
+                    check_values = event.get(direction_type, [])
+                    if type(check_values) != list:
+                        check_values = [check_values]
+                    appointment_valid[direction_type]['check'] = check_values
+
+                direction_type = None
+                for appointment in appointments:
+                    if appointment in ['1', '2']:
+                        direction_type = 'NAZ_SP'
+                    elif appointment == '3':
+                        direction_type = 'NAZ_V'
+                    elif appointment in ['4', '5']:
+                        direction_type = 'NAZ_PMP'
+                    elif appointment == '6':
+                        direction_type = 'NAZ_PK'
+                    if direction_type:
+                        valid_values = appointment_valid[direction_type]['valid']
+                        check_values = appointment_valid[direction_type]['check']
+                        if not check_values:
+                            h_errors += handle_errors(
+                                {direction_type: [u'902;Отсутствует обязательное значение.']}, parent='SLUCH',
+                                record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+                        for value in check_values:
+                            if value not in valid_values:
+                                h_errors += handle_errors(
+                                    {direction_type: [u'904;Значение не соответствует справочному.']}, parent='SLUCH',
+                                    record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
         return h_errors
 
     def validate_service(self, service):
@@ -464,6 +546,29 @@ class CheckFunction:
         return True
 
 
+class HealthGroup:
+    # Класс для получения значения группы здоровья из комментария
+    ADULT_EXAMINATION_COMMENT_REGEXP = re.compile(ADULT_EXAMINATION_COMMENT_PATTERN, re.IGNORECASE)
+    ADULT_PREVENTIVE_COMMENT_REGEXP = re.compile(r'^F(?P<student>(0|1))(?P<health_group>[0-3]{1})(?P<unknown>(0|1))$', re.IGNORECASE)
+    CHILDREN_EXAMINATION_COMMENT_REGEXP = re.compile(r'^F(?P<student>(0|1))(?P<health_group>[0-9]{1})$', re.IGNORECASE)
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def get_health_group(registry_type, comment):
+        if registry_type in (3, 4):
+            match = HealthGroup.ADULT_EXAMINATION_COMMENT_REGEXP.match(comment)
+        elif registry_type == 5:
+            match = HealthGroup.ADULT_PREVENTIVE_COMMENT_REGEXP.match(comment)
+        elif registry_type in (6, 7, 8, 9, 10):
+            match = HealthGroup.CHILDREN_EXAMINATION_COMMENT_REGEXP.match(comment)
+        if match:
+            return match.group('health_group')
+        else:
+            return '0'
+
+
 class CheckVolume:
     # Проверка на сверхобъёмы по стационару, дневному стационару
     # поликлинике профилактика, поликлинике неотложка,
@@ -477,7 +582,7 @@ class CheckVolume:
                                       '98715', '98770', '098770', '098770',
                                       '198770', '098994', '198994', '98994')
     HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280076', '280091', '280069')
-    DAY_HOSPITAL_MO_EXCLUSIONS = ('280076', '280091', '280069')
+    DAY_HOSPITAL_MO_EXCLUSIONS = ('280076', '280091')
     CLINIC_VOLUME_MO_EXCLUSIONS = (
         '280029', '280001', '280078', '280075', '280084', '280064', '280003',
         '280027', '280017', '280067', '280022', '280088', '280024', '280019',
@@ -496,6 +601,16 @@ class CheckVolume:
         self.clinic_emergency_reg = set()
         self.stomatology_prevention_uet_reg = 0
         self.stomatology_emergency_uet_reg = 0
+        self.event_reg = set()
+        self.count_invoiced_events = 0
+
+        self.exam_children_difficult_situation_reg = set()
+        self.exam_children_without_care_reg = set()
+        self.prelim_medical_exam_reg = set()
+        self.periodic_medical_exam_reg = set()
+        self.prevent_medical_exam_reg = set()
+        self.exam_adult_reg = set()
+        self.preventive_inspection_adult_reg = set()
 
         volume = MedicalServiceVolume.objects.filter(
             organization__code=self.registry_set.mo_code,
@@ -515,6 +630,14 @@ class CheckVolume:
         self.stomatology_prevention = volume[0].stomatology_prevention if volume else None
         self.stomatology_emergency = volume[0].stomatology_emergency if volume else None
 
+        self.exam_children_difficult_situation = volume[0].exam_children_difficult_situation if volume else None
+        self.exam_children_without_care = volume[0].exam_children_without_care if volume else None
+        self.prelim_medical_exam = volume[0].prelim_medical_exam if volume else None
+        self.periodic_medical_exam = volume[0].periodic_medical_exam if volume else None
+        self.prevent_medical_exam = volume[0].prevent_medical_exam if volume else None
+        self.exam_adult = volume[0].exam_adult if volume else None
+        self.preventive_inspection_adult = volume[0].preventive_inspection_adult if volume else None
+
         if self.hospital_volume < 0:
             self.hospital_volume = 0
         if self.day_hospital_volume < 0:
@@ -530,7 +653,12 @@ class CheckVolume:
         if self.stomatology_emergency < 0:
             self.stomatology_emergency = 0
 
+    def set_count_invoiced_events(self, count_events):
+        self.count_invoiced_events = int(count_events)
+        self.event_reg.clear()
+
     def check(self, event, service):
+        self.event_reg.add(event['IDCASE'])
         if event.get('USL_OK', '') == '1' and service['CODE_USL'] not in CheckVolume.HOSPITAL_VOLUME_EXCLUSIONS \
                 and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
             self.hospital_volume_reg.add(event['IDCASE'])
@@ -577,6 +705,26 @@ class CheckVolume:
                 if stomatology_subgroup in (14, 17):
                     self.stomatology_emergency_uet_reg += uet
 
+        if event.get('USL_OK', '') == '':
+            code_obj = CODES[service['CODE_USL']]
+            if code_obj.group_id == 12:
+                self.exam_children_difficult_situation_reg.add(event['IDCASE'])
+            elif code_obj.group_id == 13:
+                self.exam_children_without_care_reg.add(event['IDCASE'])
+            elif code_obj.group_id == 15:
+                self.prelim_medical_exam_reg.add(event['IDCASE'])
+            elif code_obj.group_id == 16:
+                self.periodic_medical_exam_reg.add(event['IDCASE'])
+            elif code_obj.group_id == 11:
+                self.prevent_medical_exam_reg.add(event['IDCASE'])
+            elif code_obj.group_id == 7:
+                self.exam_adult_reg.add(event['IDCASE'])
+            elif code_obj.group_id == 9:
+                self.preventive_inspection_adult_reg.add(event['IDCASE'])
+
+    def check_count_events(self):
+        print len(self.event_reg), self.count_invoiced_events, len(self.event_reg) != self.count_invoiced_events
+
     def get_error(self):
         overvolume_hospital = self.hospital_volume is not None\
             and (len(self.hospital_volume_reg) > self.hospital_volume) \
@@ -590,7 +738,7 @@ class CheckVolume:
         overvolume_clinic_prevention = self.clinic_prevention is not None \
             and (len(self.clinic_prevention_reg) > self.clinic_prevention) \
             and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS \
-            and self.registry_set.mo_code != '280026'
+            and self.registry_set.mo_code not in ('280026', '280018')
         overvolume_stomatology_prevention = self.stomatology_prevention is not None \
             and (self.stomatology_prevention_uet_reg > self.stomatology_prevention) \
             and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
@@ -599,6 +747,22 @@ class CheckVolume:
             and self.registry_set.mo_code != '280013'
         overvolume_stomatology_emergency = self.stomatology_emergency is not None \
             and (self.stomatology_emergency_uet_reg > self.stomatology_emergency)
+
+        # По профилактическим осмотрам, медоосмотрам и диспансеризациям
+        overvolume_exam_children_difficult_situation = self.exam_children_difficult_situation is not None \
+            and (len(self.exam_children_difficult_situation_reg) > self.exam_children_difficult_situation)
+        overvolume_exam_children_without_care = self.exam_children_without_care is not None \
+            and (len(self.exam_children_without_care_reg) > self.exam_children_without_care)
+        overvolume_prelim_medical_exam = self.prelim_medical_exam is not None \
+            and (len(self.prelim_medical_exam_reg) > self.prelim_medical_exam)
+        overvolume_periodic_medical_exam = self.periodic_medical_exam is not None \
+            and (len(self.periodic_medical_exam_reg) > self.periodic_medical_exam)
+        overvolume_prevent_medical_exam = self.prevent_medical_exam is not None \
+            and (len(self.prevent_medical_exam_reg) > self.prevent_medical_exam)
+        overvolume_exam_adult = self.exam_adult is not None \
+            and (len(self.exam_adult_reg) > self.exam_adult)
+        overvolume_preventive_inspection_adult = self.preventive_inspection_adult is not None \
+            and (len(self.preventive_inspection_adult_reg) > self.preventive_inspection_adult)
 
         error_message = ''
         if overvolume_hospital:
@@ -632,19 +796,79 @@ class CheckVolume:
             error_message += u'Стоматология неотложка - {0} ует, запланировано решением тарифной комиссии - {1} ует\n'.\
                 format(self.stomatology_emergency_uet_reg, self.stomatology_emergency)
 
-        if overvolume_hospital or overvolume_day_hospital or overvolume_clinic_prevention \
-                or overvolume_clinic_emergency or overvolume_stomatology_prevention or overvolume_stomatology_emergency:
+        # Проверка на сверхобъёмы по профилактическим осмотрам, медоосмотрам и диспансеризациям
+        if overvolume_exam_children_difficult_situation:
+            error_message += u'Диспанцеризация детей сирот в стац. учреждениях - {0}, ' \
+                             u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.exam_children_difficult_situation_reg), self.exam_children_difficult_situation)
 
-            return True, (u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает,'
-                          u'что в соответствии с п.6 статьи 39 \n'
-                          u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
-                          u'к тарифному соглашению в сфере обязательного медицинского страхования \n'
-                          u'Амурской области на 2016 год, страховая компания принимает реестры счетов и счета \n'
-                          u'на оплату  медицинской помощи в пределах объемов, утвержденных решением комиссии по \n'
-                          u'разработке территориальной программы обязательного '
-                          u'медицинского страхования Амурской области.\n\n'
-                          u'В текущем реестре выполнено:\n'
-                          u'%s'
-                          u'Вопросы распределения объёмов находятся в компетенции Тарифной Комиссии\n') % error_message
+        if overvolume_exam_children_without_care:
+            error_message += u'Диспанцеризация детей сирот, прин. под опеку - {0}, ' \
+                             u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.exam_children_without_care_reg), self.exam_children_without_care)
+
+        if overvolume_prelim_medical_exam:
+            error_message += u'Предварительные медосмотры несовершеннолетних - {0}, ' \
+                             u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.prelim_medical_exam_reg), self.prelim_medical_exam)
+
+        if overvolume_periodic_medical_exam:
+            error_message += u'Периодические медосмотры несовершеннолетних - {0}, ' \
+                             u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.periodic_medical_exam_reg), self.periodic_medical_exam)
+
+        if overvolume_prevent_medical_exam:
+            error_message += u'Профосмотры несовершеннолетних - {0}, ' \
+                             u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.prevent_medical_exam_reg), self.prevent_medical_exam)
+
+        if overvolume_exam_adult:
+            error_message += u'Диспанцеризация взрослого населения - {0}, ' \
+                             u'запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.exam_adult_reg), self.exam_adult)
+
+        if overvolume_preventive_inspection_adult:
+            error_message += u'Профосмотр взрослых - {0}, запланировано решением тарифной комиссии - {1}\n'.\
+                format(len(self.preventive_inspection_adult_reg), self.preventive_inspection_adult)
+
+        if overvolume_hospital or overvolume_day_hospital or overvolume_clinic_prevention \
+                or overvolume_clinic_emergency or overvolume_stomatology_prevention or overvolume_stomatology_emergency\
+                or overvolume_exam_children_difficult_situation or overvolume_exam_children_without_care\
+                or overvolume_prelim_medical_exam or overvolume_periodic_medical_exam\
+                or overvolume_prevent_medical_exam or overvolume_exam_adult or overvolume_preventive_inspection_adult:
+
+            return True, (
+                u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает,что в соответствии с п.6 статьи 39 \n'
+                u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
+                u'к тарифному соглашению в сфере обязательного медицинского страхования \n'
+                u'Амурской области на 2016 год, страховая компания принимает реестры счетов и счета\n'
+                u'на оплату  медицинской помощи в пределах объемов, утвержденных решением Комиссии по\n'
+                u'разработке территориальной программы обязательного медицинского страхования Амурской области.\n'
+                u'Дополнительно сообщаем, что принятие решения об оплате услуг, выполненных сверх установленного\n'
+                u'планового объема медицинской помощи, а так же об увеличении установленных плановых объемов \n'
+                u'медицинской помощи входит в компетенцию Комиссии по разработке территориальной программы \n'
+                u'обязательного медицинского страхования Амурской области (далее – Комиссия). \n'
+                u'Согласно п.6 Дополнительного соглашения № 03 от 25.04.2016 года к Договору на оказание и оплату \n'
+                u'медицинской помощи по обязательному медицинскому страхованию медицинская организация обязана \n'
+                u'при необходимости в течении 5 рабочих дней месяца, следующего за отчетным, направлять в Комиссию \n'
+                u'заявку на перераспределение объемов предоставления медицинской помощи.\n'
+                u'Объемы медицинской помощи, выполненные в стационарных условиях и условиях дневных стационаров \n'
+                u'сверх установленных плановых объемов рассматриваются  Комиссией, '
+                u'по обращению медицинской организации \n'
+                u'с учетом обоснования причин превышения, анализа в динамике заболеваемости, удельного веса плановых \n'
+                u'госпитализаций и наличия листов ожидания в соответствии с условиями оказания вышеупомянутых видов \n'
+                u'медицинской помощи Территориальной программы обязательного медицинского страхования – до 30 дней.\n'
+                u'Для решения вопроса об оплате услуг, выполненных сверх установленного планового объема медицинской \n'
+                u'помощи вам необходимо направить списки пациентов пролеченных сверх установленного планового объема \n'
+                u'медицинской помощи, с обоснованием причин превышения, в Комиссию, а так же списки пациентов, \n'
+                u'пролеченных сверх плана, в электронном виде, '
+                u'формате Excel по защищенному каналу связи VipNet в СМО.\n'
+                u'В электронном списке пациентов необходимо заполнить графы: ФИО, дата рождения пациента; \n'
+                u'номер страхового полиса; срок госпитализации (дата начала госпитализации, дата выписки); \n'
+                u'диагноз; код отделения, в котором проходило лечение; сумма предъявленного тарифа;'
+                u' показания для госпитализации. \n\n'
+                u'В текущем реестре выполнено:\n'
+                u'%s') % error_message
+
         else:
             return False, ''
