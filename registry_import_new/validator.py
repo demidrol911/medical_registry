@@ -570,19 +570,13 @@ class HealthGroup:
 
 
 class CheckVolume:
-    # Проверка на сверхобъёмы по стационару, дневному стационару
-    # поликлинике профилактика, поликлинике неотложка,
-    # стоматологии профилактика, стоматологии неотложка
+    """
+    Проверка на сверхобъёмы по стационару, дневному стационару
+    поликлинике профилактика, поликлинике неотложка,
+    стоматологии профилактика, стоматологии неотложка,
+    диспансеризациям и профосмотрам
+    """
 
-    HOSPITAL_VOLUME_EXCLUSIONS = ('098977', '018103', '98977', '18103',
-                                  '098975', '098994', '198994', '98994',
-                                  '98975')
-    DAY_HOSPITAL_VOLUME_EXCLUSIONS = ('098710', '098711', '098712', '098715',
-                                      '098770', '98710', '98711', '98712',
-                                      '98715', '98770', '098770', '098770',
-                                      '198770', '098994', '198994', '98994')
-    HOSPITAL_VOLUME_MO_EXCLUSIONS = ('280013', '280076', '280091', '280069')
-    DAY_HOSPITAL_MO_EXCLUSIONS = ('280076', '280091')
     CLINIC_VOLUME_MO_EXCLUSIONS = (
         '280029', '280001', '280078', '280075', '280084', '280064', '280003',
         '280027', '280017', '280067', '280022', '280088', '280024', '280019',
@@ -594,64 +588,103 @@ class CheckVolume:
 
     def __init__(self, registry_set):
         self.registry_set = registry_set
-        self.hospital_volume_reg = set()
-        self.day_hospital_volume_reg = set()
-        self.clinic_disease_reg = set()
-        self.clinic_prevention_reg = set()
-        self.clinic_emergency_reg = set()
-        self.stomatology_prevention_uet_reg = 0
-        self.stomatology_emergency_uet_reg = 0
         self.event_reg = set()
         self.count_invoiced_events = 0
+        self.volume_checker_settings = {}
+        self.volume_reg = {}
 
-        self.exam_children_difficult_situation_reg = set()
-        self.exam_children_without_care_reg = set()
-        self.prelim_medical_exam_reg = set()
-        self.periodic_medical_exam_reg = set()
-        self.prevent_medical_exam_reg = set()
-        self.exam_adult_reg = set()
-        self.preventive_inspection_adult_reg = set()
-
-        volume = MedicalServiceVolume.objects.filter(
+        volume_obj = MedicalServiceVolume.objects.filter(
             organization__code=self.registry_set.mo_code,
             date='{0}-{1}-01'.format(self.registry_set.year,
                                      self.registry_set.period)
         )
+        if volume_obj:
+            volume_limit = volume_obj[0]
 
-        # По стационару, дневному стационару, поликлиника профилактика,
-        # поликлиника неотложка рассчёт по количеству случаев
-        # По стоматологии профилактика, стоматологии неотложка
-        # рассчёт по сумме ует
-        self.hospital_volume = volume[0].hospital if volume else None
-        self.day_hospital_volume = volume[0].day_hospital if volume else None
-        self.clinic_disease = volume[0].clinic_disease if volume else None
-        self.clinic_prevention = volume[0].clinic_prevention if volume else None
-        self.clinic_emergency = volume[0].clinic_emergency if volume else None
-        self.stomatology_prevention = volume[0].stomatology_prevention if volume else None
-        self.stomatology_emergency = volume[0].stomatology_emergency if volume else None
+            self.volume_checker_settings = {
+                'hospital': {
+                    'volume_limit': volume_limit.hospital,
+                    'text': u'Круглосуточный стационар',
+                    'except_code': (
+                        '098977', '018103', '98977', '18103', '098975',
+                        '098994', '198994', '98994', '98975'
+                    ),
+                    'except_mo': ('280013', '280076', '280091', '280069')
+                },
+                'day_hospital': {
+                    'volume_limit': volume_limit.day_hospital,
+                    'text': u'Дневной стационар',
+                    'except_code': (
+                        '098710', '098711', '098712', '098715',
+                        '098770', '98710', '98711', '98712',
+                        '98715', '98770', '098770', '098770',
+                        '198770', '098994', '198994', '98994'
+                    ),
+                    'except_mo': ('280076', '280091')
+                },
+                'clinic_disease': {
+                    'volume_limit': volume_limit.clinic_disease,
+                    'text': u'Амбулаторно-поликлиническая помощь обращения',
+                    'except_mo': CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
+                },
+                'clinic_prevention': {
+                    'volume_limit': volume_limit.clinic_prevention,
+                    'text': u'Амбулаторно-поликлиническая помощь профилактическая',
+                    'except_mo': CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS + ('280026', '280018')
+                },
+                'clinic_emergency': {
+                    'volume_limit': volume_limit.clinic_emergency,
+                    'text': u'Амбулаторно-поликлиническая помощь неотложная',
+                    'except_mo': ('280013', )
+                },
+                'stomatology_prevention': {
+                    'volume_limit': volume_limit.stomatology_prevention,
+                    'text': u'Стоматология профилактика', 'units': u'ует',
+                    'except_mo':  CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
+                },
+                'stomatology_emergency': {
+                    'volume_limit': volume_limit.stomatology_emergency,
+                    'text': u'Стоматология неотложка', 'units': u'ует'
+                },
+                'exam_children_difficult_situation': {
+                    'volume_limit': volume_limit.exam_children_difficult_situation,
+                    'text': u'Диспанцеризация детей сирот в стац. учреждениях'
+                },
+                'exam_children_without_care': {
+                    'volume_limit': volume_limit.exam_children_without_care,
+                    'text': u'Диспанцеризация детей сирот, прин. под опеку'
+                },
+                'prelim_medical_exam': {
+                    'volume_limit': volume_limit.prelim_medical_exam,
+                    'text': u'Предварительные медосмотры несовершеннолетних'
+                },
+                'periodic_medical_exam': {
+                    'volume_limit': volume_limit.periodic_medical_exam,
+                    'text': u'Периодические медосмотры несовершеннолетних'
+                },
+                'prevent_medical_exam': {
+                    'volume_limit': volume_limit.prevent_medical_exam,
+                    'text': u'Профосмотры несовершеннолетних'
+                },
+                'exam_adult': {
+                    'volume_limit': volume_limit.exam_adult,
+                    'text': u'Диспанцеризация взрослого населения'
+                },
+                'preventive_inspection_adult': {
+                    'volume_limit': volume_limit.preventive_inspection_adult,
+                    'text': u'Профосмотр взрослых'
+                },
+            }
 
-        self.exam_children_difficult_situation = volume[0].exam_children_difficult_situation if volume else None
-        self.exam_children_without_care = volume[0].exam_children_without_care if volume else None
-        self.prelim_medical_exam = volume[0].prelim_medical_exam if volume else None
-        self.periodic_medical_exam = volume[0].periodic_medical_exam if volume else None
-        self.prevent_medical_exam = volume[0].prevent_medical_exam if volume else None
-        self.exam_adult = volume[0].exam_adult if volume else None
-        self.preventive_inspection_adult = volume[0].preventive_inspection_adult if volume else None
+            for service_type in self.volume_checker_settings:
+                if self.volume_checker_settings[service_type]['volume_limit'] < 0:
+                    self.volume_checker_settings[service_type]['volume_limit'] = 0
 
-        if self.hospital_volume < 0:
-            self.hospital_volume = 0
-        if self.day_hospital_volume < 0:
-            self.day_hospital_volume = 0
-        if self.clinic_disease < 0:
-            self.clinic_disease = 0
-        if self.clinic_prevention < 0:
-            self.clinic_prevention = 0
-        if self.clinic_emergency < 0:
-            self.clinic_emergency = 0
-        if self.stomatology_prevention < 0:
-            self.stomatology_prevention = 0
-        if self.stomatology_emergency < 0:
-            self.stomatology_emergency = 0
+            for service_type in self.volume_checker_settings:
+                if self.volume_checker_settings[service_type].get('units', '') == u'ует':
+                    self.volume_reg[service_type] = 0
+                else:
+                    self.volume_reg[service_type] = set()
 
     def set_count_invoiced_events(self, count_events):
         self.count_invoiced_events = int(count_events)
@@ -659,13 +692,15 @@ class CheckVolume:
 
     def check(self, event, service):
         self.event_reg.add(event['IDCASE'])
-        if event.get('USL_OK', '') == '1' and service['CODE_USL'] not in CheckVolume.HOSPITAL_VOLUME_EXCLUSIONS \
+        if event.get('USL_OK', '') == '1' \
+                and service['CODE_USL'] not in self.volume_checker_settings['hospital']['except_code'] \
                 and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
-            self.hospital_volume_reg.add(event['IDCASE'])
+            self.volume_reg['hospital'].add(event['IDCASE'])
 
-        if event.get('USL_OK', '') == '2' and service['CODE_USL'] not in CheckVolume.DAY_HOSPITAL_VOLUME_EXCLUSIONS \
+        if event.get('USL_OK', '') == '2' \
+            and service['CODE_USL'] not in self.volume_checker_settings['day_hospital']['except_code'] \
                 and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
-            self.day_hospital_volume_reg.add(event['IDCASE'])
+            self.volume_reg['day_hospital'].add(event['IDCASE'])
 
         # Новые проверки
         if event.get('USL_OK', '') == '3' \
@@ -682,161 +717,65 @@ class CheckVolume:
 
             # Поликлиника заболевание
             if code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and count_services > 1:
-                self.clinic_disease_reg.add(event['IDCASE'])
+                self.volume_reg['clinic_disease'].add(event['IDCASE'])
 
             # Поликлиника профилактика
             if (code_obj.reason_id in [2, 3, 8] and (not code_obj.group_id or code_obj.group_id in [24, ])) \
                 or (code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and
                     count_services == 1):
-                self.clinic_prevention_reg.add(event['IDCASE'])
+                self.volume_reg['clinic_prevention'].add(event['IDCASE'])
 
             # Поликлиника неотложка
             if code_obj.reason_id == 5 and (not code_obj.group_id or code_obj.group_id in [24, 44, 31]):
-                if event['LPU'] != '280043':
-                    self.clinic_emergency_reg.add(event['IDCASE'])
+                self.volume_reg['clinic_emergency'].add(event['IDCASE'])
 
             if code_obj.group_id == 19:
                 uet = float(service['KOL_USL'] or 0) * (code_obj.uet or 0)
                 # Стоматология профилактика
                 if stomatology_subgroup == 13:
-                    self.stomatology_prevention_uet_reg += uet
+                    self.volume_reg['stomatology_prevention'] += uet
 
                 # Стоматология неотложка
                 if stomatology_subgroup in (14, 17):
-                    self.stomatology_emergency_uet_reg += uet
+                    self.volume_reg['stomatology_emergency'] += uet
 
         if event.get('USL_OK', '') == '':
             code_obj = CODES[service['CODE_USL']]
             if code_obj.group_id == 12:
-                self.exam_children_difficult_situation_reg.add(event['IDCASE'])
+                self.volume_reg['exam_children_difficult_situation'].add(event['IDCASE'])
             elif code_obj.group_id == 13:
-                self.exam_children_without_care_reg.add(event['IDCASE'])
+                self.volume_reg['exam_children_without_care'].add(event['IDCASE'])
             elif code_obj.group_id == 15:
-                self.prelim_medical_exam_reg.add(event['IDCASE'])
+                self.volume_reg['prelim_medical_exam'].add(event['IDCASE'])
             elif code_obj.group_id == 16:
-                self.periodic_medical_exam_reg.add(event['IDCASE'])
+                self.volume_reg['periodic_medical_exam'].add(event['IDCASE'])
             elif code_obj.group_id == 11:
-                self.prevent_medical_exam_reg.add(event['IDCASE'])
+                self.volume_reg['prevent_medical_exam'].add(event['IDCASE'])
             elif code_obj.group_id == 7:
-                self.exam_adult_reg.add(event['IDCASE'])
+                self.volume_reg['exam_adult'].add(event['IDCASE'])
             elif code_obj.group_id == 9:
-                self.preventive_inspection_adult_reg.add(event['IDCASE'])
+                self.volume_reg['preventive_inspection_adult'].add(event['IDCASE'])
 
     def check_count_events(self):
-        print len(self.event_reg), self.count_invoiced_events, len(self.event_reg) != self.count_invoiced_events
+        return len(self.event_reg) != self.count_invoiced_events
 
     def get_error(self):
-        overvolume_hospital = self.hospital_volume is not None\
-            and (len(self.hospital_volume_reg) > self.hospital_volume) \
-            and self.registry_set.mo_code not in CheckVolume.HOSPITAL_VOLUME_MO_EXCLUSIONS
-        overvolume_day_hospital = self.day_hospital_volume is not None\
-            and (len(self.day_hospital_volume_reg) > self.day_hospital_volume) \
-            and self.registry_set.mo_code not in CheckVolume.DAY_HOSPITAL_MO_EXCLUSIONS
-        overvolume_clinic_disease = self.clinic_disease is not None \
-            and (len(self.clinic_disease_reg) > self.clinic_disease) \
-            and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
-        overvolume_clinic_prevention = self.clinic_prevention is not None \
-            and (len(self.clinic_prevention_reg) > self.clinic_prevention) \
-            and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS \
-            and self.registry_set.mo_code not in ('280026', '280018')
-        overvolume_stomatology_prevention = self.stomatology_prevention is not None \
-            and (self.stomatology_prevention_uet_reg > self.stomatology_prevention) \
-            and self.registry_set.mo_code not in CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
-        overvolume_clinic_emergency = self.clinic_emergency is not None \
-            and (len(self.clinic_emergency_reg) > self.clinic_emergency) \
-            and self.registry_set.mo_code != '280013'
-        overvolume_stomatology_emergency = self.stomatology_emergency is not None \
-            and (self.stomatology_emergency_uet_reg > self.stomatology_emergency)
-
-        # По профилактическим осмотрам, медоосмотрам и диспансеризациям
-        overvolume_exam_children_difficult_situation = self.exam_children_difficult_situation is not None \
-            and (len(self.exam_children_difficult_situation_reg) > self.exam_children_difficult_situation)
-        overvolume_exam_children_without_care = self.exam_children_without_care is not None \
-            and (len(self.exam_children_without_care_reg) > self.exam_children_without_care)
-        overvolume_prelim_medical_exam = self.prelim_medical_exam is not None \
-            and (len(self.prelim_medical_exam_reg) > self.prelim_medical_exam)
-        overvolume_periodic_medical_exam = self.periodic_medical_exam is not None \
-            and (len(self.periodic_medical_exam_reg) > self.periodic_medical_exam)
-        overvolume_prevent_medical_exam = self.prevent_medical_exam is not None \
-            and (len(self.prevent_medical_exam_reg) > self.prevent_medical_exam)
-        overvolume_exam_adult = self.exam_adult is not None \
-            and (len(self.exam_adult_reg) > self.exam_adult)
-        overvolume_preventive_inspection_adult = self.preventive_inspection_adult is not None \
-            and (len(self.preventive_inspection_adult_reg) > self.preventive_inspection_adult)
-
         error_message = ''
-        if overvolume_hospital:
-            error_message += u'Круглосуточный стационар - {0}, запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.hospital_volume_reg), self.hospital_volume)
-        if overvolume_day_hospital:
-            error_message += u'Дневной стационар - {0}, запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.day_hospital_volume_reg), self.day_hospital_volume)
-
-        if overvolume_clinic_disease:
-            error_message += u'Амбулаторно-поликлиническая помощь обращения - {0}, ' \
-                u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.clinic_disease_reg), self.clinic_disease)
-
-        if overvolume_clinic_prevention:
-            error_message += u'Амбулаторно-поликлиническая помощь профилактическая - {0}, ' \
-                u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.clinic_prevention_reg), self.clinic_prevention)
-
-        if overvolume_clinic_emergency:
-            error_message += u'Амбулаторно-поликлиническая помощь неотложная - {0}, ' \
-                u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.clinic_emergency_reg), self.clinic_emergency)
-
-        if overvolume_stomatology_prevention:
-            error_message += u'Стоматология профилактика - {0} ует, ' \
-                u'запланировано решением тарифной комиссии - {1} ует\n'.\
-                format(self.stomatology_prevention_uet_reg, self.stomatology_prevention)
-
-        if overvolume_stomatology_emergency:
-            error_message += u'Стоматология неотложка - {0} ует, запланировано решением тарифной комиссии - {1} ует\n'.\
-                format(self.stomatology_emergency_uet_reg, self.stomatology_emergency)
-
-        # Проверка на сверхобъёмы по профилактическим осмотрам, медоосмотрам и диспансеризациям
-        if overvolume_exam_children_difficult_situation:
-            error_message += u'Диспанцеризация детей сирот в стац. учреждениях - {0}, ' \
-                             u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.exam_children_difficult_situation_reg), self.exam_children_difficult_situation)
-
-        if overvolume_exam_children_without_care:
-            error_message += u'Диспанцеризация детей сирот, прин. под опеку - {0}, ' \
-                             u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.exam_children_without_care_reg), self.exam_children_without_care)
-
-        if overvolume_prelim_medical_exam:
-            error_message += u'Предварительные медосмотры несовершеннолетних - {0}, ' \
-                             u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.prelim_medical_exam_reg), self.prelim_medical_exam)
-
-        if overvolume_periodic_medical_exam:
-            error_message += u'Периодические медосмотры несовершеннолетних - {0}, ' \
-                             u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.periodic_medical_exam_reg), self.periodic_medical_exam)
-
-        if overvolume_prevent_medical_exam:
-            error_message += u'Профосмотры несовершеннолетних - {0}, ' \
-                             u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.prevent_medical_exam_reg), self.prevent_medical_exam)
-
-        if overvolume_exam_adult:
-            error_message += u'Диспанцеризация взрослого населения - {0}, ' \
-                             u'запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.exam_adult_reg), self.exam_adult)
-
-        if overvolume_preventive_inspection_adult:
-            error_message += u'Профосмотр взрослых - {0}, запланировано решением тарифной комиссии - {1}\n'.\
-                format(len(self.preventive_inspection_adult_reg), self.preventive_inspection_adult)
-
-        if overvolume_hospital or overvolume_day_hospital or overvolume_clinic_prevention \
-                or overvolume_clinic_emergency or overvolume_stomatology_prevention or overvolume_stomatology_emergency\
-                or overvolume_exam_children_difficult_situation or overvolume_exam_children_without_care\
-                or overvolume_prelim_medical_exam or overvolume_periodic_medical_exam\
-                or overvolume_prevent_medical_exam or overvolume_exam_adult or overvolume_preventive_inspection_adult:
-
+        for service_type, settings in self.volume_checker_settings.iteritems():
+            if type(self.volume_reg[service_type]) == set:
+                volume = len(self.volume_reg[service_type])
+            else:
+                volume = self.volume_reg[service_type]
+            if volume > settings['volume_limit'] \
+                    and self.registry_set.mo_code not in settings.get('except_mo', ()):
+                units = ''
+                if 'units' in settings:
+                    units = ' '+settings['units']
+                error_message += u'{text} - {volume_reg}{units}, ' \
+                                 u'запланировано решением тарифной комиссии - {volume_limit}{units}\n'.\
+                    format(text=settings['text'], volume_reg=volume, units=units,
+                           volume_limit=settings['volume_limit'])
+        if error_message:
             return True, (
                 u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает,что в соответствии с п.6 статьи 39 \n'
                 u'Федерального закона № 326-ФЗ от 29.11.2010г. и п. 5.3.2. Приложения № 33 \n'
