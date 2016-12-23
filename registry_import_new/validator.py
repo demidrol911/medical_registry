@@ -320,8 +320,22 @@ class RegistryValidator:
 
             # Проверка назначения после присвоения группы здоровья, кроме I и II
             health_group = HealthGroup.get_health_group(self.registry_type, event.get('COMENTSL', '') or '')
-            if health_group not in ('0', '1', '2'):
+            is_required_appointment = False
+            if health_group not in ('0', '1', '2') or event.get('RSLT_D', '0') in ('3', '4', '5', '31', '32'):
+                is_required_appointment = True
+            if event.get('RSLT_D', '0') in ('6', '11', '12', '13', '14', '15'):
+                is_required_appointment = False
+
+            if is_required_appointment:
                 appointments = event.get('NAZR', [])
+                if not appointments:
+                    h_errors += handle_errors({'NAZR': [u'902;Отсутствует обязательное значение для '
+                                                        u'группы здоровья %s, рассчитанной из комментария случая (%s) '
+                                                        u'и результата диспансеризации %s.'
+                                                        % (health_group, event.get('COMENTSL', '') or '',
+                                                           event.get('RSLT_D', '0'))]},
+                                              parent='SLUCH',
+                                              record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
                 if type(appointments) != list:
                     appointments = [appointments]
                 appointment_valid = {
@@ -346,6 +360,14 @@ class RegistryValidator:
                         direction_type = 'NAZ_PMP'
                     elif appointment == '6':
                         direction_type = 'NAZ_PK'
+                    else:
+                        h_errors += handle_errors(
+                            {'NAZR': [u'904;Значение не соответствует справочному для '
+                                      u'группы здоровья %s, рассчитанной из комментария случая (%s) '
+                                      u'и результата диспансеризации %s.'
+                                      % (health_group, event.get('COMENTSL', '') or '',
+                                         event.get('RSLT_D', '0'))]}, parent='SLUCH',
+                            record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
                     if direction_type:
                         valid_values = appointment_valid[direction_type]['valid']
                         check_values = appointment_valid[direction_type]['check']
@@ -630,12 +652,12 @@ class CheckVolume:
                 'clinic_prevention': {
                     'volume_limit': volume_limit.clinic_prevention,
                     'text': u'Амбулаторно-поликлиническая помощь профилактическая',
-                    'except_mo': CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS + ('280026', '280018')
+                    'except_mo': CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS + ('280026', )
                 },
                 'clinic_emergency': {
                     'volume_limit': volume_limit.clinic_emergency,
                     'text': u'Амбулаторно-поликлиническая помощь неотложная',
-                    'except_mo': ('280013', )
+                    'except_mo': ('280013', '280043', )
                 },
                 'stomatology_prevention': {
                     'volume_limit': volume_limit.stomatology_prevention,
