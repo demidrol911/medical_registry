@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 def get_register_element():
     register_element = MedicalRegister.objects.filter(
-        is_active=True, year='2016', status_id__in=(1, 5, 500),
+        is_active=True, year='2016', status_id__in=(500, 1) #, organization_code='280018'
     ) \
         .values('organization_code',
                 'year',
@@ -66,7 +66,8 @@ def get_services(register_element):
                         provided_event.examination_result_fk as examination_result,
                         provided_event.ksg_smo AS ksg_smo,
 
-                        patient.insurance_policy_fk as patient_policy,
+                        COALESCE(patient.insurance_policy_fk, patient.person_unique_id) as patient_policy,
+                        patient.insurance_policy_fk,
                         patient.birthdate as patient_birthdate,
                         patient.gender_fk AS patient_gender,
 
@@ -85,6 +86,9 @@ def get_services(register_element):
                          -- Исключение для женских консультаций 1 и 2 и травматологии ГКБ
                          WHEN department.old_code in ('0121001', '0121002', '0301010')
                               and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null) THEN 2
+                         WHEN department.old_code in ('0115025')
+                              and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null)
+                           THEN department.day_hospital_level
                          WHEN provided_event.term_fk = 1 THEN department.level
                          WHEN provided_event.term_fk = 2 THEN department.day_hospital_level
                          ELSE department.level
@@ -95,6 +99,9 @@ def get_services(register_element):
                          -- Исключение для женских консультаций 1 и 2 и травматологии ГКБ
                          WHEN department.old_code in ('0121001', '0121002', '0301010')
                               and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null) THEN 2
+                         WHEN department.old_code in ('0115025')
+                              and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null)
+                           THEN medical_organization.day_hospital_level
                          WHEN provided_event.term_fk = 1 THEN medical_organization.level
                          WHEN provided_event.term_fk = 2 THEN medical_organization.day_hospital_level
                          ELSE medical_organization.level
@@ -106,23 +113,24 @@ def get_services(register_element):
                          -- Исключение для женских консультаций 1 и 2 и травматологии ГКБ
                          WHEN department.old_code in ('0121001', '0121002', '0301010')
                               and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null) THEN 19
+                         WHEN department.old_code in ('0115025')
+                              and (provided_event.term_fk not in (1, 2) or provided_event.term_fk is null)
+                           THEN department.alternate_tariff_group_fk
                          WHEN provided_event.term_fk = 1 THEN department.tariff_group_fk
                          WHEN provided_event.term_fk = 2 THEN department.alternate_tariff_group_fk
                          ELSE department.tariff_group_fk
                          END AS department_tariff_group,
 
-                    provided_event.ksg_smo in (
-                         '66', '67', '68', '87', '88', '89', '90', '91', '180', '181',
-                         '182', '300', '301', '302', '303', '304', '305', '306',
-                         '307', '308'
-                    ) and
-                    ( ms.group_fk in (1, 2)
-                      or ms.code in ('098995', '098996', '098997', '098606',
-                                     '098607', '098608', '098609', '198611',
-                                     '198612', '198613', '198614', '198615',
-                                     '198995', '198996', '198997',
-                                     '198616', '198617')
-                    ) AS is_payment_by_ksg
+                    CASE WHEN ms.code in (
+                        '098783', '098784', '098785',  '098786', '198783', '198784',
+                        '198785', '198786', '198787', '198788', '198789', '198790')
+                         THEN True
+                         when ms.code not in (
+                            '098783', '098784', '098785',  '098786', '198783', '198784',
+                            '198785', '198786', '198787', '198788', '198789', '198790')
+                            and ksg_payment.id_pk is not null THEN True
+                         ELSE False END
+                    AS is_payment_by_ksg
 
                 from provided_service
                 join provided_event
@@ -138,10 +146,12 @@ def get_services(register_element):
                 join medical_organization ON
                     medical_organization.id_pk = provided_service.organization_fk
                 join medical_service ms ON ms.id_pk = provided_service.code_fk
+                left join ksg_payment ON ksg_payment.service_code_fk = provided_service.code_fk
                 where medical_register.is_active
                     and medical_register.year = %(year)s
                     and medical_register.period = %(period)s
                     and medical_register.organization_code = %(organization_code)s
+                    --and provided_service.payment_type_fk is null
             )
             select
                 services.id_pk,
@@ -157,7 +167,6 @@ def get_services(register_element):
 
                 person.deathdate as person_deathdate,
                 insurance_policy.stop_date as policy_stop_date,
-                operation.reason_stop_fk as stop_reason,
                 insurance_policy.type_fk as policy_type,
                 services.*,
 
@@ -238,22 +247,9 @@ def get_services(register_element):
             FROM services
             join medical_service ON medical_service.id_pk = services.code_fk
             left join insurance_policy
-                on services.patient_policy = insurance_policy.version_id_pk
+                on services.insurance_policy_fk = insurance_policy.version_id_pk
             left join person
                 on person.version_id_pk = insurance_policy.person_fk
-            left join operation
-                on operation.insurance_policy_fk = insurance_policy.version_id_pk
-                and operation.id_pk = (
-                    select op.id_pk
-                    from operation op
-                    join operation_status os
-                        on op.id_pk = os.operation_fk
-                    where op.insurance_policy_fk = insurance_policy.version_id_pk
-                    and os.timestamp = (
-                        select min(timestamp)
-                        from operation_status
-                        where operation_status.operation_fk = op.id_pk)
-                    order by timestamp desc limit 1)
 
             -- Основной тариф
             LEFT JOIN tariff_basic
@@ -287,13 +283,13 @@ def get_services(register_element):
             -- Тариф для услуг рассчитываемых по КСГ (исключение)
             lEFT JOIN tariff_ksg
                 ON tariff_ksg.regional_coefficient = services.regional_coefficient
-                    AND tariff_ksg.level = services.department_level
+                    AND tariff_ksg.level = (CASE WHEN services.organization_code = '280007' THEN 2 ELSE services.department_level END)
                     AND tariff_ksg.ksg_fk = ksg.id_pk
                     AND tariff_ksg.start_date=
                     GREATEST((select max(start_date)
                               from tariff_ksg
                               where start_date <= services.end_date
-                              and "level" = services.department_level
+                              and "level" = (CASE WHEN services.organization_code = '280007' THEN 2 ELSE services.department_level END)
                               AND ksg_fk = ksg.id_pk),
                     '2016-05-01'::DATE)
 
@@ -320,13 +316,13 @@ def get_services(register_element):
 
             -- нкд для услуг рассчитываемых по КСГ (исключение)
             lEFT JOIN tariff_nkd_ksg
-                ON tariff_nkd_ksg.level = services.department_level
+                ON tariff_nkd_ksg.level = (CASE WHEN services.organization_code = '280007' THEN 2 ELSE services.department_level END)
                     AND tariff_nkd_ksg.ksg_fk = ksg.id_pk
                     AND tariff_nkd_ksg.start_date= GREATEST(
                         (select max(start_date)
                          from tariff_nkd_ksg
                          where start_date <= services.end_date
-                             and "level" = services.department_level
+                             and "level" =  (CASE WHEN services.organization_code = '280007' THEN 2 ELSE services.department_level END)
                              AND ksg_fk = ksg.id_pk
                          ), '2016-05-01'::DATE)
     """
@@ -600,6 +596,94 @@ def identify_patient(register_element):
             and p2.insurance_policy_fk is null
         ) as T where id_pk = T.patient_id
     """
+
+    query5 = """
+        update patient set person_unique_id = T.person_unique_id
+        from (
+            SELECT distinct p.id_pk AS patient_id, up.person_unique_id
+            FROM medical_register mr
+            JOIN medical_register_record mrr
+                  ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                  ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                  ON ps.event_fk=pe.id_pk
+            JOIN medical_organization mo
+                  ON mo.id_pk = ps.organization_fk
+            JOIN medical_service ms
+                  ON ms.id_pk = ps.code_fk
+            JOIN patient p
+                  ON p.id_pk = mrr.patient_fk
+            join uploading_policy u_pol ON u_pol.id_pk = (
+                select
+                case when char_length(p.insurance_policy_number) <= 6 THEN
+                (select id_pk from uploading_policy
+                     where
+                    (series = p.insurance_policy_series
+                    and number = trim(leading '0' from p.insurance_policy_number))
+                    or (p.insurance_policy_series || trim(leading '0' from p.insurance_policy_number) = number)
+
+                    order by stop_date DESC NULLS FIRST
+                    LIMIT 1
+                )
+                when char_length(p.insurance_policy_number) between 7 and 8 THEN
+                (select id_pk from uploading_policy where
+                    series = p.insurance_policy_series
+                    and number = p.insurance_policy_number
+                    order by stop_date DESC NULLS FIRST
+                    LIMIT 1
+                )
+                when char_length(p.insurance_policy_number) = 9 THEN
+                (select id_pk from uploading_policy where
+                    number = p.insurance_policy_number
+                    order by stop_date DESC NULLS FIRST
+                    LIMIT 1
+                )
+                when char_length(p.insurance_policy_number) = 16 THEN
+                (select id_pk from uploading_policy
+                    where
+                    enp = p.insurance_policy_number or enp_precalculated = p.insurance_policy_number
+                    order by stop_date desc NULLS FIRST
+                    LIMIT 1
+                )
+                END)
+            join uploading_person up ON up.id_pk = (
+                 select id_pk
+                 from uploading_person
+                 where
+                     id_pk = u_pol.uploading_person_fk
+                     and (((
+                    (
+                    p.first_name = up.first_name
+                    or p.middle_name = up.middle_name
+                    or p.last_name = up.last_name
+                    ) and p.birthdate = up.birthdate
+                ) or (
+                    p.last_name = up.last_name
+                    and p.first_name = up.first_name
+                    and p.middle_name = up.middle_name
+                ) or (p.snils = up.snils
+                    and p.first_name = up.first_name
+                    and p.birthdate = up.birthdate)
+                    or (regexp_replace(regexp_replace((up.last_name || up.first_name || up.middle_name), 'Ё', 'Е' , 'g'), ' ', '' , 'g') = regexp_replace(regexp_replace((p.last_name || p.first_name || p.middle_name), 'Ё', 'Е' , 'g'), ' ', '' , 'g') and p.birthdate = up.birthdate)
+                    ) or p.newborn_code != '0')
+                )
+            join uploading_policy u_pol2 ON u_pol2.id_pk = (
+                 select u_pol1.id_pk
+                 from uploading_person up1
+                 join uploading_policy u_pol1 ON u_pol1.uploading_person_fk = up1.id_pk
+                 where up1.person_unique_id = up.person_unique_id
+                 order by u_pol1.stop_date desc nulls first
+                 limit 1
+                 ) and (CASE WHEN u_pol2.stop_date is not null THEN ps.start_date <= u_pol2.stop_date ELSE True END)
+            WHERE mr.is_active
+                and mr.year = %s
+                and mr.period = %s
+                and mr.organization_code = %s
+                AND p.insurance_policy_fk is null
+            ) AS T
+        where id_pk = T.patient_id
+    """
     cursor = connection.cursor()
     print u'идентификация по фио, снилс и полису'
     cursor.execute(query1, [register_element['year'],
@@ -621,22 +705,78 @@ def identify_patient(register_element):
                             register_element['period'],
                             register_element['organization_code']])
     transaction.commit()
+    print u'идентификация по новой базе'
+    cursor.execute(query5, [register_element['year'],
+                            register_element['period'],
+                            register_element['organization_code']])
+    transaction.commit()
+
+    cursor.close()
+
+
+@howlong
+def update_person_unique_id(register_element):
+    """
+    Проставляет уникальный идентификатор пациенту из полиса
+    """
+    query = """
+        UPDATE patient SET person_unique_id = T.unique_id
+        FROM (
+            SELECT p.id_pk as patient_id, per.id As unique_id
+                FROM medical_register mr
+                JOIN medical_register_record mrr
+                      ON mr.id_pk=mrr.register_fk
+                JOIN provided_event pe
+                      ON mrr.id_pk=pe.record_fk
+                JOIN provided_service ps
+                      ON ps.event_fk=pe.id_pk
+                JOIN medical_organization mo
+                      ON mo.id_pk = ps.organization_fk
+                JOIN medical_service ms
+                      ON ms.id_pk = ps.code_fk
+                JOIN patient p
+                      ON p.id_pk = mrr.patient_fk
+                JOIN insurance_policy ip
+                      ON ip.version_id_pk = p.insurance_policy_fk
+                JOIN person per
+                    ON per.version_id_pk = (
+                        SELECT version_id_pk
+                        FROM person
+                        WHERE id = (
+                            SELECT id
+                            FROM person
+                            WHERE version_id_pk = ip.person_fk
+                        ) AND is_active
+                )
+                WHERE mr.is_active
+                      AND mr.year = %(year)s
+                      AND mr.period = %(period)s
+                      AND mr.organization_code = %(organization)s
+            ) AS T
+        WHERE id_pk = T.patient_id
+    """
+    cursor = connection.cursor()
+    cursor.execute(query, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+
+    transaction.commit()
     cursor.close()
 
 
 def update_patient_attachment_code(register_element):
     query = """
-        update patient set attachment_code = T.code
+        update patient set attachment_code = T.attachment_organization
         from (
-        SELECT DISTINCT p.id_pk, att_org.code
+        SELECT DISTINCT p.id_pk, COALESCE(up_att_org.code, att_org.code) AS attachment_organization
         FROM medical_register_record mrr
             JOIN patient p
                 on p.id_pk = mrr.patient_fk
             JOIN medical_register mr
                 ON mrr.register_fk = mr.id_pk
-            JOIN insurance_policy i
+            LEFT JOIN insurance_policy i
                 ON p.insurance_policy_fk = i.version_id_pk
-            JOIN person
+            LEFT JOIN person
                 ON person.version_id_pk = (
                     SELECT version_id_pk
                     FROM person WHERE id = (
@@ -655,12 +795,22 @@ def update_patient_attachment_code(register_element):
                      SELECT parent_fk FROM medical_organization
                      WHERE id_pk = attachment.medical_organization_fk
                   )
+
+            LEFT JOIN uploading_person up ON up.person_unique_id = p.person_unique_id
+            LEFT JOIN uploading_attachment ua ON ua.id_pk = (
+                SELECT id_pk
+                FROM uploading_attachment ua1
+                WHERE ua1.id = up.id and ua1.start_date <= format('%%s-%%s-%%s', mr.year, mr.period, '01')::DATE
+                ORDER by ua1.start_date DESC
+                LIMIT 1
+            )
+            LEFT JOIN medical_organization up_att_org ON up_att_org.id_pk = ua.organization_fk
         WHERE mr.is_active
          AND mr.year = %(year)s
          AND mr.period = %(period)s
          and mr.organization_code = %(organization)s
          ) as T
-        Where T.id_pk = patient.id_pk
+        WHERE T.id_pk = patient.id_pk
     """
 
     cursor = connection.cursor()
@@ -674,7 +824,16 @@ def update_patient_attachment_code(register_element):
 
 def update_payment_kind(register_element):
     # По подушевому оплачиваются все услуги поликлиники, оказанные прикреплённому застрахованному
-    # кроме профилей Травматология и ортопедия, Акушерство и гинекология в Свободненской больнице
+    # Есть ряд исключений оплата за единицу объема:
+    # 1. При диспансерном наблюдении женщин в период беременности в Свободненской больнице,
+    # прикреплённых с Свободненской поликлинике
+    # 2. При разовых посещениях и обращениях в связи с заболеванием в Свободенской больнице
+    # по профилю акушерство и гинекология, прикреплённых к Свободненской поликлинике
+    # 3. При разовых посещениях и обращениях в свзяи с заболеванием в Свободненской больнице,
+    # по профилю травматология и ортопедия, прикрепленных к медицинским организациям г. Свободного
+    # 4. При разовых посещениях и обращениях в связи с заболеванием по враачебным специальностям,
+    # за исключением профиля терапия (взрослое население), прикреплённых к Свободненской больнице
+    # в Свободненская поликлиника и в Свободненской ДВОМЦ
 
     # По подушевому оплачивается вся скорая помощь кроме услуг тромболизиса
     query = """
@@ -688,30 +847,18 @@ def update_payment_kind(register_element):
                     ((medical_service.group_fk = 24 OR medical_service.group_fk is null)
                       and medical_service.reason_fk in (1, 2, 3, 8) and provided_event.term_fk=3)
                       AND not (
-                         mr1.organization_code = '280001' AND medical_service.tariff_profile_fk in (108, 93, 241)
+                         (mr1.organization_code = '280001' AND medical_service.tariff_profile_fk = 241 AND p1.attachment_code = '280052')
+                          OR (mr1.organization_code = '280001' AND medical_service.reason_fk = 1 AND medical_service.tariff_profile_fk = 93 AND p1.attachment_code = '280052')
+                          OR (mr1.organization_code = '280001' AND medical_service.reason_fk = 1 AND medical_service.tariff_profile_fk = 108 AND p1.attachment_code IN ('280052', '280076'))
+                          OR (mr1.organization_code in ('280052', '280076') AND medical_service.reason_fk = 1 AND medical_service.tariff_profile_fk != 120
+                              AND medical_service.code ILIKE '0%%'  AND Extract (year from age(ps1.end_date, p1.birthdate)) >= 18 AND p1.attachment_code = '280001')
                       )
                       AND ps1.department_fk NOT IN (15, 88, 89)
-                when TRUE THEN
-                    CASE p1.attachment_code = mr1.organization_code -- если пациент прикреплён щас к МО
-                    when true THEN -- прикреплён
-                        CASE
-                        when T1.pk is not NULL
-                            and T1.attachment_code = mr1.organization_code -- и был прикреплён тогда
-                        THEN 2
-                        when T1.pk is not NULL
-                            and T1.attachment_code != mr1.organization_code -- и не был прикреплён тогда
-                        THEN 3
-
-                        ELSE 2
-                        END
-                    else -- не приреплён
-                        CASE
-                        when T1.pk is not NULL
-                            and T1.attachment_code = mr1.organization_code
-                        THEN 2
-                        else 1
-                        END
-                    END
+                when TRUE THEN (
+                                    CASE WHEN at_stat.id_pk IS NULL THEN 1
+                                         ELSE 2
+                                    END
+                                )
                 ELSE
                     1
                 END
@@ -731,6 +878,8 @@ def update_payment_kind(register_element):
                 on medical_register_record.patient_fk = p1.id_pk
             left join insurance_policy i1
                 on i1.version_id_pk = p1.insurance_policy_fk
+            left join attachment_statistics at_stat
+                on at_stat.organization = mr1.organization_code AND at_stat.at = format('%%s-%%s-%%s', mr1.year, mr1.period, '01')::DATE
             LEFT JOIN (
                 select ps.id_pk as pk, i.id as policy, ps.code_fk as code, ps.end_date,
                     ps.basic_disease_fk as disease, ps.worker_code, mr.year, mr.period,
@@ -762,6 +911,187 @@ def update_payment_kind(register_element):
         where provided_service.id_pk = T.service_pk
     """
 
+    cursor = connection.cursor()
+    cursor.execute(query, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+
+    transaction.commit()
+    cursor.close()
+
+
+def update_payment_kind_newborn(register_element):
+    """
+    При оказаниии первичной медико-санитарной помощи детям с момента рождения до получения
+    полиса обязательного медицинского страхования, но не более 30 дней, оплата осуществляется
+    за единицу объёма медицинской помощи - за посещение, обращение (законченный случай)
+    за медицинскую услугу
+    см. Дополнительное соглашение № 9 от 22.09.2016
+    """
+    query = """
+        UPDATE provided_event SET newborn_tariff_payment = True
+        WHERE id_pk in (
+            SELECT distinct pe.id_pk
+            FROM medical_register mr
+            JOIN medical_register_record mrr
+                  ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                  ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                  ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms
+                  ON ms.id_pk = ps.code_fk
+            JOIN patient p ON p.id_pk = mrr.patient_fk
+            LEFT JOIN person
+                ON person.version_id_pk = (
+                    select max(version_id_pk)
+                    from person
+                    where id = (
+                        select id from (
+                        select DISTINCT person.id, stop_date
+                        from person
+                            join insurance_policy
+                                on person.version_id_pk = insurance_policy.person_fk
+                        where replace(last_name, 'Ё', 'Е') = replace(p.last_name, 'Ё', 'Е')
+                            and replace(first_name, 'Ё', 'Е') = replace(p.first_name, 'Ё', 'Е')
+                            and replace(middle_name, 'Ё', 'Е') = replace(p.middle_name, 'Ё', 'Е')
+                            and birthdate = p.birthdate
+                        ORDER BY stop_date DESC NULLS FIRST
+                        limit 1
+                        ) as T
+                    )
+                )
+            LEFT JOIN insurance_policy
+                ON person.version_id_pk = insurance_policy.person_fk
+                   AND insurance_policy.start_date <= ps.start_date
+            JOIN medical_organization mo ON mo.code =  mr.organization_code  and mo.parent_fk is null
+            WHERE mr.is_active
+                and mr.year = %(year)s
+                and mr.period = %(period)s
+                and mr.organization_code = %(organization)s
+                and pe.term_fk = 3
+                and (ms.group_fk is null or ms.group_fk = 24)
+                and (ps.start_date - p.birthdate <= 30)
+                and insurance_policy.version_id_pk is null
+                and pe.kind_fk in (1, 5, 6)
+        )
+    """
+
+    query_check = """
+        UPDATE provided_event SET newborn_tariff_payment = False
+        WHERE id_pk in (
+            SELECT distinct pe.id_pk
+            FROM medical_register mr
+            JOIN medical_register_record mrr
+                  ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+                  ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+                  ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms
+                  ON ms.id_pk = ps.code_fk
+            JOIN patient p ON p.id_pk = mrr.patient_fk
+            WHERE mr.is_active
+                and mr.year = %(year)s
+                and mr.period = %(period)s
+                and mr.organization_code = %(organization)s
+                and pe.newborn_tariff_payment
+                and pe.term_fk = 3
+                and (ms.group_fk is null or ms.group_fk = 24)
+                and (ps.start_date - p.birthdate <= 30)
+                and pe.kind_fk in (1, 5, 6)
+                and exists (
+                  select 1
+                  from uploading_person up
+                  join uploading_policy u_pol ON u_pol.uploading_person_fk = up.id_pk and u_pol.start_date <= ps.start_date
+                  where replace(up.last_name, 'Ё', 'Е') = replace(p.last_name, 'Ё', 'Е')
+                        and replace(up.first_name, 'Ё', 'Е') = replace(p.first_name, 'Ё', 'Е')
+                        and replace(up.middle_name, 'Ё', 'Е') = replace(p.middle_name, 'Ё', 'Е')
+                        and up.birthdate = p.birthdate
+                )
+        )
+    """
+
+    query2 = """
+        UPDATE provided_service SET payment_kind_fk = 1
+            WHERE event_fk in (
+                SELECT distinct pe.id_pk
+                FROM medical_register mr
+                JOIN medical_register_record mrr
+                      ON mr.id_pk=mrr.register_fk
+                JOIN provided_event pe
+                      ON mrr.id_pk=pe.record_fk
+                JOIN provided_service ps
+                      ON ps.event_fk=pe.id_pk
+                WHERE mr.is_active
+                    and mr.year = %(year)s
+                    and mr.period = %(period)s
+                    and mr.organization_code = %(organization)s
+                    and pe.newborn_tariff_payment
+            )
+    """
+
+    cursor = connection.cursor()
+    cursor.execute(query, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+    transaction.commit()
+
+    # Перепроверить наличие полиса у новорождённых по новой базе
+    cursor = connection.cursor()
+    cursor.execute(query_check, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+    transaction.commit()
+
+    # Проставить payment_kind_fk значением 1, там где newborn_tariff_payment истина
+    cursor.execute(query2, dict(
+        year=register_element['year'], period=register_element['period'],
+        organization=register_element['organization_code']))
+    transaction.commit()
+    cursor.close()
+
+
+def update_payment_kind_not_attachment(register_element):
+    """
+    При обращении по поводу заболевания с кратностью не менее двух посещений по поводу
+    одного заболевания застрахованных лиц, прикрепленных к иным медицинским
+    организациям расположенным в других муниципальных образованиях
+    см. Доп.соглашение № 8 от 09.09.2016
+    """
+    query = """
+        update provided_service set payment_kind_fk = 1
+        where event_fk in (
+            select pe.id_pk
+                from medical_register mr
+                JOIN medical_register_record mrr
+                      ON mr.id_pk=mrr.register_fk
+                JOIN provided_event pe
+                      ON mrr.id_pk=pe.record_fk
+                JOIN provided_service ps
+                      ON ps.event_fk=pe.id_pk
+                JOIN medical_service ms
+                      ON ms.id_pk = ps.code_fk
+                join patient p ON p.id_pk = mrr.patient_fk
+                join medical_organization att ON att.code = p.attachment_code and att.parent_fk is null
+                join medical_organization mo ON mo.code =  mr.organization_code  and mo.parent_fk is null
+                left join lateral (
+                    select count(distinct ps1.id_pk) AS count_services
+                    from provided_service ps1
+                       join medical_service ms1 ON ms1.id_pk = ps1.code_fk
+                    where (ms1.group_fk is null or ms1.group_fk not in (27, 3, 5, 42))
+                           and ps1.event_fk = ps.event_fk
+                ) AS Y ON True
+                where mr.is_active
+                    and mr.year = %(year)s
+                    and mr.period = %(period)s
+                    and mr.organization_code = %(organization)s
+                    and pe.term_fk = 3
+                    and (p.attachment_code != mr.organization_code)
+                    and (ms.reason_fk = 1 AND Y.count_services > 1) and (ms.group_fk is null or ms.group_fk = 24)
+                    and att.region_fk != mo.region_fk
+        )
+    """
     cursor = connection.cursor()
     cursor.execute(query, dict(
         year=register_element['year'], period=register_element['period'],
@@ -947,7 +1277,7 @@ def update_ksg(register_element):
                 ) AS ksg_byservice ON NOT ksg_bydisease.defined_by_diagnosis
 
             LEFT JOIN ksg ksg_calc ON (
-                CASE WHEN service_term = 1 AND
+                CASE WHEN (service_term = 1 AND
                          ((ksg_byservice.code=11 AND ksg_bydisease.code=9) OR
                          (ksg_byservice.code=12 AND ksg_bydisease.code=9) OR
                          (ksg_byservice.code=11 AND ksg_bydisease.code=10) OR
@@ -960,7 +1290,8 @@ def update_ksg(register_element):
                          (ksg_byservice.code=34 AND ksg_bydisease.code=223) OR
                          (ksg_byservice.code=237 AND ksg_bydisease.code=252) OR
                          ksg_byservice.code in (300, 301, 302, 303, 304, 305, 306, 307, 308)
-                         )
+                         )) or
+                         (service_term = 2 AND ksg_byservice.code in (111, 112, 113, 114, 115, 116, 117, 118))
                        THEN ksg_byservice.id_pk
                      WHEN COALESCE(ksg_bydisease.coefficient, 0) >= COALESCE(ksg_byservice.coefficient, 0)
                        THEN ksg_bydisease.id_pk
@@ -1092,17 +1423,19 @@ def calculate_tariff(register_element):
                         and service.person_deathdate < service.start_date:
                     set_sanction(service, 56)
                     payment_type = 3
-
+                '''
                 elif service.policy_stop_date:
                     if service.policy_stop_date < service.start_date \
                             and service.stop_reason in (1, 3, 4):
                         set_sanction(service, 53)
                         payment_type = 3
 
+
                     if service.policy_type == 1 and service.policy_stop_date < \
                             min_date_for_stopped_policy:
                         set_sanction(service, 54)
                         payment_type = 3
+                '''
 
             payments = get_payments_sum(service)
 
@@ -1127,7 +1460,8 @@ def calculate_tariff(register_element):
 def get_payments_sum(service):
     is_endovideosurgery = (service.service_comment == '100000')
     is_curation_coefficient = (service.service_comment == '0000001')
-    is_mobile_brigade = (service.service_comment == '000010')
+    #is_mobile_brigade = (service.service_comment == '000010')
+    is_mobile_brigade = len(service.service_comment) >= 5 and service.service_comment[4] == '1'
     is_trombolitic_therapy = (service.service_comment == '000000001')
     is_mobile_stom_cab = (service.service_comment == '0000001')
 
@@ -1217,7 +1551,7 @@ def get_payments_sum(service):
 
         if term == 1:
             # стационар 5) Коэффициент сложности лечения пациента КСЛП
-            if service.quantity >= 30 and not (service.service_group == 20 or service.ksg_smo in (88, 89, 90, 91))\
+            if service.quantity >= 30 and not (service.service_group == 20 or service.ksg_smo in ('88', '89', '90', '91'))\
                     and is_curation_coefficient:
                 accepted_payment += round(accepted_payment * 0.25, 2)
                 provided_tariff += round(provided_tariff * 0.25, 2)
@@ -1239,6 +1573,14 @@ def get_payments_sum(service):
                 provided_tariff += round(provided_tariff * 0.34, 2)
                 ProvidedServiceCoefficient.objects.get_or_create(
                     service=service, coefficient_id=9)
+
+            # КПГ онкология
+            if service.service_tariff_profile in (23, 24) and service.organization_code in ('280005', ):
+                accepted_payment -= round(accepted_payment * 0.09, 2)
+                provided_tariff -= round(provided_tariff * 0.09, 2)
+                ProvidedServiceCoefficient.objects.get_or_create(
+                    service=service, coefficient_id=28)
+
         if term == 2:
             # дневной стационар 3) Управленческий коэффициент (КУ)
             # КПГ медицинская реабилитация
@@ -1320,8 +1662,11 @@ def main():
             ).update(payment_type=None)
 
             identify_patient(register_element)
+            update_person_unique_id(register_element)
             update_patient_attachment_code(register_element)
             update_payment_kind(register_element)
+            update_payment_kind_newborn(register_element)
+            update_payment_kind_not_attachment(register_element)
             update_wrong_date(register_element)
             update_ksg(register_element)
 
@@ -1348,6 +1693,8 @@ def main():
             checks.underpay_service_term_kind_mismatch(register_element)
             checks.underpay_incorrect_examination_events(register_element)
             checks.underpay_hitech_with_small_duration(register_element)
+            checks.underpay_wrong_adult_examination_not_attachment(register_element)
+            checks.underpay_wrong_hospital_quantity(register_element)
 
         print 'iterate tariff', register_element
         calculate_tariff(register_element)
@@ -1355,9 +1702,21 @@ def main():
 
         print u'stomat, outpatient, examin'
         if register_element['status'] == 500:
-            checks.underpay_repeated_service(register_element)
-            checks.underpay_duplicate_examination_in_current_register(register_element)
+            pass
+            #update_patient_attachment_code(register_element)
+            #update_payment_kind(register_element)
+            #update_payment_kind_newborn(register_element)
+            #update_payment_kind_not_attachment(register_element)
+            #calculate_tariff(register_element)
+            #update_payment_kind_newborn(register_element)
+            #update_payment_kind(register_element)
+            #identify_patient(register_element)
+            #checks.underpay_repeated_service(register_element)
+            #checks.underpay_duplicate_examination_in_current_register(register_element)
         else:
+            checks.underpay_wrong_service_after_death(register_element)
+            checks.underpay_wrong_very_old_policy(register_element)
+            checks.underpay_wrong_person_in_other_company(register_element)
             checks.underpay_invalid_stomatology_event(register_element)
             checks.underpay_repeated_service(register_element)
             checks.underpay_invalid_outpatient_event(register_element)
