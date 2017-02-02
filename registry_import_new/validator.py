@@ -12,7 +12,7 @@ from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, \
 import re
 from datetime import datetime
 from main.funcs import safe_int
-from main.models import MedicalServiceVolume
+from main.models import MedicalServiceVolume, MedicalServiceVolumeHitech
 
 
 def set_error(code, field='', parent='', record_uid='',
@@ -256,20 +256,19 @@ class RegistryValidator:
                 {'RSLT_D': [u'904;Указанный код результата диспансеризации не совпадает с указанным комментарием']},
                 parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
-        # Проверка КСГ
-        if (event.get('USL_OK', '') == '1' and not event.get('KSG_MO', None)) \
-                or (event.get('USL_OK', '') == '2' and not event.get('KSG_MO', None)
-                    and event['LPU'] != '280064'):
-            h_errors += handle_errors(
-                {'KSG_MO': [u'902;Отсутствует обязательное значение.']},
-                parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+        if self.registry_type == 1:
+            # Проверка КСГ
+            if event.get('USL_OK', '') in ('1', '2') and not event.get('KSG_MO', None):
+                h_errors += handle_errors(
+                    {'KSG_MO': [u'902;Отсутствует обязательное значение.']},
+                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
-        if (event.get('USL_OK', '') == '1' and event.get('KSG_MO', None) not in HOSPITAL_KSGS) \
-                or (event.get('USL_OK', '') == '2' and event.get('KSG_MO', None) not in DAY_HOSPITAL_KSGS
-                    and event['LPU'] != '280064'):
-            h_errors += handle_errors(
-                {'KSG_MO': [u'904;Значение не соответствует справочному.']},
-                parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+            if event.get('KSG_MO', None) and \
+                    ((event.get('USL_OK', '') == '1' and event.get('KSG_MO', None) not in HOSPITAL_KSGS)
+                     or (event.get('USL_OK', '') == '2' and event.get('KSG_MO', None) not in DAY_HOSPITAL_KSGS)):
+                h_errors += handle_errors(
+                    {'KSG_MO': [u'904;Значение не соответствует справочному.']},
+                    parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         # Проверка наличия уточнения в диагнозах
         if event['LPU'] != '280043':
@@ -662,7 +661,7 @@ class CheckVolume:
                 'stomatology_prevention': {
                     'volume_limit': volume_limit.stomatology_prevention,
                     'text': u'Стоматология профилактика', 'units': u'ует',
-                    'except_mo':  CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
+                    'except_mo':  CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS + ('280026', )
                 },
                 'stomatology_emergency': {
                     'volume_limit': volume_limit.stomatology_emergency,
@@ -708,12 +707,21 @@ class CheckVolume:
                 else:
                     self.volume_reg[service_type] = set()
 
+        self.vollume_hitech_limit = {
+            volume['vmp_group']: volume['value'] for volume in MedicalServiceVolumeHitech.objects.filter(
+                organization__code=self.registry_set.mo_code,
+                date='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period)).values('vmp_group', 'value')
+        }
+        self.volume_hitech_reg = {}
+
     def set_count_invoiced_events(self, count_events):
         self.count_invoiced_events = int(count_events)
         self.event_reg.clear()
 
     def check(self, event, service):
         self.event_reg.add(event['IDCASE'])
+        code_obj = CODES[service['CODE_USL']]
+
         if event.get('USL_OK', '') == '1' \
                 and service['CODE_USL'] not in self.volume_checker_settings['hospital']['except_code'] \
                 and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
@@ -727,7 +735,6 @@ class CheckVolume:
         # Новые проверки
         if event.get('USL_OK', '') == '3' \
                 and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
-            code_obj = CODES[service['CODE_USL']]
             count_services = 0
             stomatology_subgroup = 0
             for s in event.get('USL', []):
@@ -762,7 +769,6 @@ class CheckVolume:
                     self.volume_reg['stomatology_emergency'] += uet
 
         if event.get('USL_OK', '') == '':
-            code_obj = CODES[service['CODE_USL']]
             if code_obj.group_id == 12:
                 self.volume_reg['exam_children_difficult_situation'].add(event['IDCASE'])
             elif code_obj.group_id == 13:
@@ -777,6 +783,11 @@ class CheckVolume:
                 self.volume_reg['exam_adult'].add(event['IDCASE'])
             elif code_obj.group_id == 9:
                 self.volume_reg['preventive_inspection_adult'].add(event['IDCASE'])
+
+        if code_obj.group_id == 20:
+            if code_obj.vmp_group not in self.volume_hitech_reg:
+                self.volume_hitech_reg[code_obj.vmp_group] = set()
+            self.volume_hitech_reg[code_obj.vmp_group].add(service['IDSERV'])
 
     def check_count_events(self):
         return len(self.event_reg) != self.count_invoiced_events
@@ -797,6 +808,14 @@ class CheckVolume:
                                  u'запланировано решением тарифной комиссии - {volume_limit}{units}\n'.\
                     format(text=settings['text'], volume_reg=volume, units=units,
                            volume_limit=settings['volume_limit'])
+
+        for vmp_group, value in self.volume_hitech_reg.iteritems():
+            volume_limit = self.vollume_hitech_limit.get(vmp_group, 0)
+            if len(value) > volume_limit:
+                error_message += u'{text} - {volume_reg}, ' \
+                    u'запланировано решением тарифной комиссии - {volume_limit}\n'.format(
+                    text=u'ВМП '+MedicalServiceVolumeHitech.VMP_GROUPS[vmp_group]+u' группа '+str(vmp_group),
+                    volume_reg=len(value), volume_limit=volume_limit)
         if error_message:
             return True, (
                 u'Амурский филиал АО «Страховая компания «СОГАЗ-Мед» сообщает,что в соответствии с п.6 статьи 39 \n'
