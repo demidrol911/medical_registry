@@ -5,13 +5,13 @@ from report_printer.management.commands.targeted_expertise_pages.overdued_nkd_ho
 from report_printer.management.commands.targeted_expertise_pages.doubled_disease import DoubledDisease
 from report_printer.management.commands.targeted_expertise_pages.repaid_by_death import RepaidByDeath
 from report_printer.management.commands.targeted_expertise_pages.complicated_event import ComplicatedEvent
-from report_printer.management.commands.targeted_expertise_pages.ambulance_dead_patient import AmbulanceDeadPatient
+from report_printer.management.commands.targeted_expertise_pages.ambulance_dead_patient import AmbulanceDeadPatient, WrongOnkology
 from report_printer.management.commands.targeted_expertise_pages.oks_onmk import OksOnmkPage
 from report_printer.management.commands.targeted_expertise_pages.report import TargetedExpertisePage
 from report_printer.libs.report import Report
 from report_printer.libs.report import ReportParameters
 from medical_service_register.path import REESTR_EXP
-from report_printer.libs.const import MONTH_NAME
+from main.data_cache import MONTH_NAME
 
 
 class Command(BaseCommand):
@@ -27,6 +27,8 @@ class Command(BaseCommand):
     7. Пациенты умершие при оказании скорой помощи
     """
 
+    # Умершие пациенты по ВМП помечать тарифный профиль, что именно за ВМП
+
     def handle(self, *args, **options):
         dead_patient_report = DeadResultPatient()
         dead_patient_report.print_to_excel()
@@ -40,7 +42,7 @@ class Command(BaseCommand):
         doubled_disease.print_to_excel()
         doubled_disease.print_to_dbf()
 
-        # Отчёт по количеству целевых экспертиз
+        #Отчёт по количеству целевых экспертиз
         parameters = ReportParameters()
         parameters.path_to_dir = REESTR_EXP % (
             parameters.registry_year,
@@ -56,6 +58,9 @@ class Command(BaseCommand):
         report.print_pages(parameters)
 
         repaid_by_death = RepaidByDeath()
+        repaid_by_death.enable_prepare_data_mode()
+        repaid_by_death.print_to_excel()
+        repaid_by_death.disable_prepare_data_mode()
         repaid_by_death.print_to_dbf()
         repaid_by_death.print_to_excel()
 

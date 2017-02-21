@@ -17,6 +17,55 @@ class OverduedNkdHospitalization(FilterReportPage):
 
     def get_query(self):
         query = '''
+        with double_services as (
+        select DISTINCT pe.id_pk event_1
+        FROM provided_service ps
+            join provided_event pe
+                on pe.id_pk = ps.event_fk
+            JOIN medical_register_record mrr
+                on mrr.id_pk = pe.record_fk
+            JOIN medical_register mr
+                on mr.id_pk = mrr.register_fk
+            JOIN patient p
+                on p.id_pk = mrr.patient_fk
+            JOIN medical_service ms
+                ON ms.id_pk = ps.code_fk
+            JOIN (
+                select pe1.id_pk as event_id, mr1.organization_code,
+                    pe1.term_fk, ps1.basic_disease_fk, ps1.code_fk,
+                    pe1.start_date as event_start_date,
+                    pe1.end_date as event_end_date, ps1.id_pk as service_id,
+                    ps1.department_fk AS department_id,
+                    format('%%s-%%s-01', mr1.year, mr1.period)::DATE AS checking_period,
+                    p1.person_unique_id
+                FROM provided_service ps1
+                    join provided_event pe1
+                        on pe1.id_pk = ps1.event_fk
+                    JOIN medical_register_record mrr1
+                        on mrr1.id_pk = pe1.record_fk
+                    JOIN medical_register mr1
+                        on mr1.id_pk = mrr1.register_fk
+                    JOIN patient p1
+                        on p1.id_pk = mrr1.patient_fk
+                WHERE mr1.is_active
+                    and format('%%s-%%s-01', mr1.year, mr1.period)::DATE <= format('%%s-%%s-01', %(year)s,  %(period)s)::DATE
+                    and format('%%s-%%s-01', mr1.year, mr1.period)::DATE >= format('%%s-%%s-01', %(year)s,  %(period)s)::DATE - interval '9 months'
+                    and pe1.term_fk in (1,2)
+                    and ps1.payment_type_fk in (2)
+                    and ps1.tariff > 0
+                ) as T on T.person_unique_id = p.person_unique_id and mr.organization_code = T.organization_code and T.term_fk = pe.term_fk
+                    and ps.basic_disease_fk = T.basic_disease_fk and T.event_id <> pe.id_pk
+                    and ps.id_pk <> T.service_id
+        WHERE mr.is_active
+            and mr.year = %(year)s
+            and mr.period = %(period)s
+            AND ps.payment_type_fk = 2
+            and pe.term_fk in (1, 2)
+            AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
+            and (pe.term_fk in (1, 2) and ps.code_fk = T.code_fk and abs(pe.start_date - T.event_end_date) between 0 and 89)
+            and ps.tariff > 0
+        group by 1
+        )
         select *,
             case when nkd <= 1 then 100
             else round(T.c_quantity / T.nkd * 100, 0)
@@ -29,7 +78,20 @@ class OverduedNkdHospitalization(FilterReportPage):
                                   '198995', '198996', '198997', '098606',
                                   '098607', '098608', '098609', '198611',
                                   '198612', '198613', '198614', '198615',
-                                  '198616', '198617')
+                                  '198616', '198617',
+                                    '098783',
+                                    '098784',
+                                    '098785',
+                                    '098786',
+                                    '198783',
+                                    '198784',
+                                    '198785',
+                                    '198786',
+                                    '198787',
+                                    '198788',
+                                    '198789',
+                                    '198790'
+                                  )
                             THEN (select tariff_nkd_ksg.value
                                   FROM tariff_nkd_ksg
                                   WHERE tariff_nkd_ksg.level = dep.level
@@ -93,9 +155,14 @@ class OverduedNkdHospitalization(FilterReportPage):
                 pe.hospitalization_fk as hospitalization_code,
                 pe.worker_code,
                 tro.code as outcome_code,
-                concat_ws(', ', COALESCE(aa2.name, ''), Coalesce(aa1.name, ''), COALESCE(aa.name, ''),
-                coalesce(adr.street, ''), coalesce(adr.house_number, ''),
-                COALESCE(adr.extra_number, ''), coalesce(adr.room_number)) as address,
+                CASE WHEN aa2.name IS NULL AND aa1.name IS NULL AND aa.name IS NULL
+                          AND adr.street IS NULL AND adr.house_number IS NULL
+                          AND adr.extra_number IS NULL AND adr.room_number IS NULL THEN up.address
+                     ELSE concat_ws(', ', COALESCE(aa2.name, ''), COALESCE(aa1.name, ''),
+                               COALESCE(aa.name, ''), COALESCE(adr.street, ''),
+                               COALESCE(adr.house_number, ''), COALESCE(adr.extra_number, ''),
+                               COALESCE(adr.room_number))
+                END AS address,
                 case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
                 ps.quantity as c_quantity,
                 pe.term_fk AS event_term,
@@ -153,6 +220,11 @@ class OverduedNkdHospitalization(FilterReportPage):
                     ON ksg.code::VARCHAR = pe.ksg_smo
                        AND ksg.start_date = '2016-01-01'
                        AND ksg.term_fk = pe.term_fk
+                LEFT JOIN uploading_person up ON up.id_pk = (
+                   SELECT MAX(id_pk)
+                   FROM uploading_person
+                   WHERE person_unique_id = p.person_unique_id
+                )
             where mr.is_active
                 and mr.year = %(year)s
                 and mr.period = %(period)s
@@ -162,6 +234,9 @@ class OverduedNkdHospitalization(FilterReportPage):
                 and (ps.comment not like '1%%' or ps.comment is null or ps.comment = '')
                 and idc.idc_code not like 'O04%%'
                 and (ms.group_fk is null or ms.group_fk <> 17)
+                and (pe.treatment_result_fk not IN (5, 6, 15, 16) or pe.treatment_result_fk is null) and pe.id_pk not in (
+                     select event_1 from double_services
+                )
         ) as T
         where
             case when nkd <= 1 then 100

@@ -58,9 +58,14 @@ class DeadResultPatient(FilterReportPage):
             pe.worker_code,
             tro.code AS outcome_code,
             tr.name AS treatment_result_name,
-            concat_ws(', ', COALESCE(aa2.name, ''), COALESCE(aa1.name, ''), COALESCE(aa.name, ''),
-            COALESCE(adr.street, ''), COALESCE(adr.house_number, ''),
-            COALESCE(adr.extra_number, ''), COALESCE(adr.room_number)) AS address,
+            CASE WHEN aa2.name IS NULL AND aa1.name IS NULL AND aa.name IS NULL
+                      AND adr.street IS NULL AND adr.house_number IS NULL
+                      AND adr.extra_number IS NULL AND adr.room_number IS NULL THEN up.address
+                 ELSE concat_ws(', ', COALESCE(aa2.name, ''), COALESCE(aa1.name, ''),
+                                COALESCE(aa.name, ''), COALESCE(adr.street, ''),
+                                COALESCE(adr.house_number, ''), COALESCE(adr.extra_number, ''),
+                                COALESCE(adr.room_number))
+            END AS address,
             CASE ps.payment_kind_fk WHEN 2 THEN 'P' ELSE 'T' END AS funding_type,
             COALESCE(ms.uet, 0) AS uet,
             pe.id_pk AS event_id,
@@ -116,6 +121,11 @@ class DeadResultPatient(FilterReportPage):
                 ON aa1.id_pk = aa.parent_fk
             LEFT join administrative_area aa2
                 ON aa2.id_pk = aa1.parent_fk
+            LEFT JOIN uploading_person up ON up.id_pk = (
+               SELECT MAX(id_pk)
+               FROM uploading_person
+               WHERE person_unique_id = p.person_unique_id
+            )
         WHERE mr.is_active
              AND mr.year = %(year)s
              AND mr.period = %(period)s

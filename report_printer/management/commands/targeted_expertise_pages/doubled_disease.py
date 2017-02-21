@@ -32,13 +32,11 @@ class DoubledDisease(FilterReportPage):
                         on mr.id_pk = mrr.register_fk
                     JOIN patient p
                         on p.id_pk = mrr.patient_fk
-                    JOIN insurance_policy ip
-                        on ip.version_id_pk = p.insurance_policy_fk
                     JOIN medical_service ms
                         ON ms.id_pk = ps.code_fk
                     JOIN (
                         select pe1.id_pk as event_id, mr1.organization_code,
-                            ip1.id, pe1.term_fk, ps1.basic_disease_fk, ps1.code_fk,
+                            p1.person_unique_id, pe1.term_fk, ps1.basic_disease_fk, ps1.code_fk,
                             pe1.start_date as event_start_date,
                             pe1.end_date as event_end_date, ps1.id_pk as service_id,
                             ps1.department_fk AS department_id,
@@ -52,8 +50,6 @@ class DoubledDisease(FilterReportPage):
                                 on mr1.id_pk = mrr1.register_fk
                             JOIN patient p1
                                 on p1.id_pk = mrr1.patient_fk
-                            JOIN insurance_policy ip1
-                                on ip1.version_id_pk = p1.insurance_policy_fk
                         WHERE mr1.is_active
                             and format('%%s-%%s-01', mr1.year, mr1.period)::DATE <= format('%%s-%%s-01', %(year)s, %(period)s)::DATE
                             and format('%%s-%%s-01', mr1.year, mr1.period)::DATE >= format('%%s-%%s-01', %(year)s, %(period)s)::DATE - interval '9 months'
@@ -70,15 +66,17 @@ class DoubledDisease(FilterReportPage):
                                     )
                                 )
                             )
+                            and (pe1.treatment_result_fk not IN (5, 6, 15, 16) or pe1.treatment_result_fk is null)
                             and ps1.payment_type_fk in (2)
                             and ps1.tariff > 0
-                        ) as T on T.id = ip.id and mr.organization_code = T.organization_code and T.term_fk = pe.term_fk
+                        ) as T on T.person_unique_id = p.person_unique_id and mr.organization_code = T.organization_code and T.term_fk = pe.term_fk
                             and ps.basic_disease_fk = T.basic_disease_fk and T.event_id <> pe.id_pk
                             and ps.id_pk <> T.service_id
                 WHERE mr.is_active
                     and mr.year = %(year)s
                     and mr.period = %(period)s
                     AND ps.payment_type_fk = 2
+                    and (pe.treatment_result_fk not IN (5, 6, 15, 16) or pe.treatment_result_fk is null)
                     AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
                     and (( pe.term_fk in (1, 2) and ps.code_fk = T.code_fk and abs(pe.start_date - T.event_end_date) between 0 and 89)
                         or (pe.term_fk = 4 and ps.code_fk = T.code_fk and age(pe.end_date, T.event_end_date) = '0 days')
@@ -127,14 +125,19 @@ class DoubledDisease(FilterReportPage):
             COALESCE(pe.hospitalization_fk, 0) as hospitalization_code,
             pe.worker_code,
             tro.code as outcome_code,
-            concat_ws(', ', COALESCE(aa2.name, ''), Coalesce(aa1.name, ''), COALESCE(aa.name, ''),
-            coalesce(adr.street, ''), coalesce(adr.house_number, ''),
-            COALESCE(adr.extra_number, ''), coalesce(adr.room_number)) as address,
+            CASE WHEN aa2.name IS NULL AND aa1.name IS NULL AND aa.name IS NULL
+                          AND adr.street IS NULL AND adr.house_number IS NULL
+                          AND adr.extra_number IS NULL AND adr.room_number IS NULL THEN up.address
+                     ELSE concat_ws(', ', COALESCE(aa2.name, ''), COALESCE(aa1.name, ''),
+                               COALESCE(aa.name, ''), COALESCE(adr.street, ''),
+                               COALESCE(adr.house_number, ''), COALESCE(adr.extra_number, ''),
+                               COALESCE(adr.room_number))
+                END AS address,
             case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
             mr.period,
             ps.id_pk as service_id,
             pe.term_fk AS event_term,
-            format('%%s %%s %%s %%s', ip.id, CASE WHEN pe.term_fk = 4 THEN NULL
+            format('%%s %%s %%s %%s', p.person_unique_id, CASE WHEN pe.term_fk = 4 THEN NULL
                                                   ELSE (select max(ps_inner.code_fk)
                                                         from provided_service ps_inner
                                                              join medical_service ms_inner
@@ -160,8 +163,6 @@ class DoubledDisease(FilterReportPage):
                 on p.id_pk = mrr.patient_fk
             LEFT JOIN idc
                 on idc.id_pk = ps.basic_disease_fk
-            JOIN insurance_policy ip
-                on ip.version_id_pk = p.insurance_policy_fk
             JOIN medical_organization mo
                 on mo.code = mr.organization_code and mo.parent_fk is null
             JOIN medical_organization dep
@@ -190,6 +191,11 @@ class DoubledDisease(FilterReportPage):
                 on aa1.id_pk = aa.parent_fk
             LEFT join administrative_area aa2
                 on aa2.id_pk = aa1.parent_fk
+            LEFT JOIN uploading_person up ON up.id_pk = (
+               SELECT MAX(id_pk)
+               FROM uploading_person
+               WHERE person_unique_id = p.person_unique_id
+            )
         WHERE ms.code not like 'A%%'
               AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
 
@@ -220,14 +226,19 @@ class DoubledDisease(FilterReportPage):
             COALESCE(pe.hospitalization_fk, 0) as hospitalization_code,
             pe.worker_code,
             tro.code as outcome_code,
-            concat_ws(', ', COALESCE(aa2.name, ''), Coalesce(aa1.name, ''), COALESCE(aa.name, ''),
-            coalesce(adr.street, ''), coalesce(adr.house_number, ''),
-            COALESCE(adr.extra_number, ''), coalesce(adr.room_number)) as address,
+            CASE WHEN aa2.name IS NULL AND aa1.name IS NULL AND aa.name IS NULL
+                          AND adr.street IS NULL AND adr.house_number IS NULL
+                          AND adr.extra_number IS NULL AND adr.room_number IS NULL THEN up.address
+                     ELSE concat_ws(', ', COALESCE(aa2.name, ''), COALESCE(aa1.name, ''),
+                               COALESCE(aa.name, ''), COALESCE(adr.street, ''),
+                               COALESCE(adr.house_number, ''), COALESCE(adr.extra_number, ''),
+                               COALESCE(adr.room_number))
+            END AS address,
             case ps.payment_kind_fk when 2 then 'P' else 'T' END as funding_type,
             mr.period,
             ps.id_pk as service_id,
             pe.term_fk AS event_term,
-            format('%%s %%s %%s %%s', ip.id, CASE WHEN pe.term_fk = 4 THEN NULL
+            format('%%s %%s %%s %%s', p.person_unique_id, CASE WHEN pe.term_fk = 4 THEN NULL
                                                   ELSE (select max(ps_inner.code_fk)
                                                         from provided_service ps_inner
                                                              join medical_service ms_inner
@@ -253,8 +264,6 @@ class DoubledDisease(FilterReportPage):
                 on p.id_pk = mrr.patient_fk
             LEFT JOIN idc
                 on idc.id_pk = ps.basic_disease_fk
-            JOIN insurance_policy ip
-                on ip.version_id_pk = p.insurance_policy_fk
             JOIN medical_organization mo
                 on mo.code = mr.organization_code and mo.parent_fk is null
             JOIN medical_organization dep
@@ -283,6 +292,11 @@ class DoubledDisease(FilterReportPage):
                 on aa1.id_pk = aa.parent_fk
             LEFT join administrative_area aa2
                 on aa2.id_pk = aa1.parent_fk
+            LEFT JOIN uploading_person up ON up.id_pk = (
+               SELECT MAX(id_pk)
+               FROM uploading_person
+               WHERE person_unique_id = p.person_unique_id
+            )
         WHERE ms.code not like 'A%%'
               AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
         order by unique_hash, event_start_date DESC
