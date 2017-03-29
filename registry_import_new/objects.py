@@ -3,11 +3,11 @@ from main.data_cache import GENDERS, PERSON_ID_TYPES, \
     POLICY_TYPES, DEPARTMENTS, ORGANIZATIONS, TERMS, KINDS, FORMS, \
     HOSPITALIZATIONS, PROFILES, OUTCOMES, RESULTS, \
     SPECIALITIES_NEW, METHODS, DISEASES, DIVISIONS, \
-    SPECIALS, CODES, HITECH_KINDS, HITECH_METHODS, EXAMINATION_RESULTS
+    SPECIALS, CODES, HITECH_KINDS, HITECH_METHODS, EXAMINATION_RESULTS, MEDICINES
 from main.funcs import safe_int, safe_date, safe_float
 from main.models import Patient, MedicalRegisterRecord, ProvidedEvent, ProvidedService, MedicalRegister, \
-    MedicalRegisterImport, MedicalRegisterStatus, ProvidedEventConcomitantDisease, ProvidedEventComplicatedDisease, \
-    ProvidedEventSpecial, ProvidedEventAppointment
+    MedicalRegisterImport, MedicalRegisterStatus, ProvidedEventAdditionalDisease, \
+    ProvidedEventSpecial, ProvidedEventAppointment, ProvidedEventMedicine
 from django.db import connection, transaction
 from datetime import datetime
 
@@ -29,6 +29,7 @@ class RegistryDb:
         self.complicated_list = []
         self.special_list = []
         self.appointment_list = []
+        self.medicine_list = []
 
         self._patient_pk_list = []
         self._register_pk_list = []
@@ -152,8 +153,9 @@ class RegistryDb:
             concomitants = [concomitants]
         for code in concomitants:
             if code:
-                self.concomitant_list.append(ProvidedEventConcomitantDisease(
+                self.concomitant_list.append(ProvidedEventAdditionalDisease(
                     event_id=event_obj.id_pk, disease=DISEASES.get(code, None),
+                    disease_type=1,
                     newly_disease_sign=0))
 
         complicateds = event.get('DS3', [])
@@ -161,8 +163,9 @@ class RegistryDb:
             complicateds = [complicateds]
         for code in complicateds:
             if code:
-                self.complicated_list.append(ProvidedEventComplicatedDisease(
-                    event_id=event_obj.id_pk, disease=DISEASES.get(code, None)))
+                self.complicated_list.append(ProvidedEventAdditionalDisease(
+                    event_id=event_obj.id_pk, disease=DISEASES.get(code, None),
+                    disease_type=2))
 
         specials = event.get('OS_SLUCH', [])
         if type(specials) != list:
@@ -176,10 +179,21 @@ class RegistryDb:
         if type(exam_concomitant_diseases) != list:
             exam_concomitant_diseases = [exam_concomitant_diseases]
         for disease in exam_concomitant_diseases:
-            self.concomitant_list.append(ProvidedEventConcomitantDisease(
+            self.concomitant_list.append(ProvidedEventAdditionalDisease(
                 event_id=event_obj.id_pk,
                 disease=DISEASES.get(disease.get('DS2'), None),
+                disease_type=1,
                 newly_disease_sign=safe_int(disease.get('DS2_PR', 0))
+            ))
+
+        medicines = event.get('LEKPREP', [])
+        if type(medicines) != list:
+            medicines = [medicines]
+        for medicine in medicines:
+            self.medicine_list.append(ProvidedEventMedicine(
+                event_id=event_obj.id_pk,
+                medicine=MEDICINES.get(medicine.get('CODE_LP'), None),
+                medicine_name=medicine.get('NAME_LP', None)
             ))
 
         appointments = event.get('NAZR', [])
@@ -270,9 +284,10 @@ class RegistryDb:
                 Patient.objects.bulk_create(set(self.patients))
                 MedicalRegisterRecord.objects.bulk_create(self.records)
                 ProvidedEvent.objects.bulk_create(self.events)
-                ProvidedEventConcomitantDisease.objects.bulk_create(self.concomitant_list)
-                ProvidedEventComplicatedDisease.objects.bulk_create(self.complicated_list)
+                ProvidedEventAdditionalDisease.objects.bulk_create(self.concomitant_list)
+                ProvidedEventAdditionalDisease.objects.bulk_create(self.complicated_list)
                 ProvidedEventSpecial.objects.bulk_create(self.special_list)
+                ProvidedEventMedicine.objects.bulk_create(self.medicine_list)
                 ProvidedEventAppointment.objects.bulk_create(self.appointment_list)
                 ProvidedService.objects.bulk_create(self.services)
                 MedicalRegister.objects.filter(

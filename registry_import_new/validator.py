@@ -7,7 +7,7 @@ from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, \
     ADULT_EXAMINATION_COMMENT_PATTERN, KIND_TERM_DICT, \
     OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, \
     EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS, DISABILITY_GROUPS, INCOMING_SIGNS, \
-    INCOMPLETE_VOLUME_REASONS, EXAMINATION_KINDS
+    INCOMPLETE_VOLUME_REASONS, EXAMINATION_KINDS, MEDICINES
 
 import re
 from datetime import datetime
@@ -299,6 +299,20 @@ class RegistryValidator:
                     h_errors += handle_errors(
                         {'DS3': [u'904;Диагноз указан без уточняющей подрубрики']},
                         parent='SLUCH', record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
+
+        # Проверка лекарственных препаратов
+        medicine_valid = {
+            'CODE_LP': [_required, _in(MEDICINES)],
+            'NAME_LP': _required
+        }
+
+        medicines = event.get('LEKPREP', [])
+        if type(medicines) != list:
+            medicines = [medicines]
+
+        for medicine in medicines:
+            h_errors += handle_errors(validate(medicine_valid, medicine), parent='LEKPREP',
+                                      record_uid=self.current_record['N_ZAP'], event_uid=event['IDCASE'])
 
         if self.registry_type in (10, 9, 8, 7, 6, 5, 4, 3):
             # Проверка сопутствующих заболеваний
@@ -630,7 +644,7 @@ class CheckVolume:
                         '098977', '018103', '98977', '18103', '098975',
                         '098994', '198994', '98994', '98975'
                     ),
-                    'except_mo': ('280013', '280076', '280091', '280069')
+                    'except_mo': ('280013',)
                 },
                 'day_hospital': {
                     'volume_limit': volume_limit.day_hospital,
@@ -641,7 +655,7 @@ class CheckVolume:
                         '98715', '98770', '098770', '098770',
                         '198770', '098994', '198994', '98994'
                     ),
-                    'except_mo': ('280076', '280091')
+                    'except_mo': ()
                 },
                 'clinic_disease': {
                     'volume_limit': volume_limit.clinic_disease,
@@ -765,7 +779,7 @@ class CheckVolume:
                     self.volume_reg['stomatology_prevention'] += uet
 
                 # Стоматология неотложка
-                if stomatology_subgroup in (14, 17):
+                if stomatology_subgroup in (17, ):
                     self.volume_reg['stomatology_emergency'] += uet
 
         if event.get('USL_OK', '') == '':
@@ -783,11 +797,6 @@ class CheckVolume:
                 self.volume_reg['exam_adult'].add(event['IDCASE'])
             elif code_obj.group_id == 9:
                 self.volume_reg['preventive_inspection_adult'].add(event['IDCASE'])
-
-        if code_obj.group_id == 20:
-            if code_obj.vmp_group not in self.volume_hitech_reg:
-                self.volume_hitech_reg[code_obj.vmp_group] = set()
-            self.volume_hitech_reg[code_obj.vmp_group].add(service['IDSERV'])
 
     def check_count_events(self):
         return len(self.event_reg) != self.count_invoiced_events
