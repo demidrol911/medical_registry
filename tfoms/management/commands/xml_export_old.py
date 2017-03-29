@@ -83,6 +83,18 @@ def get_patients(year, period):
                 medical_register.is_active
                 and medical_register.year = %(year)s
                 and medical_register.period = %(period)s
+                and medical_register.organization_code in ('280001',
+'280003',
+'280005',
+'280007',
+'280026',
+'280027',
+'280043',
+'280064',
+'280069',
+'280075',
+'280084',
+'280093')
                 --and medical_register.type = 2
             )
         """
@@ -310,7 +322,12 @@ def get_records(register_pk):
             case coalesce((select min(payment_kind_fk) from provided_service where tariff > 0 and event_fk = provided_event.id_pk and payment_type_fk = 2), 1)
             when 3 then 1
             when 2 then 2
-            else 1 end as payment_kind_code
+            else 1 end as payment_kind_code,
+            provided_event.incoming_sign AS incoming_sign,
+            provided_event.issue_talon_date AS issue_talon_date,
+            provided_event.planned_hospitalization_date AS planned_hospitalization_date,
+            provided_service.incomplete_volume_reason AS incomplete_volume_reason,
+            patient.disability_group AS disability_group
         from
             medical_register
             join medical_register_record
@@ -393,12 +410,24 @@ def main():
     sumv_usl_sum = 0
     sumv_usl_sum2 = 0
     registers = MedicalRegister.objects.filter(
-        is_active=True, period=period, year=year
+        is_active=True, period=period, year=year,
+        organization_code__in=['280001',
+'280003',
+'280005',
+'280007',
+'280026',
+'280027',
+'280043',
+'280064',
+'280069',
+'280075',
+'280084',
+'280093']
     ).order_by('organization_code')
     print u'Регистры: ', registers
 
-    file_regular = 'HS28004T28_16%s2' % period
-    file_patients = 'LS28004T28_16%s2' % period
+    file_regular = 'HS28004T28_16%s1' % period
+    file_patients = 'LS28004T28_16%s1' % period
 
     lm_xml = writer.Xml('%s.xml' % file_patients)
     lm_xml.plain_put('<?xml version="1.0" encoding="windows-1251"?>')
@@ -460,7 +489,7 @@ def main():
         if register_type == 0:
             continue
         print register_type
-        name = '%sS28004T28_16%s2' % (XML_TYPES[register_type].upper(),
+        name = '%sS28004T28_16%s1' % (XML_TYPES[register_type].upper(),
                                       period)
         hm_xml = writer.Xml('%s.XML' % name)
 
@@ -593,6 +622,7 @@ def main():
                     hm_xml.put('SMO_OGRN', '1027739008440')
                     hm_xml.put('SMO_OK', '10000')
                     hm_xml.put('SMO_NAM', u'АО "Страховая компания "СОГАЗ-Мед" Амурский филиал'.encode('cp1251'))
+                    hm_xml.put('INV', record.disability_group)
                     if register_type in (1, 2):
                         hm_xml.put('NOVOR', patient_is_newborn)
                     hm_xml.put('VNOV_D', record.weight or '')
@@ -622,6 +652,8 @@ def main():
                     if register_type == 2:
                         hm_xml.put('VID_HMP', record.hitech_kind_code or '')
                         hm_xml.put('METOD_HMP', record.hitech_method_code or '')
+                        hm_xml.put('TAL_D', record.issue_talon_date)
+                        hm_xml.put('TAL_P', record.planned_hospitalization_date)
 
                     if register_type in (1, 2):
                         hm_xml.put('NPR_MO', record.event_referred_organization_code or '')
@@ -634,6 +666,7 @@ def main():
                         hm_xml.put('PROFIL', record.event_profile_code or '')
                         hm_xml.put('DET', event_is_children_profile)
                     hm_xml.put('NHISTORY', record.anamnesis_number.encode('cp1251'))
+                    hm_xml.put('P_PER', record.incoming_sign)
 
                     if register_type in (3, 4, 5, 6, 7, 8, 9, 10, 11):
                         hm_xml.put('P_OTK', record.examination_rejection or '0')
@@ -741,6 +774,7 @@ def main():
                 hm_xml.put('SUMV_USL', sumv_usl or 0)
                 hm_xml.put('PRVS', record.service_worker_speciality_code or '')
                 hm_xml.put('CODE_MD', (record.service_worker_code or '').encode('cp1251'))
+                hm_xml.put('NPL', record.incomplete_volume_reason)
                 hm_xml.put('COMENTU', record.service_comment or '')
                 hm_xml.end('USL')
 
