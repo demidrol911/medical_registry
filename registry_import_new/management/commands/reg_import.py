@@ -1,4 +1,5 @@
 #! -*- coding: utf-8 -*-
+from optparse import make_option
 from django.core.management.base import BaseCommand
 import os
 import re
@@ -130,7 +131,7 @@ def load_registry_set():
     return registry_sets
 
 
-def registry_process(registry_set):
+def registry_process(registry_set, is_commit):
     """
     Обработка реестра.
     Включает в себя загрузку реестра и форматно-логический контроль
@@ -139,7 +140,7 @@ def registry_process(registry_set):
     patient_file = registry_set.get_patients_file()
     logger.info(u'%s обрабатывается файл с пациентами' % patient_file.file_name)
     validator = RegistryValidator(patient_file.type_id)
-    registry_db = RegistryDb(registry_set)
+    registry_db = RegistryDb(registry_set, is_commit)
     patients_file = XmlLikeFileReader(patient_file.path)
     patients_errors = defaultdict(list)
     patients = {}
@@ -201,15 +202,16 @@ def registry_process(registry_set):
                     for service in event.get('USL', []):
                         registry_db.create_service_obj(service, event_obj)
                         service_file_errors[service_item.file_name] += validator.validate_service(service)
-                        volume_checker.check(event, service)
+                        volume_checker.check(event, service, patient_policy)
         if volume_checker.check_count_events():
             service_file_errors[service_item.file_name] += handle_errors(
                 {'SD_Z': [u'304;Количество случаев не соответствует указанному значению']}, parent='ZGLV')
     return registry_db, patient_file_errors, service_file_errors, volume_checker.get_error()
 
 
-def main():
-    vipnet_handler.get_vipnet_files()
+def main(options):
+    if not options['no-check-vipnet']:
+        vipnet_handler.get_vipnet_files()
     sender = Sender()
     for registry_set in load_registry_set():
         logger.info(u'%s реестр подготавливается к импорту' % registry_set.mo_code)
@@ -224,9 +226,11 @@ def main():
             logger.info(u'%s уже есть заимпорченный итоговый реестр' % registry_set.mo_code)
 
         if not fatal_errors and not already_in_database:
-            registry_db, patient_file_errors, services_file_errors, volume_errors = registry_process(registry_set)
+            registry_db, patient_file_errors, services_file_errors, volume_errors = registry_process(
+                registry_set, not options['no-insert'])
+
             flc_master = FlcReportMaster(registry_set)
-            if volume_errors[0]:
+            if volume_errors[0] and not options['no-overvolume']:
                 save_to_economist_folder(registry_set, volume_errors[1])
                 sender.send_errors_message(u'ОШИБКИ ОБРАБОТКИ (СВЕРХОБЪЁМЫ) %s ВЕРСИЯ %s' %
                                            (registry_set.mo_code, registry_set.version),
@@ -243,7 +247,7 @@ def main():
                         flc_master.create_report_services(file_name, services_file_errors[file_name])
 
                 flc_file_path = flc_master.create_flc_archive()
-                if flc_file_path:
+                if flc_file_path and not options['no-flc']:
                     sender.send_file(flc_file_path)
                     registry_db.insert_error_message()
                 else:
@@ -258,5 +262,36 @@ class Command(BaseCommand):
     """
     Импорт реестров услуг
     """
+    option_list = BaseCommand.option_list + (
+        make_option(
+            '--no-insert',
+            action='store_true',
+            dest='no-insert',
+            default=False,
+            help=u'Не загружать реестр в базу'
+        ),
+        make_option(
+            '--no-check-vipnet',
+            action='store_true',
+            dest='no-check-vipnet',
+            default=False,
+            help=u'Не проверять випнет на наличие присланных реестров'
+        ),
+        make_option(
+            '--no-overvolume',
+            action='store_true',
+            dest='no-overvolume',
+            default=False,
+            help=u'Игнорировать сверхобъёмы'
+        ),
+        make_option(
+            '--no-flc',
+            action='store_true',
+            dest='no-flc',
+            default=False,
+            help=u'Игнорировать ошибки ФЛК'
+        ),
+    )
+
     def handle(self, *args, **options):
-        main()
+        main(options)

@@ -3,7 +3,7 @@ from main.data_cache import GENDERS, PERSON_ID_TYPES, \
     POLICY_TYPES, DEPARTMENTS, ORGANIZATIONS, TERMS, KINDS, FORMS, \
     HOSPITALIZATIONS, PROFILES, OUTCOMES, RESULTS, \
     SPECIALITIES_NEW, METHODS, DISEASES, DIVISIONS, \
-    SPECIALS, CODES, HITECH_KINDS, HITECH_METHODS, EXAMINATION_RESULTS, MEDICINES
+    SPECIALS, CODES, HITECH_KINDS, HITECH_METHODS, EXAMINATION_RESULTS, MEDICINES, BED_PROFILES, OPERATIONS
 from main.funcs import safe_int, safe_date, safe_float
 from main.models import Patient, MedicalRegisterRecord, ProvidedEvent, ProvidedService, MedicalRegister, \
     MedicalRegisterImport, MedicalRegisterStatus, ProvidedEventAdditionalDisease, \
@@ -14,11 +14,9 @@ from datetime import datetime
 from main.logger import get_logger
 logger = get_logger(__name__)
 
-TEST_MODE = False
-
 
 class RegistryDb:
-    def __init__(self, registry_set):
+    def __init__(self, registry_set, is_commit=True):
         self.registry_set = registry_set
         self.patients = []
         self.registries = []
@@ -37,6 +35,7 @@ class RegistryDb:
         self._event_pk_list = []
         self._service_pk_list = []
         self.cursor = connection.cursor()
+        self.is_commit = is_commit
 
     def create_patient_obj(self, patient):
         patient_obj = Patient(
@@ -238,11 +237,16 @@ class RegistryDb:
                     self.appointment_list.append(ProvidedEventAppointment(
                         event_id=event_obj.id_pk,
                         direction_type=safe_int(appointment),
-                        hospital_bed_profile=safe_int(val)
+                        hospital_bed_profile=BED_PROFILES(safe_int(val))
                     ))
         return event_obj
 
     def create_service_obj(self, service, event_obj):
+        if service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B'):
+            code = OPERATIONS.get(service['CODE_USL'], CODES[service['CODE_USL']])
+        else:
+            code = CODES[service['CODE_USL']]
+
         service_obj = ProvidedService(
             id_pk=self._get_next_provided_service_pk(),
             id=service.get('IDSERV', ''),
@@ -254,7 +258,7 @@ class RegistryDb:
             start_date=safe_date(service.get('DATE_IN', '')),
             end_date=safe_date(service.get('DATE_OUT', '')),
             basic_disease=DISEASES.get(service.get('DS', ''), None),
-            code=CODES.get(service['CODE_USL'], None),
+            code=code,
             quantity=safe_float(service.get('KOL_USL', 0)),
             tariff=safe_float(service.get('TARIF', 0)),
             invoiced_payment=safe_float(service.get('SUMV_USL', 0)),
@@ -269,7 +273,7 @@ class RegistryDb:
         return service_obj
 
     def insert_registry(self):
-        if not TEST_MODE:
+        if self.is_commit:
             with transaction.atomic():
                 MedicalRegisterImport.objects.create(
                     period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
@@ -295,7 +299,7 @@ class RegistryDb:
                 ).update(status=MedicalRegisterStatus.objects.get(pk=1))
 
     def insert_error_message(self):
-        if not TEST_MODE:
+        if self.is_commit:
             MedicalRegisterImport.objects.create(
                 period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
                 organization=self.registry_set.mo_code,
@@ -304,7 +308,7 @@ class RegistryDb:
             )
 
     def insert_overvolume_message(self):
-        if not TEST_MODE:
+        if self.is_commit:
             MedicalRegisterImport.objects.create(
                 period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
                 organization=self.registry_set.mo_code,
@@ -313,7 +317,7 @@ class RegistryDb:
             )
 
     def _get_next_patient_pk(self):
-        if TEST_MODE:
+        if not self.is_commit:
             return 1
         if len(self._patient_pk_list) == 0:
             self._patient_pk_list = self._get_pk("select nextval('patient_seq')"
@@ -321,7 +325,7 @@ class RegistryDb:
         return self._patient_pk_list.pop()
 
     def _get_next_medical_register_pk(self):
-        if TEST_MODE:
+        if not self.is_commit:
             return 1
         if len(self._register_pk_list) == 0:
             self._register_pk_list = self._get_pk("select nextval('medical_register_seq')"
@@ -329,7 +333,7 @@ class RegistryDb:
         return self._register_pk_list.pop()
 
     def _get_next_medical_register_record_pk(self):
-        if TEST_MODE:
+        if not self.is_commit:
             return 1
         if len(self._record_pk_list) == 0:
             self._record_pk_list = self._get_pk("select nextval('medical_register_record_seq')"
@@ -337,7 +341,7 @@ class RegistryDb:
         return self._record_pk_list.pop()
 
     def _get_next_provided_event_pk(self):
-        if TEST_MODE:
+        if not self.is_commit:
             return 1
         if len(self._event_pk_list) == 0:
             self._event_pk_list = self._get_pk("select nextval('provided_event_seq')"
@@ -345,7 +349,7 @@ class RegistryDb:
         return self._event_pk_list.pop()
 
     def _get_next_provided_service_pk(self):
-        if TEST_MODE:
+        if not self.is_commit:
             return 1
         if len(self._service_pk_list) == 0:
             self._service_pk_list = self._get_pk("select nextval('provided_service_seq')"

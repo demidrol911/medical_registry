@@ -7,7 +7,7 @@ from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, \
     ADULT_EXAMINATION_COMMENT_PATTERN, KIND_TERM_DICT, \
     OLD_ADULT_EXAMINATION, NEW_ADULT_EXAMINATION, \
     EXAMINATION_HEALTH_GROUP_EQUALITY, HOSPITAL_KSGS, DAY_HOSPITAL_KSGS, DISABILITY_GROUPS, INCOMING_SIGNS, \
-    INCOMPLETE_VOLUME_REASONS, EXAMINATION_KINDS, MEDICINES
+    INCOMPLETE_VOLUME_REASONS, EXAMINATION_KINDS, MEDICINES, BED_PROFILES, OPERATIONS
 
 import re
 from datetime import datetime
@@ -355,7 +355,7 @@ class RegistryValidator:
                     'NAZ_SP': {'check': None, 'valid': SPECIALITIES_NEW},
                     'NAZ_V': {'check': None, 'valid': EXAMINATION_KINDS},
                     'NAZ_PMP': {'check': None, 'valid': PROFILES},
-                    'NAZ_PK': {'check': None, 'valid': []},
+                    'NAZ_PK': {'check': None, 'valid': BED_PROFILES},
                 }
                 for direction_type in appointment_valid:
                     check_values = event.get(direction_type, [])
@@ -407,6 +407,12 @@ class RegistryValidator:
         h_errors = handle_errors(errors, parent='USL', record_uid=self.current_record['N_ZAP'],
                                  event_uid=self.current_event['IDCASE'],
                                  service_uid=service['IDSERV'])
+
+        if not CheckFunction.is_active_operation(service['CODE_USL']):
+            h_errors += handle_errors({'CODE_USL': [u'904;Код услуги отсутствует в номенклатуре']},
+                                      parent='USL', record_uid=self.current_record['N_ZAP'],
+                                      event_uid=self.current_event['IDCASE'],
+                                      service_uid=service['IDSERV'])
 
         # Проверка на соответсвтие кода услуги типу файла
         if not CheckFunction.is_service_corresponds_registry_type(service['CODE_USL'], self.registry_type):
@@ -580,6 +586,13 @@ class CheckFunction:
             return False
         return True
 
+    @staticmethod
+    def is_active_operation(code):
+        if code.startswith('A') or code.startswith('B'):
+            return code in OPERATIONS
+        else:
+            return True
+
 
 class HealthGroup:
     # Класс для получения значения группы здоровья из комментария
@@ -618,7 +631,7 @@ class CheckVolume:
         '280085', '280038', '280066', '280052', '280076', '280083', '280069',
         '280068', '280065', '280037', '280009', '280007', '280039', '280020',
         '280053', '280071', '280025', '280059', '280080', '280041', '280015',
-        '280040', '280061', '280074', '280012', '280036', '280002',
+        '280040', '280061', '280074', '280012', '280036', '280002', '280125'
     )
 
     def __init__(self, registry_set):
@@ -683,31 +696,38 @@ class CheckVolume:
                 },
                 'exam_children_difficult_situation': {
                     'volume_limit': volume_limit.exam_children_difficult_situation,
-                    'text': u'Диспанцеризация детей сирот в стац. учреждениях'
+                    'text': u'Диспанцеризация детей сирот в стац. учреждениях',
+                    'units': u'пациентов'
                 },
                 'exam_children_without_care': {
                     'volume_limit': volume_limit.exam_children_without_care,
-                    'text': u'Диспанцеризация детей сирот, прин. под опеку'
+                    'text': u'Диспанцеризация детей сирот, прин. под опеку',
+                    'units': u'пациентов'
                 },
                 'prelim_medical_exam': {
                     'volume_limit': volume_limit.prelim_medical_exam,
-                    'text': u'Предварительные медосмотры несовершеннолетних'
+                    'text': u'Предварительные медосмотры несовершеннолетних',
+                    'units': u'пациентов'
                 },
                 'periodic_medical_exam': {
                     'volume_limit': volume_limit.periodic_medical_exam,
-                    'text': u'Периодические медосмотры несовершеннолетних'
+                    'text': u'Периодические медосмотры несовершеннолетних',
+                    'units': u'пациентов'
                 },
                 'prevent_medical_exam': {
                     'volume_limit': volume_limit.prevent_medical_exam,
-                    'text': u'Профосмотры несовершеннолетних'
+                    'text': u'Профосмотры несовершеннолетних',
+                    'units': u'пациентов'
                 },
                 'exam_adult': {
                     'volume_limit': volume_limit.exam_adult,
-                    'text': u'Диспанцеризация взрослого населения'
+                    'text': u'Диспанцеризация взрослого населения',
+                    'units': u'пациентов'
                 },
                 'preventive_inspection_adult': {
                     'volume_limit': volume_limit.preventive_inspection_adult,
-                    'text': u'Профосмотр взрослых'
+                    'text': u'Профосмотр взрослых',
+                    'units': u'пациентов'
                 },
             }
 
@@ -732,7 +752,7 @@ class CheckVolume:
         self.count_invoiced_events = int(count_events)
         self.event_reg.clear()
 
-    def check(self, event, service):
+    def check(self, event, service, patient_policy):
         self.event_reg.add(event['IDCASE'])
         code_obj = CODES[service['CODE_USL']]
 
@@ -784,19 +804,19 @@ class CheckVolume:
 
         if event.get('USL_OK', '') == '':
             if code_obj.group_id == 12:
-                self.volume_reg['exam_children_difficult_situation'].add(event['IDCASE'])
+                self.volume_reg['exam_children_difficult_situation'].add(patient_policy['ID_PAC'])
             elif code_obj.group_id == 13:
-                self.volume_reg['exam_children_without_care'].add(event['IDCASE'])
+                self.volume_reg['exam_children_without_care'].add(patient_policy['ID_PAC'])
             elif code_obj.group_id == 15:
-                self.volume_reg['prelim_medical_exam'].add(event['IDCASE'])
+                self.volume_reg['prelim_medical_exam'].add(patient_policy['ID_PAC'])
             elif code_obj.group_id == 16:
-                self.volume_reg['periodic_medical_exam'].add(event['IDCASE'])
+                self.volume_reg['periodic_medical_exam'].add(patient_policy['ID_PAC'])
             elif code_obj.group_id == 11:
-                self.volume_reg['prevent_medical_exam'].add(event['IDCASE'])
+                self.volume_reg['prevent_medical_exam'].add(patient_policy['ID_PAC'])
             elif code_obj.group_id == 7:
-                self.volume_reg['exam_adult'].add(event['IDCASE'])
+                self.volume_reg['exam_adult'].add(patient_policy['ID_PAC'])
             elif code_obj.group_id == 9:
-                self.volume_reg['preventive_inspection_adult'].add(event['IDCASE'])
+                self.volume_reg['preventive_inspection_adult'].add(patient_policy['ID_PAC'])
 
     def check_count_events(self):
         return len(self.event_reg) != self.count_invoiced_events
