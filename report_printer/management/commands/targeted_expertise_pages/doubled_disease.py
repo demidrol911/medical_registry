@@ -147,7 +147,26 @@ class DoubledDisease(FilterReportPage):
                                                         and (ms_inner.group_fk not in (3, 5, 42)
                                                              or ms_inner.group_fk is null))
                                              END, idc.idc_code, mo.code) AS unique_hash,
-            0 AS sort
+            0 AS sort,
+            array_to_string(ARRAY(select idc.idc_code
+                from provided_event_additional_disease
+                    join idc
+                        on idc.id_pk = provided_event_additional_disease.disease_fk and disease_type = 1
+                where event_fk = pe.id_pk), ';') as concomitant_disease,
+            array_to_string(ARRAY(select idc.idc_code
+                from provided_event_additional_disease
+                    join idc
+                        on idc.id_pk = provided_event_additional_disease.disease_fk and disease_type = 2
+                where event_fk = pe.id_pk), ';') as complicated_disease,
+            pe.ksg_smo AS ksg,
+            CASE WHEN pe.term_fk in (1, 2) and ps.tariff > 0 THEN pe.comment END AS event_comment,
+            CASE WHEN pe.term_fk in (1, 2) and ps.tariff > 0 THEN
+                 (array_to_string(ARRAY(select tc.code || ':' || COALESCE(tc.value, psc.value) from provided_service_coefficient psc
+                    join tariff_coefficient tc ON tc.id_pk = psc.coefficient_fk
+                    where psc.service_fk = ps.id_pk
+                    order by tc.id_pk
+                    ), ';')) END AS coeff_comment,
+            mws.code AS worker_speciality_code
         from all_data
             join provided_event pe
                 on pe.id_pk = all_data.event_1
@@ -183,6 +202,7 @@ class DoubledDisease(FilterReportPage):
                 )
             LEFT JOIN treatment_outcome tro
                 on tro.id_pk = pe.treatment_outcome_fk
+            LEFT JOIN medical_worker_speciality mws ON mws.id_pk = pe.worker_speciality_fk
             LEFT JOIN address adr
                 on adr.person_fk = per.version_id_pk and adr.type_fk = 1
             LEFT JOIN administrative_area aa
@@ -196,8 +216,7 @@ class DoubledDisease(FilterReportPage):
                FROM uploading_person
                WHERE person_unique_id = p.person_unique_id
             )
-        WHERE ms.code not like 'A%%'
-              AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
+        WHERE (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
 
         union
 
@@ -248,7 +267,26 @@ class DoubledDisease(FilterReportPage):
                                                         and (ms_inner.group_fk not in (3, 5, 42)
                                                              or ms_inner.group_fk is null))
                                              END, idc.idc_code, mo.code) AS unique_hash,
-            1 AS sort
+            1 AS sort,
+            array_to_string(ARRAY(select idc.idc_code
+                from provided_event_additional_disease
+                    join idc
+                        on idc.id_pk = provided_event_additional_disease.disease_fk and disease_type = 1
+                where event_fk = pe.id_pk), ';') as concomitant_disease,
+            array_to_string(ARRAY(select idc.idc_code
+                from provided_event_additional_disease
+                    join idc
+                        on idc.id_pk = provided_event_additional_disease.disease_fk and disease_type = 2
+                where event_fk = pe.id_pk), ';') as complicated_disease,
+            pe.ksg_smo AS ksg,
+            CASE WHEN pe.term_fk in (1, 2) and ps.tariff > 0 THEN pe.comment END AS event_comment,
+            CASE WHEN pe.term_fk in (1, 2) and ps.tariff > 0 THEN
+                 (array_to_string(ARRAY(select tc.code || ':' || COALESCE(tc.value, psc.value) from provided_service_coefficient psc
+                    join tariff_coefficient tc ON tc.id_pk = psc.coefficient_fk
+                    where psc.service_fk = ps.id_pk
+                    order by tc.id_pk
+                    ), ';')) END AS coeff_comment,
+            mws.code AS worker_speciality_code
         from all_data
             join provided_event pe
                 on pe.id_pk = all_data.event_2 and pe.id_pk NOT IN (SELECT DISTINCT event_1 from all_data)
@@ -284,6 +322,7 @@ class DoubledDisease(FilterReportPage):
                 )
             LEFT JOIN treatment_outcome tro
                 on tro.id_pk = pe.treatment_outcome_fk
+            LEFT JOIN medical_worker_speciality mws ON mws.id_pk = pe.worker_speciality_fk
             LEFT JOIN address adr
                 on adr.person_fk = per.version_id_pk and adr.type_fk = 1
             LEFT JOIN administrative_area aa
@@ -297,8 +336,7 @@ class DoubledDisease(FilterReportPage):
                FROM uploading_person
                WHERE person_unique_id = p.person_unique_id
             )
-        WHERE ms.code not like 'A%%'
-              AND (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
+        WHERE (ms.group_fk not in (3, 5, 42) or ms.group_fk is null)
         order by unique_hash, event_start_date DESC
         '''
         return query
@@ -336,7 +374,7 @@ class DoubledDisease(FilterReportPage):
         return {
             'dev_path': DEVELOP_REPEATED_DBF,
             'prod_path': PRODUCTION_REPEATED_DBF,
-            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date'),
+            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date', 'event_id'),
             'stop_fields': ('department', 'term_name'),
             'titles': (
                 ("COD", "C", 15),
@@ -348,7 +386,8 @@ class DoubledDisease(FilterReportPage):
                 ("OT", "C", 25),
                 ("DR", "D"),
                 ("DS", "C", 6),
-                ("DS2", "C", 6),
+                ("DS2", "C", 128),
+                ("DS3", "C", 128),
                 ("C_I", "C", 16),
                 ("D_BEG", "D"),
                 ("D_U", "D"),
@@ -362,6 +401,10 @@ class DoubledDisease(FilterReportPage):
                 ("EMPL_NUM", "C", 16),
                 ("HOSP_TYPE", "N", 2),
                 ("OUTCOME", "C", 3),
+                ("PRVS", "C", 16),
+                ("KSG", "C", 4),
+                ("COMENTSL", "C", 128),
+                ("COEFCOMENT", "C", 128),
                 ("IDCASE", "C", 16),
                 ("IDSERV", "C", 16),
                 ("ISREPEATED", "N", 2),
@@ -373,11 +416,11 @@ class DoubledDisease(FilterReportPage):
         return {
             'dev_path': DEVELOP_REPEATED,
             'prod_path': PRODUCTION_REPEATED,
-            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date'),
+            'order_fields': ('last_name', 'first_name', 'middle_name', 'birthdate', 'sort', 'start_date', 'event_id'),
             'stop_fields': ('mo_name', 'term_name'),
             'titles': [
                 u'МО', u'Подразделение', u'Условия', u'Фамилия', u'Имя', u'Отчество',
-                u'ДР',  u'Услуга', u'Код диагноза', u'Оплачено',
+                u'ДР',  u'Услуга', u'Код диагноза', u'Специальность врача', u'Оплачено',
                 u'Начало услуги', u'Окончание услуги', u'Начало случая',
                 u'Окончание случая', u'Повтор', u'Период'
             ],
@@ -398,7 +441,8 @@ class DoubledDisease(FilterReportPage):
         new["OT"] = unicode_to_cp866(item.get('middle_name', ''))
         new["DR"] = item.get('birthdate', '1900-01-01')
         new["DS"] = unicode_to_cp866(item['disease'])
-        new["DS2"] = ''
+        new["DS2"] = unicode_to_cp866(item['concomitant_disease'])
+        new["DS3"] = unicode_to_cp866(item['complicated_disease'])
         new["C_I"] = unicode_to_cp866(item.get('anamnesis_number', ''))
         new["D_BEG"] = item.get('start_date', '1900-01-01')
         new["D_U"] = item.get('end_date', '1900-01-01')
@@ -413,6 +457,10 @@ class DoubledDisease(FilterReportPage):
         new["OUTCOME"] = item['outcome_code'] or ''
         new["HOSP_TYPE"] = item['hospitalization_code'] or 0
         new["EMPL_NUM"] = unicode_to_cp866(item['worker_code'] or '')
+        new["PRVS"] = unicode_to_cp866(item['worker_speciality_code'] or '')
+        new["KSG"] = unicode_to_cp866(item['ksg'] or '')
+        new["COMENTSL"] = unicode_to_cp866(item['event_comment'] or '')
+        new["COEFCOMENT"] = unicode_to_cp866(item['coeff_comment'] or '')
         new["IDCASE"] = item['event_id'] or ''
         new["IDSERV"] = item['service_id'] or ''
         new["ISREPEATED"] = int(not bool(item.get('sort')))
@@ -428,6 +476,7 @@ class DoubledDisease(FilterReportPage):
         sheet.write(item['birthdate'].strftime('%d.%m.%Y'), 'c')
         sheet.write(item['service_code'], 'c')
         sheet.write(item['disease'], 'c')
+        sheet.write(item['worker_speciality_code'], 'c')
         sheet.write(item['accepted_payment'], 'c')
         sheet.write(item['start_date'].strftime('%d.%m.%Y'), 'c')
         sheet.write(item['end_date'].strftime('%d.%m.%Y'), 'c')
