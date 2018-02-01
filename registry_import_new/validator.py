@@ -1,4 +1,5 @@
 #! -*- coding: utf-8 -*-
+from hospital_accounting.models import MedicalOrganization
 from valid import _length, _pattern, validate, _required, _in, _isdate
 from main.data_cache import GENDERS, PERSON_ID_TYPES, KINDS, ORGANIZATIONS, \
     DEPARTMENTS, DISEASES, METHODS, CODES, SPECIALS, TERMS, FORMS, \
@@ -482,8 +483,8 @@ class RegistryValidator:
                                       service_uid=service['IDSERV'])
 
         # Проверки на целостность случаев по поликлинике
-        code_obj = CODES[service['CODE_USL']]
-        if self.current_event.get('USL_OK', '') == '3' and not service['CODE_USL'].startswith('A'):
+        code_obj = CODES.get(service['CODE_USL'], None)
+        if code_obj and self.current_event.get('USL_OK', '') == '3' and not service['CODE_USL'].startswith('A'):
             if code_obj.division_id:
                 self.divisions_check_list.append(code_obj.division_id)
             if code_obj.reason_id:
@@ -533,7 +534,9 @@ class CheckFunction:
 
     @staticmethod
     def is_service_corresponds_registry_type(field_value, registry_type):
-        service = CODES.get(field_value)
+        service = CODES.get(field_value, None)
+        if not service:
+            return True
         if field_value and field_value.startswith('A'):
             return True
         if registry_type == 1 and \
@@ -582,7 +585,7 @@ class CheckFunction:
         if not field_value:
             return True
         disease = DISEASES.get(field_value, None)
-        if disease and disease.is_precision:
+        if disease and not disease.is_precision:
             return False
         return True
 
@@ -638,6 +641,7 @@ class CheckVolume:
         self.registry_set = registry_set
         self.event_reg = set()
         self.count_invoiced_events = 0
+        self.patient_data = None
         self.volume_checker_settings = {}
         self.volume_reg = {}
 
@@ -683,12 +687,12 @@ class CheckVolume:
                 'clinic_emergency': {
                     'volume_limit': volume_limit.clinic_emergency,
                     'text': u'Амбулаторно-поликлиническая помощь неотложная',
-                    'except_mo': ('280013', '280043', )
+                    'except_mo': ('280013', '280043', '280076')
                 },
                 'stomatology_prevention': {
                     'volume_limit': volume_limit.stomatology_prevention,
                     'text': u'Стоматология профилактика', 'units': u'ует',
-                    'except_mo':  CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS + ('280026', )
+                    'except_mo':  CheckVolume.CLINIC_VOLUME_MO_EXCLUSIONS
                 },
                 'stomatology_emergency': {
                     'volume_limit': volume_limit.stomatology_emergency,
@@ -747,76 +751,129 @@ class CheckVolume:
                 date='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period)).values('vmp_group', 'value')
         }
         self.volume_hitech_reg = {}
+        self.exam_patients_dict = self.__get_exam_patients_in_previous_periods()
+
+    def __get_exam_patients_in_previous_periods(self):
+        query = '''
+            SELECT
+            DISTINCT
+                mo.id_pk, ms.group_fk AS group_id,
+                regexp_replace(regexp_replace(
+                    CASE WHEN p.last_name = 'НЕТ' THEN '' ELSE p.last_name END
+                    || CASE WHEN p.first_name = 'НЕТ' THEN '' ELSE p.first_name END
+                    || CASE WHEN p.middle_name = 'НЕТ' THEN '' ELSE p.middle_name END
+                    || p.birthdate, 'Ё', 'Е' , 'g'),  ' ', '' , 'g') AS patient_data
+            FROM medical_register mr
+            JOIN medical_register_record mrr
+              ON mr.id_pk=mrr.register_fk
+            JOIN provided_event pe
+              ON mrr.id_pk=pe.record_fk
+            JOIN provided_service ps
+              ON ps.event_fk=pe.id_pk
+            JOIN medical_service ms
+              ON ms.id_pk = ps.code_fk
+            JOIN patient p
+              ON p.id_pk = mrr.patient_fk
+            JOIN medical_organization mo
+              ON mo.id_pk = ps.organization_fk
+            WHERE mr.is_active
+                AND format('%%s-%%s-01', mr.year, mr.period)::DATE >= format('%%s-%%s-01', %(year)s, '01')::DATE
+                AND format('%%s-%%s-01', mr.year, mr.period)::DATE < format('%%s-%%s-01', %(year)s, %(period)s)::DATE
+            AND mr.organization_code = %(organization_code)s
+            AND ms.group_fk in (12, 13, 15, 16, 11, 7, 9)
+            AND ps.payment_type_fk = 2
+            ORDER BY group_id, patient_data
+        '''
+
+        data = MedicalOrganization.objects.raw(query, dict(year=self.registry_set.year,
+                                                           period=self.registry_set.period,
+                                                           organization_code=self.registry_set.mo_code))
+        exam_patients_dict = {12: [], 13: [], 15: [], 16: [], 11: [], 7: [], 9: []}
+        for item in data:
+            exam_patients_dict[item.group_id].append(item.patient_data)
+        return exam_patients_dict
 
     def set_count_invoiced_events(self, count_events):
         self.count_invoiced_events = int(count_events)
         self.event_reg.clear()
 
+    def set_patient(self, patient_obj):
+        self.patient_data = ''
+        self.patient_data += ('' if patient_obj.last_name == 'НЕТ' else patient_obj.last_name)
+        self.patient_data += ('' if patient_obj.first_name == 'НЕТ' else patient_obj.first_name)
+        self.patient_data += ('' if patient_obj.middle_name == 'НЕТ' else patient_obj.middle_name)
+        self.patient_data += patient_obj.birthdate.strftime('%Y-%m-%d')
+        self.patient_data = self.patient_data.upper()
+        self.patient_data = self.patient_data.replace(u'Ё', u'Е')
+        self.patient_data = self.patient_data.replace(' ', '')
+
     def check(self, event, service, patient_policy):
         self.event_reg.add(event['IDCASE'])
-        code_obj = CODES[service['CODE_USL']]
+        code_obj = CODES.get(service['CODE_USL'], None)
 
-        if event.get('USL_OK', '') == '1' \
-                and service['CODE_USL'] not in self.volume_checker_settings['hospital']['except_code'] \
-                and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
-            self.volume_reg['hospital'].add(event['IDCASE'])
+        if code_obj:
+            if event.get('USL_OK', '') == '1' \
+                    and service['CODE_USL'] not in self.volume_checker_settings['hospital']['except_code'] \
+                    and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
+                self.volume_reg['hospital'].add(event['IDCASE'])
 
-        if event.get('USL_OK', '') == '2' \
-            and service['CODE_USL'] not in self.volume_checker_settings['day_hospital']['except_code'] \
-                and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
-            self.volume_reg['day_hospital'].add(event['IDCASE'])
+            if event.get('USL_OK', '') == '2' \
+                and service['CODE_USL'] not in self.volume_checker_settings['day_hospital']['except_code'] \
+                    and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
+                self.volume_reg['day_hospital'].add(event['IDCASE'])
 
-        # Новые проверки
-        if event.get('USL_OK', '') == '3' \
-                and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
-            count_services = 0
-            stomatology_subgroup = 0
-            for s in event.get('USL', []):
-                cur_code_obj = CODES[s['CODE_USL']]
-                if cur_code_obj.group_id not in (27, 3, 5, 42):
-                    count_services += 1
-                if cur_code_obj.group_id == 19 and cur_code_obj.subgroup_id in (13, 14, 17):
-                    stomatology_subgroup = cur_code_obj.subgroup_id
+            # Новые проверки
+            if event.get('USL_OK', '') == '3' \
+                    and not (service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B')):
+                count_services = 0
+                stomatology_subgroup = 0
+                for s in event.get('USL', []):
+                    cur_code_obj = CODES[s['CODE_USL']]
+                    if cur_code_obj.group_id not in (27, 3, 5, 42):
+                        count_services += 1
+                    if cur_code_obj.group_id == 19 and cur_code_obj.subgroup_id in (13, 14, 17):
+                        stomatology_subgroup = cur_code_obj.subgroup_id
 
-            # Поликлиника заболевание
-            if code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and count_services > 1:
-                self.volume_reg['clinic_disease'].add(event['IDCASE'])
+                # Поликлиника заболевание
+                if code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and count_services > 1:
+                    self.volume_reg['clinic_disease'].add(event['IDCASE'])
 
-            # Поликлиника профилактика
-            if (code_obj.reason_id in [2, 3, 8] and (not code_obj.group_id or code_obj.group_id in [24, ])) \
-                or (code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and
-                    count_services == 1):
-                self.volume_reg['clinic_prevention'].add(event['IDCASE'])
+                # Поликлиника профилактика
+                if (code_obj.reason_id in [2, 3, 8] and (not code_obj.group_id or code_obj.group_id in [24, ])) \
+                    or (code_obj.reason_id == 1 and (not code_obj.group_id or code_obj.group_id in [24, ]) and
+                        count_services == 1):
+                    self.volume_reg['clinic_prevention'].add(event['IDCASE'])
 
-            # Поликлиника неотложка
-            if code_obj.reason_id == 5 and (not code_obj.group_id or code_obj.group_id in [24, 44, 31]):
-                self.volume_reg['clinic_emergency'].add(event['IDCASE'])
+                # Поликлиника неотложка
+                if code_obj.reason_id == 5 and (not code_obj.group_id or code_obj.group_id in [24, 44, 31]):
+                    self.volume_reg['clinic_emergency'].add(event['IDCASE'])
 
-            if code_obj.group_id == 19:
-                uet = float(service['KOL_USL'] or 0) * (code_obj.uet or 0)
-                # Стоматология профилактика
-                if stomatology_subgroup == 13:
-                    self.volume_reg['stomatology_prevention'] += uet
+                if code_obj.group_id == 19:
+                    uet = float(service['KOL_USL'] or 0) * (code_obj.uet or 0)
+                    # Стоматология профилактика
+                    if stomatology_subgroup == 13:
+                        self.volume_reg['stomatology_prevention'] += uet
 
-                # Стоматология неотложка
-                if stomatology_subgroup in (17, ):
-                    self.volume_reg['stomatology_emergency'] += uet
+                    # Стоматология неотложка
+                    if stomatology_subgroup in (17, ):
+                        self.volume_reg['stomatology_emergency'] += uet
 
-        if event.get('USL_OK', '') == '':
-            if code_obj.group_id == 12:
-                self.volume_reg['exam_children_difficult_situation'].add(patient_policy['ID_PAC'])
-            elif code_obj.group_id == 13:
-                self.volume_reg['exam_children_without_care'].add(patient_policy['ID_PAC'])
-            elif code_obj.group_id == 15:
-                self.volume_reg['prelim_medical_exam'].add(patient_policy['ID_PAC'])
-            elif code_obj.group_id == 16:
-                self.volume_reg['periodic_medical_exam'].add(patient_policy['ID_PAC'])
-            elif code_obj.group_id == 11:
-                self.volume_reg['prevent_medical_exam'].add(patient_policy['ID_PAC'])
-            elif code_obj.group_id == 7:
-                self.volume_reg['exam_adult'].add(patient_policy['ID_PAC'])
-            elif code_obj.group_id == 9:
-                self.volume_reg['preventive_inspection_adult'].add(patient_policy['ID_PAC'])
+            if event.get('USL_OK', '') == '' and \
+                    not self.patient_data in self.exam_patients_dict.get(code_obj.group_id, []):
+                if code_obj.group_id == 12:
+                    self.volume_reg['exam_children_difficult_situation'].add(patient_policy['ID_PAC'])
+                elif code_obj.group_id == 13:
+                    self.volume_reg['exam_children_without_care'].add(patient_policy['ID_PAC'])
+                elif code_obj.group_id == 15:
+                    self.volume_reg['prelim_medical_exam'].add(patient_policy['ID_PAC'])
+                elif code_obj.group_id == 16:
+                    self.volume_reg['periodic_medical_exam'].add(patient_policy['ID_PAC'])
+                elif code_obj.group_id == 11:
+                    self.volume_reg['prevent_medical_exam'].add(patient_policy['ID_PAC'])
+                elif code_obj.group_id == 7:
+                    self.volume_reg['exam_adult'].add(patient_policy['ID_PAC'])
+                elif code_obj.group_id == 9:
+                    self.volume_reg['preventive_inspection_adult'].add(patient_policy['ID_PAC'])
 
     def check_count_events(self):
         return len(self.event_reg) != self.count_invoiced_events

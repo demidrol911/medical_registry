@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from django.core.management.base import BaseCommand
 from medical_service_register.path import INBOX_DIR, ARCHIVE_DIR
 from medical_service_register.path import REGISTRY_IMPORT_DIR, OTHER_FILES_DIR
 from medical_service_register.path import IDENT_TABLE
@@ -126,3 +127,11 @@ def get_vipnet_files():
             except:
                 pass
 
+
+class Command(BaseCommand):
+    """
+    Загрузка реестров из випнета
+    """
+   
+    def handle(self, *args, **options):
+        get_vipnet_files()

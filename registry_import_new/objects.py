@@ -49,7 +49,7 @@ class RegistryDb:
             birthplace=patient.get('MR', ''),
             gender=GENDERS.get(patient.get('W'), None),
             person_id_type=PERSON_ID_TYPES.get(patient.get('DOCTYPE'), None),
-            person_id_series=patient.get('DOCSER', '') or '',
+            person_id_series=(patient.get('DOCSER', '') or '').upper(),
             person_id_number=patient.get('DOCNUM', '') or '',
             weight=safe_float(patient.get('VNOV_D', 0)),
             okato_residence=patient.get('OKATOP', '') or '',
@@ -91,6 +91,9 @@ class RegistryDb:
                                           year=self.registry_set.year,
                                           period=self.registry_set.period,
                                           status_id=12,
+                                          reporting_date=datetime.strptime('01-%s-%s' % (self.registry_set.period,
+                                                                                         self.registry_set.year),
+                                                                           '%d-%m-%Y'),
                                           invoice_date=registry['DSCHET'])
         self.registries.append(registry_object)
         return registry_object
@@ -237,7 +240,7 @@ class RegistryDb:
                     self.appointment_list.append(ProvidedEventAppointment(
                         event_id=event_obj.id_pk,
                         direction_type=safe_int(appointment),
-                        hospital_bed_profile=BED_PROFILES(safe_int(val))
+                        hospital_bed_profile=BED_PROFILES[val]
                     ))
         return event_obj
 
@@ -245,7 +248,7 @@ class RegistryDb:
         if service['CODE_USL'].startswith('A') or service['CODE_USL'].startswith('B'):
             code = OPERATIONS.get(service['CODE_USL'], CODES[service['CODE_USL']])
         else:
-            code = CODES[service['CODE_USL']]
+            code = CODES.get(service['CODE_USL'], None)
 
         service_obj = ProvidedService(
             id_pk=self._get_next_provided_service_pk(),
@@ -275,11 +278,17 @@ class RegistryDb:
     def insert_registry(self):
         if self.is_commit:
             with transaction.atomic():
+                MedicalRegisterImport.objects.filter(
+                    organization=self.registry_set.mo_code,
+                    filename=self.registry_set.filename,
+                    status_num_id=3
+                ).delete()
                 MedicalRegisterImport.objects.create(
                     period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
                     organization=self.registry_set.mo_code,
-                    filename=self.registry_set.get_patients_file().file_name,
+                    filename=self.registry_set.filename,
                     status=u'Принят',
+                    status_num_id=6
                 )
                 MedicalRegister.objects.filter(
                     is_active=True, year=self.registry_set.year, period=self.registry_set.period,
@@ -296,24 +305,51 @@ class RegistryDb:
                 ProvidedService.objects.bulk_create(self.services)
                 MedicalRegister.objects.filter(
                     pk__in=[rec.pk for rec in self.registries]
-                ).update(status=MedicalRegisterStatus.objects.get(pk=1))
+                ).update(status=MedicalRegisterStatus.objects.get(pk=6))
 
-    def insert_error_message(self):
+    def insert_import_message(self):
         if self.is_commit:
+            MedicalRegisterImport.objects.filter(
+                organization=self.registry_set.mo_code,
+                filename=self.registry_set.filename,
+                status_num_id=2
+            ).delete()
             MedicalRegisterImport.objects.create(
                 period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
                 organization=self.registry_set.mo_code,
-                filename=self.registry_set.get_patients_file().file_name,
-                status=u'Не пройден ФЛК'
+                filename=self.registry_set.filename,
+                status=u'Импорт',
+                status_num_id=3
+            )
+
+    def insert_error_message(self):
+        if self.is_commit:
+            MedicalRegisterImport.objects.filter(
+                organization=self.registry_set.mo_code,
+                filename=self.registry_set.filename,
+                status_num_id=3
+            ).delete()
+            MedicalRegisterImport.objects.create(
+                period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
+                organization=self.registry_set.mo_code,
+                filename=self.registry_set.filename,
+                status=u'Не пройден ФЛК',
+                status_num_id=4
             )
 
     def insert_overvolume_message(self):
         if self.is_commit:
+            MedicalRegisterImport.objects.filter(
+                organization=self.registry_set.mo_code,
+                filename=self.registry_set.filename,
+                status_num_id=3
+            ).delete()
             MedicalRegisterImport.objects.create(
                 period='{0}-{1}-01'.format(self.registry_set.year, self.registry_set.period),
                 organization=self.registry_set.mo_code,
-                filename=self.registry_set.get_patients_file().file_name,
-                status=u'Сверхобъёмы'
+                filename=self.registry_set.filename,
+                status=u'Сверхобъёмы',
+                status_num_id=5
             )
 
     def _get_next_patient_pk(self):
