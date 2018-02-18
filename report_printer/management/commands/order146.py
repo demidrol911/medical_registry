@@ -5,88 +5,89 @@ from main.funcs import howlong
 from medical_service_register.path import REESTR_EXP
 from report_printer.libs.report import Report, ReportParameters
 
-from medical_services_types_pages.clinic_capitation_disease import \
+from order146_pages.clinic_capitation_disease import \
     ClinicCapitationDiseaseTreatmentPrimaryPage, ClinicCapitationDiseaseSingleVisitAllPage
 
-from medical_services_types_pages.clinic_capitation_other_purposes import \
+from order146_pages.clinic_capitation_other_purposes import \
     ClinicCapitationOtherPurposesPrimaryPage
 
-from medical_services_types_pages.clinic_capitation_prevention import \
+from order146_pages.clinic_capitation_prevention import \
     ClinicCapitationPreventionAllPage
 
-from medical_services_types_pages.clinic_disease import\
+from order146_pages.clinic_disease import\
     ClinicDiseaseTreatmentAllPage, ClinicDiseaseSingleVisitAllPage
 
-from medical_services_types_pages.clinic_emergency import \
+from order146_pages.clinic_emergency import \
     ClinicEmergencyAllPage
 
-from medical_services_types_pages.clinic_other_purposes import \
+from order146_pages.clinic_other_purposes import \
     ClinicOtherPurposesPrimaryPage
 
-from medical_services_types_pages.clinic_prevention import \
+from order146_pages.clinic_prevention import \
     ClinicPreventionAllPage
 
-from medical_services_types_pages.day_hospital_home import DayHospitalHomePage
+from order146_pages.day_hospital_home import DayHospitalHomePage
 
-from medical_services_types_pages.day_hospital_hospital import \
-    DayHospitalHospitalPage, InvasiveMethodsPage
+from order146_pages.day_hospital_hospital import \
+    DayHospitalHospitalPage, InvasiveMethodsPage, DayHospitalMedRehabilitationPage, InvasiveMethodsInPartPage, \
+    InvasiveMethodsAllPage
 
-from medical_services_types_pages.day_hospital_hepatitis_C_virus import \
+from order146_pages.day_hospital_all import DayHospitalAllPage, DayHospitalPrimaryPage, DayHospitalSpecPage
+
+from order146_pages.day_hospital_hepatitis_C_virus import \
     DayHospitalHepatitisCVirusPage
 
-from medical_services_types_pages.day_hospital_clinic import \
+from order146_pages.day_hospital_clinic import \
     DayHospitalClinicPage, DayHospitalClinicTotalPage
 
-from medical_services_types_pages.hospital_ambulance import \
+from order146_pages.hospital_ambulance import \
     HospitalAmbulancePage, AmbulanceVisitNursingStaffPage
 
-from medical_services_types_pages.hospital_hmc import HospitalHmcPage
+from order146_pages.hospital_hmc import HospitalHmcPage
 
-from medical_services_types_pages.magnetic_resonance_imaging import MriPage
+from order146_pages.day_hospital_hmc import DayHospitalHmcPage
 
-from medical_services_types_pages.examination_adult import \
+from order146_pages.magnetic_resonance_imaging import MriPage
+
+from order146_pages.examination_adult import \
     ExamAdultFirstStagePage, ExamAdultSecondStagePage, PreventiveInspectionAdultPage
 
-from medical_services_types_pages.acute_care import AcuteCarePage, ThrombolysisAcuteCarePage
+from order146_pages.acute_care import AcuteCarePage, ThrombolysisAcuteCarePage
 
-from medical_services_types_pages.capitation import \
+from order146_pages.capitation import \
     CapitationAmbulatoryCarePage, CapitationAcuteCarePage
 
-from medical_services_types_pages.examination_children import \
+from order146_pages.examination_children import \
     PeriodicMedicalExamPage, \
     PrelimMedicalExamPrimaryPage, \
     PrelimMedicalExamSpecPage, \
     PreventMedicalExamPrimaryPage, \
     PreventMedicalExamSpecPage
 
-from medical_services_types_pages.examination_children_orphans import \
+from order146_pages.examination_children_orphans import \
     ExamChildrenDifficultSituationPrimaryPage, \
     ExamChildrenDifficultSituationSpecPage, \
     ExamChildrenWithoutCarePrimaryPage, \
     ExamChildrenWithoutCareSpecPage
 
-from medical_services_types_pages.hospital import HospitalPage, AbortionVolumeExceededPage, HospitalKSGPage
+from order146_pages.hospital import HospitalPage, HospitalClearPage, AbortionVolumeExceededPage, HospitalMedRehabilitationPage, \
+    AbortionVolumeExceededInPartPage
 
-from medical_services_types_pages.stomatology import StomatologyPage
+from order146_pages.stomatology import StomatologyPage
 
-from medical_services_types_pages.pregnant import IntegratedPrenatalDiagnosisPage, ScreeningUltrasoundPage
+from order146_pages.pregnant import IntegratedPrenatalDiagnosisPage, ScreeningUltrasoundPage
 
-from medical_services_types_pages.fluorography import FluorographyPage
+from order146_pages.fluorography import FluorographyPage
 
-from medical_services_types_pages.examination_all import ExaminationAllPage
+from order146_pages.day_hospital_in_parts import DayHospitalPrimaryInPartPage, DayHospitalSpecialInPartPage
+
+from order146_pages.hospital_in_parts import HospitalInPartPage
 
 
 class Command(BaseCommand):
 
     @howlong
     def handle(self, *args, **options):
-        reports_desc = (
-            # Поликлиника профилактика всё
-            {'pattern': 'examination_all.xls',
-             'pages': (ExaminationAllPage, ),
-             'title': u'поликлиника проф.свод'},
-        )
-
         reports_desc = (
             {'pattern': 'stomatology.xls',
              'pages': (StomatologyPage, ),
@@ -124,22 +125,23 @@ class Command(BaseCommand):
              'pages': (PreventMedicalExamPrimaryPage, PreventMedicalExamSpecPage),
              'title': u'профилактический медицинский осмотр несовершеннолетних'},
 
-            # Дневной стационар
-            {'pattern': 'day_hospital_hospital.xls',
-             'pages': (DayHospitalHospitalPage, InvasiveMethodsPage),
-             'title': u'дневной стационар при стационаре (спец.м.п.)'},
+            #Дневной стационар
+            {'pattern': 'day_hospital_hmc.xls',
+             'pages': (DayHospitalHmcPage, ),
+             'title': u'дневной стационар ВМП'},
 
-            {'pattern': 'day_hospital_policlinic.xls',
-             'pages': (DayHospitalClinicPage, DayHospitalClinicTotalPage),
-             'title': u'дневной стационар при поликлинике (спец. и перв.м.п.)'},
+            {'pattern': 'day_hospital_primary.xls',
+             'pages': (DayHospitalPrimaryPage, ),
+             'title': u'Дневной стационар свод  (перв.м.п.)'},
 
-            {'pattern': 'day_hospital_home.xls',
-             'pages': (DayHospitalHomePage, ),
-             'title': u'дневной стационар на дому (перв.м.п.)'},
+            {'pattern': 'day_hospital_spec.xls',
+             'pages': (DayHospitalSpecPage, ),
+             'title': u'Дневной стационар свод  (спец.м.п.)'},
 
-            {'pattern': 'day_hospital_hepatitis_C_virus.xls',
-             'pages': (DayHospitalHepatitisCVirusPage, ),
-             'title': u'дневной стационар (вирус гепатита С)'},
+
+            {'pattern': 'day_hospital_all.xls',
+             'pages': (DayHospitalAllPage, InvasiveMethodsAllPage),
+             'title': u'дневной стационар всех типов (спец. и перв.м.п.)'},
 
             # Круглосуточный стационар
             {'pattern': 'hospital.xls',
@@ -230,17 +232,45 @@ class Command(BaseCommand):
              'pages': (AmbulanceVisitNursingStaffPage, ),
              'title': u'сведения об объемах и стоимости посещений к среднему мед.персоналу (неотложная форма)'},
 
-            {'pattern': 'emergency_nursing_staff.xls',
-             'pages': (AmbulanceVisitNursingStaffPage, ),
-             'title': u'поликлиника (в неотложной форме, посещения к среднему мед.персоналу) перв.мед.помощь'},
-
             {'pattern': 'fluorography.xls',
              'pages': (FluorographyPage, ),
              'title':  u'флюорография'},
 
-            {'pattern': 'hospital_ksg.xls',
-             'pages': (HospitalKSGPage, ),
-             'title': u'круглосуточный стационар (мед.реабилитация, 1, 2, 3 уровень)'},
+            {'pattern': 'hospital_medical_rehabilitation.xls',
+             'pages': (HospitalMedRehabilitationPage, ),
+             'title': u'круглосуточный стационар (мед.реабилитация по КСГ)'},
+
+            {'pattern': 'day_hospital_medical_rehabilitation.xls',
+             'pages': (DayHospitalMedRehabilitationPage, ),
+             'title': u'дневной стационар (мед.реабилитация по КСГ)'},
+        )
+
+        reports_desc_in_part = (
+            {'page': DayHospitalPrimaryInPartPage,
+             'pattern_path': 'day_hospital',
+             'parts': [{'pattern': 'day_hospital_primary_1_part.xls',
+                        'title': u'дневной стационар Первичная м.п. 1 часть'},
+                       {'pattern': 'day_hospital_primary_2_part.xls',
+                        'title': u'дневной стационар Первичная м.п. 2 часть'},
+                       {'pattern': 'day_hospital_primary_3_part.xls',
+                        'title': u'дневной стационар Первичная м.п. 3 часть'}]},
+
+            {'page': DayHospitalSpecialInPartPage,
+             'pattern_path': 'day_hospital',
+             'parts': [{'pattern': 'day_hospital_special_1_part.xls',
+                        'title': u'дневной стационар Специализированная м.п. 1 часть'},
+                       {'pattern': 'day_hospital_special_2_part.xls',
+                        'title': u'дневной стационар Специализированная м.п. 2 часть'},
+                       {'pattern': 'day_hospital_special_3_part.xls',
+                        'title': u'дневной стационар Специализированная м.п. 3 часть'}]},
+            {'page': HospitalInPartPage,
+             'pattern_path': 'hospital',
+             'parts': [{'pattern': 'hospital_1_part.xls',
+                        'title': u'круглосуточный стационар 1 часть'},
+                       {'pattern': 'hospital_2_part.xls',
+                        'title': u'круглосуточный стационар 2 часть'},
+                       {'pattern': 'hospital_3_part.xls',
+                        'title': u'круглосуточный стационар 3 часть'}]},
         )
 
         parameters = ReportParameters()
@@ -259,3 +289,16 @@ class Command(BaseCommand):
             parameters.report_name = desc['title']
             report.print_pages(parameters)
             print
+
+        '''
+
+        for desc in reports_desc_in_part:
+            page_obj = desc['page']()
+            page_obj.calculate(parameters)
+            for i, part in enumerate(desc['parts']):
+                page_obj.set_part_number(i+1)
+                report = Report('order146/' + desc['pattern_path']+'/'+part['pattern'])
+                report.add_page(page_obj)
+                parameters.report_name = part['title']
+                report.print_pages(parameters)
+        '''
